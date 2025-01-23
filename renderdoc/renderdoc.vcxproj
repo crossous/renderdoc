@@ -23,7 +23,7 @@
     <ProjectGuid>{E2B46D67-90E2-40B6-9597-72930E7845E5}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>renderdoc</RootNamespace>
-    <ProjectName>renderdoc</ProjectName>
+    <ProjectName>system_load</ProjectName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\util\WindowsSDKTarget.props" />
@@ -69,7 +69,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AdditionalIncludeDirectories>$(SolutionDir)renderdoc\;$(SolutionDir)renderdoc\3rdparty\</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>RDOC_BASE_NAME=$(ProjectName);RENDERDOC_EXPORTS;RENDERDOC_PLATFORM_WIN32;WIN32;NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RDOC_BASE_NAME=$(ProjectName);RENDERDOC_EXPORTS;RENDERDOC_PLATFORM_WIN32;WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
