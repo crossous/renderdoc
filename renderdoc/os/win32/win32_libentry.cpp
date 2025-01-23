@@ -31,6 +31,37 @@
 #include "hooks/hooks.h"
 #include "strings/string_utils.h"
 
+#include <iostream>
+
+static bool OpenConsole()
+{
+  if(AllocConsole())
+  {
+    freopen("CONOUT$", "w", stdout);
+    SetConsoleTitle(L"Debug Console");
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),
+                            FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED);
+    std::cout << "RenderDoc OpenConsole!" << std::endl;
+    return true;
+  }
+
+  return false;
+}
+
+//static bool CloseConsole()
+//{
+//  HWND hwndConsole = GetConsoleWindow();
+//  if(hwndConsole)
+//  {
+//    ShowWindow(hwndConsole, SW_HIDE);
+//    FreeConsole();
+//    std::cout << "Console closed and hidden." << std::endl;
+//    return true;
+//  }
+//  std::cout << "No console window found." << std::endl;
+//  return false;
+//}
+
 static BOOL add_hooks()
 {
   wchar_t curFile[512];
@@ -76,8 +107,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
   if(ul_reason_for_call == DLL_PROCESS_ATTACH)
   {
+    bool isReplayApp = LibraryHooks::Detect(STRINGIZE(RDOC_BASE_NAME) "__replay__marker");
+
+    if(!isReplayApp)
+        OpenConsole();
+
     BOOL ret = add_hooks();
     SetLastError(0);
+
+    if(!isReplayApp)
+      std::cout << "RenderDoc AddHook " << (ret ? "true" : "false") << std::endl;
+
     return ret;
   }
 
