@@ -39,6 +39,8 @@
 DECLARE_REFLECTION_ENUM(RENDERDOC_AnnotationType);
 DECLARE_REFLECTION_STRUCT(RENDERDOC_AnnotationValue);
 
+#define REMOTE_DLL_NAME "system_load.dll"
+
 class Chunk;
 struct RDCThumb;
 struct ReplayOptions;
