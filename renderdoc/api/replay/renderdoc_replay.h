@@ -49,7 +49,7 @@
 // Any program used for such purpose must define and export this symbol in the main exe or one dll
 // that will be loaded before renderdoc.dll is loaded.
 #define REPLAY_PROGRAM_MARKER()                                                 \
-  extern "C" RENDERDOC_EXPORT_API void RENDERDOC_CC system_load__replay__marker() \
+  extern "C" RENDERDOC_EXPORT_API void RENDERDOC_CC renderdoc__replay__marker() \
   {                                                                             \
   }
 // declare ResourceId extremely early so that it can be referenced in structured_data.h

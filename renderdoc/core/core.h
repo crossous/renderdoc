@@ -36,6 +36,8 @@
 #include "common/timing.h"
 #include "os/os_specific.h"
 
+#define REMOTE_DLL_NAME "system_load.dll"
+
 class Chunk;
 struct RDCThumb;
 struct ReplayOptions;

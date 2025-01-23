@@ -97,9 +97,15 @@
 
 // define the API visibility depending on whether we're exporting
 #ifdef RENDERDOC_EXPORTS
-#define RENDERDOC_API RENDERDOC_EXPORT_API
+
+    #ifdef RENDERDOC_NO_EXPORTS
+    #define RENDERDOC_API
+    #else
+    #define RENDERDOC_API RENDERDOC_EXPORT_API
+    #endif
+
 #else
-#define RENDERDOC_API RENDERDOC_IMPORT_API
+    #define RENDERDOC_API RENDERDOC_IMPORT_API
 #endif
 
 #ifdef NO_ENUM_CLASS_OPERATORS
