@@ -35,6 +35,7 @@
 #include "strings/string_utils.h"
 
 #include <string>
+#include <api/replay/renderdoc_replay.h>
 
 static rdcarray<EnvironmentModification> &GetEnvModifications()
 {
@@ -613,6 +614,10 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
   GetModuleFileNameW(GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll"), &renderdocPath[0],
                                       MAX_PATH - 1);
 
+  size_t dirLen = wcslen(renderdocPath) - wcslen(TEXT(STRINGIZE(RDOC_BASE_NAME) ".dll"));
+  renderdocPath[dirLen] = L'\0';
+  wcscat(renderdocPath, TEXT(REMOTE_DLL_NAME));
+
   wchar_t renderdocPathLower[MAX_PATH] = {0};
   memcpy(renderdocPathLower, renderdocPath, MAX_PATH * sizeof(wchar_t));
   for(size_t i = 0; i < MAX_PATH && renderdocPathLower[i]; i++)
@@ -974,7 +979,7 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
 
   const char *rdoc_dll = STRINGIZE(RDOC_BASE_NAME);
 
-  uintptr_t loc = FindRemoteDLL(pid, STRINGIZE(RDOC_BASE_NAME) ".dll");
+  uintptr_t loc = FindRemoteDLL(pid, REMOTE_DLL_NAME);
 
   rdcpair<RDResult, uint32_t> result = {ResultCode::Succeeded, 0};
 

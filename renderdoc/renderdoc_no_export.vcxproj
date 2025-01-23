@@ -20,10 +20,10 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <UseNativeEnvironment>true</UseNativeEnvironment>
-    <ProjectGuid>{E2B46D67-90E2-40B6-9597-72930E7845E5}</ProjectGuid>
+    <ProjectGuid>{1C547EC5-694E-404C-9FC2-151D15DEE242}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>renderdoc</RootNamespace>
-    <ProjectName>renderdoc</ProjectName>
+    <ProjectName>system_load</ProjectName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\util\WindowsSDKTarget.props" />
@@ -42,9 +42,12 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <Import Project="$(SolutionDir)\util\WindowsSDKFix.props" />
   <PropertyGroup>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <ExecutablePath>$(ExecutablePath)</ExecutablePath>
+    <IncludePath>$(SolutionDir)\breakpad;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <ExcludePath>$(ExcludePath)</ExcludePath>
   </PropertyGroup>
   <PropertyGroup>
     <IntDir>$(SolutionDir)$(Platform)\$(Configuration)\obj\$(ProjectName)\</IntDir>
@@ -69,7 +72,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AdditionalIncludeDirectories>$(SolutionDir)renderdoc\;$(SolutionDir)renderdoc\3rdparty\</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>RDOC_BASE_NAME=$(ProjectName);RENDERDOC_EXPORTS;RENDERDOC_PLATFORM_WIN32;WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RDOC_BASE_NAME=$(ProjectName);RENDERDOC_EXPORTS;RENDERDOC_NO_EXPORTS;RENDERDOC_PLATFORM_WIN32;WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4100</DisableSpecificWarnings>
@@ -206,7 +209,6 @@
     <ClInclude Include="common\wrapped_pool.h" />
     <ClInclude Include="core\bit_flag_iterator.h" />
     <ClInclude Include="core\gpu_address_range_tracker.h" />
-    <ClInclude Include="core\rdcbytetrie.h" />
     <ClInclude Include="core\settings.h" />
     <ClInclude Include="core\core.h" />
     <ClInclude Include="core\crash_handler.h" />
@@ -253,7 +255,6 @@
     <ClInclude Include="serialise\serialiser.h" />
     <ClInclude Include="serialise\streamio.h" />
     <ClInclude Include="serialise\zstdio.h" />
-    <ClInclude Include="shaders\controlflow.h" />
     <ClInclude Include="strings\string_utils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -658,7 +659,6 @@
     <ClCompile Include="serialise\streamio.cpp" />
     <ClCompile Include="serialise\streamio_tests.cpp" />
     <ClCompile Include="serialise\zstdio.cpp" />
-    <ClCompile Include="shaders\controlflow.cpp" />
     <ClCompile Include="strings\grisu2.cpp" />
     <ClCompile Include="strings\string_utils.cpp" />
     <ClCompile Include="strings\utf8printf.cpp" />
@@ -672,8 +672,6 @@
     <None Include="data\glsl\array2ms.comp" />
     <None Include="data\glsl\blit.vert" />
     <None Include="data\glsl\checkerboard.frag" />
-    <None Include="data\glsl\debug_math.comp" />
-    <None Include="data\glsl\debug_sample.frag" />
     <None Include="data\glsl\depth_copy.frag" />
     <None Include="data\glsl\depth_copyms.frag" />
     <None Include="data\glsl\deptharr2ms.frag" />
@@ -724,7 +722,6 @@
     <None Include="data\hlsl\shaderdebug.hlsl" />
     <None Include="data\hlsl\depth_copy.hlsl" />
     <None Include="data\hlsl\raytracing.hlsl" />
-    <None Include="data\hlsl\quadswizzle.hlsl" />
   </ItemGroup>
   <!-- try to bake shaders needed in DXIL now, in case we won't be able to find a dxc at runtime -->
   <UsingTask TaskName="GetDXCExecutable" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
@@ -854,9 +851,8 @@ namespace DXCEnumerateAndCheck {
     <Message Text="Processing layer JSON file for RenderDoc $(MajorVersion).$(MinorVersion)" Importance="High" />
     <!-- Read the template json, replace the major/minor versions -->
     <PropertyGroup>
-      <VulkanLayerName>VK_LAYER_$(ProjectName.ToUpper())_Capture</VulkanLayerName>
       <VulkanEnableVar>ENABLE_VULKAN_$(ProjectName)_CAPTURE</VulkanEnableVar>
-      <JSONContents>$([System.IO.File]::ReadAllText('$(SolutionDir)renderdoc/driver/vulkan/renderdoc.json').Replace('@RENDERDOC_VERSION_MAJOR@', '$(MajorVersion)').Replace('@RENDERDOC_VERSION_MINOR@', '$(MinorVersion)').Replace('@VULKAN_LAYER_MODULE_PATH@', '.\\$(ProjectName).dll').Replace('@VULKAN_LAYER_NAME@', $(VulkanLayerName)).Replace('@VULKAN_ENABLE_VAR@', $(VulkanEnableVar.ToUpper())))</JSONContents>
+      <JSONContents>$([System.IO.File]::ReadAllText('$(SolutionDir)renderdoc/driver/vulkan/renderdoc.json').Replace('@RENDERDOC_VERSION_MAJOR@', '$(MajorVersion)').Replace('@RENDERDOC_VERSION_MINOR@', '$(MinorVersion)').Replace('@VULKAN_LAYER_MODULE_PATH@', '.\\$(ProjectName).dll').Replace('@VULKAN_ENABLE_VAR@', $(VulkanEnableVar.ToUpper())))</JSONContents>
     </PropertyGroup>
     <!-- Write it out to the output directory -->
     <WriteLinesToFile File="$(OutDir)$(ProjectName).json" Lines="$(JSONContents)" Overwrite="true" />
