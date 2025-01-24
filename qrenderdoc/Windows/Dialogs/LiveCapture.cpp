@@ -190,7 +190,7 @@ LiveCapture::LiveCapture(ICaptureContext &ctx, const QString &hostname, const QS
 
       QColor inverseColor;
       inverseColor.setHsl((this->m_ButtonColorHue + 180) % 360, 255, 128);    // 对比色色相 + 180
-      this->ui->queueCap->setStyleSheet(
+      this->ui->triggerImmediateCapture->setStyleSheet(
           QString(tr("background-color: %1; color: %2;"))
           .arg(color.name())
           .arg(inverseColor.name()));
