@@ -34,6 +34,7 @@
 #include <QStyledItemDelegate>
 #include <QToolBar>
 #include <QToolButton>
+#include <QPropertyAnimation>
 #include "Code/QRDUtils.h"
 #include "Code/Resources.h"
 #include "Code/qprocessinfo.h"
@@ -178,6 +179,24 @@ LiveCapture::LiveCapture(ICaptureContext &ctx, const QString &hostname, const QS
 
     ui->mainLayout->addWidget(bottomTools);
   }
+
+  {
+    m_ButtonColorTimer = new QTimer(this);
+    connect(m_ButtonColorTimer, &QTimer::timeout, this, [this]() {
+      // 每次改变色相（H），保持饱和度和亮度不变
+      this->m_ButtonColorHue = (this->m_ButtonColorHue + 1) % 360;    // 色相范围是 0 到 360
+      QColor color;
+      color.setHsl(this->m_ButtonColorHue, 255, 128);    // 设置色相、饱和度和亮度
+
+      QColor inverseColor;
+      inverseColor.setHsl((this->m_ButtonColorHue + 180) % 360, 255, 128);    // 对比色色相 + 180
+      this->ui->queueCap->setStyleSheet(
+          QString(tr("background-color: %1; color: %2;"))
+          .arg(color.name())
+          .arg(inverseColor.name()));
+    });
+    m_ButtonColorTimer->start(16);
+  }
 }
 
 LiveCapture::~LiveCapture()
@@ -188,6 +207,7 @@ LiveCapture::~LiveCapture()
   killThread();
 
   delete ui;
+  delete m_ButtonColorTimer;
 }
 
 void LiveCapture::QueueCapture(int frameNumber, int numFrames)
