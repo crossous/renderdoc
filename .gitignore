@@ -27,6 +27,7 @@ obj/
 *.opensdf
 *.VC.*db
 .vs/
+.idea/
 .vscode/
 *.pdb
 *.sln.ide/
