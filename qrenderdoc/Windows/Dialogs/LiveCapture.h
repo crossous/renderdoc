@@ -200,4 +200,7 @@ private:
   QMutex m_ChildrenLock;
   QList<ChildProcess> m_Children;
   QMap<QString, APIStatus> m_APIs;
+
+  int m_ButtonColorHue = 0;
+  QTimer *m_ButtonColorTimer;
 };
