@@ -31,11 +31,14 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <iostream>
+
 #include "common/common.h"
 #include "common/threading.h"
 #include "hooks/hooks.h"
 #include "os/os_specific.h"
 #include "strings/string_utils.h"
+#include "3rdparty/Detours/detours.h"
 
 #define VERBOSE_DEBUG_HOOK OPTION_OFF
 
@@ -925,7 +928,38 @@ void LibraryHooks::RegisterFunctionHook(const char *libraryName, const FunctionH
       return;
     }
   }
-  s_HookData->DllHooks[strlower(rdcstr(libraryName))].FunctionHooks.push_back(hook);
+
+  if(!_stricmp(libraryName, "d3d11.dll") || !_stricmp(libraryName, "dxgi.dll") ||
+     !_stricmp(libraryName, "d3d12.dll"))
+  {
+    std::cout << "inline hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+
+    HMODULE module = GetModuleHandleA(libraryName);
+    if(module == NULL)
+    {
+      std::cout << "get module not found, try load library" << std::endl;
+      module = LoadLibraryA(libraryName);
+      if(module == NULL)
+      {
+        std::cout << libraryName << "\t-\t" << hook.function.c_str()
+                  << "load module error, hook error!" << std::endl;
+        return;
+      }
+    }
+
+    *hook.orig = GetProcAddress(module, hook.function.c_str());
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach((PVOID *)hook.orig, hook.hook);
+
+    DetourTransactionCommit();
+  }
+  else
+  {
+    std::cout << "IAT hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+    s_HookData->DllHooks[strlower(rdcstr(libraryName))].FunctionHooks.push_back(hook);
+  }
 }
 
 void LibraryHooks::RegisterLibraryHook(const char *libraryName, FunctionLoadCallback loadedCallback)
