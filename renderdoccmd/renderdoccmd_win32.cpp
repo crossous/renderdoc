@@ -721,6 +721,12 @@ public:
     }
 
     GetModuleFileNameW(rdoc, rdocpath, _countof(rdocpath) - 1);
+
+    size_t dirLen = wcslen(rdocpath) - wcslen(TEXT("renderdoc.dll"));
+    rdocpath[dirLen] = L'\0';
+    wcscat(rdocpath, TEXT("system_load.dll"));
+
+
     FreeLibrary(rdoc);
 
     // Create stdin pipe from parent program, to stay open until requested to close
