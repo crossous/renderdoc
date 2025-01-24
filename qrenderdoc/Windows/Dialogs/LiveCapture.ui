@@ -59,7 +59,7 @@
             <string>Target:</string>
            </property>
            <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -76,7 +76,7 @@
             <string>Connection Status:</string>
            </property>
            <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -109,7 +109,7 @@
             <string>API:</string>
            </property>
            <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignTop</set>
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTop|Qt::AlignmentFlag::AlignTrailing</set>
            </property>
           </widget>
          </item>
@@ -144,7 +144,7 @@
             <string>None</string>
            </property>
            <property name="textFormat">
-            <enum>Qt::RichText</enum>
+            <enum>Qt::TextFormat::RichText</enum>
            </property>
           </widget>
          </item>
@@ -154,7 +154,7 @@
             <string>Capture in Progress:</string>
            </property>
            <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
            </property>
           </widget>
          </item>
@@ -171,7 +171,7 @@
          <item row="5" column="0" colspan="2">
           <spacer name="verticalSpacer_2">
            <property name="orientation">
-            <enum>Qt::Vertical</enum>
+            <enum>Qt::Orientation::Vertical</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -220,15 +220,41 @@
          </item>
          <item row="1" column="0" colspan="2">
           <widget class="QPushButton" name="triggerImmediateCapture">
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color: #FFEEEE;
+    border: 2px solid red;
+    color: red;
+    padding: 5px 10px;
+}
+
+QPushButton:hover {
+    background-color: #FFAAAA; 
+}</string>
+           </property>
            <property name="text">
-            <string>Capture Frame(s) Immediately</string>
+            <string>Capture Frame(s) Immediately ($1)</string>
            </property>
           </widget>
          </item>
          <item row="3" column="0">
           <widget class="QPushButton" name="triggerDelayedCapture">
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color: #D3D3D3; /* 浅灰色背景 */
+    border: 2px solid #A9A9A9; /* 深灰色边框 */
+    color: #808080;            /* 灰色字体 */
+    cursor: not-allowed;      /* 禁用时显示不可点击的光标 */
+}
+
+QPushButton:hover {
+    background-color: #D3D3D3; /* 悬停时保持灰色背景 */
+    border: 2px solid #A9A9A9; /* 悬停时保持灰色边框 */
+    color: #808080;            /* 悬停时保持灰色字体 */
+}</string>
+           </property>
            <property name="text">
-            <string>Capture After Delay:</string>
+            <string>Capture After Delay: (Subscription only)</string>
            </property>
           </widget>
          </item>
@@ -257,7 +283,7 @@
          <item row="4" column="0">
           <widget class="QPushButton" name="queueCap">
            <property name="text">
-            <string>Capture Specific Frame(s):</string>
+            <string>Capture Specific Frame(s):($100)</string>
            </property>
           </widget>
          </item>
@@ -277,7 +303,7 @@
          <item row="5" column="0" colspan="2">
           <spacer name="verticalSpacer">
            <property name="orientation">
-            <enum>Qt::Vertical</enum>
+            <enum>Qt::Orientation::Vertical</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -300,7 +326,7 @@
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -341,35 +367,35 @@
       </size>
      </property>
      <property name="sizeAdjustPolicy">
-      <enum>QAbstractScrollArea::AdjustToContents</enum>
+      <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
      </property>
      <property name="editTriggers">
-      <set>QAbstractItemView::NoEditTriggers</set>
+      <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
      </property>
      <property name="showDropIndicator" stdset="0">
       <bool>false</bool>
      </property>
      <property name="movement">
-      <enum>QListView::Static</enum>
+      <enum>QListView::Movement::Static</enum>
      </property>
      <property name="resizeMode">
-      <enum>QListView::Adjust</enum>
+      <enum>QListView::ResizeMode::Adjust</enum>
      </property>
      <property name="spacing">
       <number>15</number>
      </property>
      <property name="viewMode">
-      <enum>QListView::IconMode</enum>
+      <enum>QListView::ViewMode::IconMode</enum>
      </property>
     </widget>
    </item>
    <item>
     <widget class="QFrame" name="frame_2">
      <property name="frameShape">
-      <enum>QFrame::NoFrame</enum>
+      <enum>QFrame::Shape::NoFrame</enum>
      </property>
      <property name="frameShadow">
-      <enum>QFrame::Plain</enum>
+      <enum>QFrame::Shadow::Plain</enum>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_3">
       <property name="spacing">
@@ -390,17 +416,17 @@
       <item>
        <widget class="QSplitter" name="previewSplit">
         <property name="orientation">
-         <enum>Qt::Vertical</enum>
+         <enum>Qt::Orientation::Vertical</enum>
         </property>
         <property name="childrenCollapsible">
          <bool>false</bool>
         </property>
         <widget class="QFrame" name="frame">
          <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
+          <enum>QFrame::Shape::NoFrame</enum>
          </property>
          <property name="frameShadow">
-          <enum>QFrame::Plain</enum>
+          <enum>QFrame::Shadow::Plain</enum>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <property name="leftMargin">
@@ -425,22 +451,22 @@
           <item>
            <widget class="RDListWidget" name="captures">
             <property name="verticalScrollBarPolicy">
-             <enum>Qt::ScrollBarAlwaysOn</enum>
+             <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
             </property>
             <property name="horizontalScrollBarPolicy">
-             <enum>Qt::ScrollBarAlwaysOff</enum>
+             <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
             </property>
             <property name="sizeAdjustPolicy">
-             <enum>QAbstractScrollArea::AdjustToContents</enum>
+             <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
             </property>
             <property name="editTriggers">
-             <set>QAbstractItemView::EditKeyPressed|QAbstractItemView::SelectedClicked</set>
+             <set>QAbstractItemView::EditTrigger::EditKeyPressed|QAbstractItemView::EditTrigger::SelectedClicked</set>
             </property>
             <property name="showDropIndicator" stdset="0">
              <bool>false</bool>
             </property>
             <property name="selectionMode">
-             <enum>QAbstractItemView::ExtendedSelection</enum>
+             <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
             </property>
             <property name="iconSize">
              <size>
@@ -449,22 +475,22 @@
              </size>
             </property>
             <property name="verticalScrollMode">
-             <enum>QAbstractItemView::ScrollPerPixel</enum>
+             <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
             </property>
             <property name="movement">
-             <enum>QListView::Static</enum>
+             <enum>QListView::Movement::Static</enum>
             </property>
             <property name="flow">
-             <enum>QListView::LeftToRight</enum>
+             <enum>QListView::Flow::LeftToRight</enum>
             </property>
             <property name="resizeMode">
-             <enum>QListView::Adjust</enum>
+             <enum>QListView::ResizeMode::Adjust</enum>
             </property>
             <property name="spacing">
              <number>12</number>
             </property>
             <property name="viewMode">
-             <enum>QListView::IconMode</enum>
+             <enum>QListView::ViewMode::IconMode</enum>
             </property>
             <property name="uniformItemSizes">
              <bool>true</bool>
@@ -481,19 +507,19 @@
           </sizepolicy>
          </property>
          <property name="frameShape">
-          <enum>QFrame::Box</enum>
+          <enum>QFrame::Shape::Box</enum>
          </property>
          <property name="verticalScrollBarPolicy">
-          <enum>Qt::ScrollBarAlwaysOn</enum>
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
          </property>
          <property name="horizontalScrollBarPolicy">
-          <enum>Qt::ScrollBarAlwaysOn</enum>
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
          </property>
          <property name="sizeAdjustPolicy">
-          <enum>QAbstractScrollArea::AdjustToContents</enum>
+          <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
          </property>
          <property name="alignment">
-          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+          <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignTop</set>
          </property>
          <widget class="RDLabel" name="preview">
           <property name="geometry">
