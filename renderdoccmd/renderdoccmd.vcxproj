@@ -22,7 +22,7 @@
     <ProjectGuid>{D03DF2F9-513C-4084-BBDD-1DEE8D9250D7}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>renderdoccmd</RootNamespace>
-    <ProjectName>renderdoccmd</ProjectName>
+    <ProjectName>render_soco_doccmd</ProjectName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\util\WindowsSDKTarget.props" />
