@@ -38,6 +38,7 @@
 #include "common/formatting.h"
 #include "os/os_specific.h"
 #include "strings/string_utils.h"
+#include "core/core.h"
 
 // gives us an address to identify this dll with
 static int dllLocator = 0;
@@ -175,6 +176,10 @@ void GetLibraryFilename(rdcstr &selfName)
 {
   wchar_t curFile[512] = {0};
   GetModuleFileNameW(GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll"), curFile, 511);
+
+  size_t dirLen = wcslen(curFile) - wcslen(TEXT(STRINGIZE(RDOC_BASE_NAME) ".dll"));
+  curFile[dirLen] = L'\0';
+  wcscat(curFile, TEXT(REMOTE_DLL_NAME));
 
   selfName = StringFormat::Wide2UTF8(curFile);
 }
