@@ -249,7 +249,6 @@ QPushButton:hover {
     border-radius: 10px; /* 设置圆角 */
     border: 2px solid #FFD700; /* 金黄色边框 */
     padding: 10px 20px; /* 设置内边距 */
-    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3); /* 阴影效果 */
 }
 
 QPushButton:hover {
@@ -261,7 +260,6 @@ QPushButton:hover {
 QPushButton:pressed {
     background: #FF8C00; /* 按下时背景变为橙红色 */
     border: 2px solid #FF4500; /* 按下时边框变为更深的橙红色 */
-    box-shadow: inset 0px 4px 8px rgba(0, 0, 0, 0.3); /* 按下时阴影内陷 */
 }</string>
            </property>
            <property name="text">
