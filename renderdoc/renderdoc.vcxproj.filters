@@ -977,6 +977,9 @@
     <ClCompile Include="common\jobsystem_tests.cpp">
       <Filter>Common</Filter>
     </ClCompile>
+    <ClCompile Include="os\win32\win32_pe_parse.cpp">
+      <Filter>OS\Win32</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="os\win32\comexport.def">
