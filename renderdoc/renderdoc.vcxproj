@@ -642,6 +642,7 @@
     <ClCompile Include="os\win32\win32_hook.cpp" />
     <ClCompile Include="os\win32\win32_libentry.cpp" />
     <ClCompile Include="os\win32\win32_network.cpp" />
+    <ClCompile Include="os\win32\win32_pe_parse.cpp" />
     <ClCompile Include="os\win32\win32_process.cpp" />
     <ClCompile Include="os\win32\win32_shellext.cpp" />
     <ClCompile Include="os\win32\win32_stringio.cpp" />

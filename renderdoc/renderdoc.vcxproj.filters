@@ -989,6 +989,9 @@
     <ClCompile Include="shaders\controlflow.cpp">
       <Filter>Shaders</Filter>
     </ClCompile>
+    <ClCompile Include="os\win32\win32_pe_parse.cpp">
+      <Filter>OS\Win32</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="os\win32\comexport.def">
