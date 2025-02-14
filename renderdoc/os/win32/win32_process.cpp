@@ -33,6 +33,7 @@
 #include "core/core.h"
 #include "os/os_specific.h"
 #include "strings/string_utils.h"
+#include "win32_pe_parse.h"
 
 #include <string>
 #include <api/replay/renderdoc_replay.h>
@@ -399,7 +400,7 @@ uintptr_t FindRemoteDLL(DWORD pid, rdcstr libName)
   return ret;
 }
 
-void InjectFunctionCall(HANDLE hProcess, uintptr_t renderdoc_remote, const char *funcName,
+void InjectFunctionCall(HANDLE hProcess, const wchar_t* dllPath, uintptr_t renderdoc_remote, const char *funcName,
                         void *data, const size_t dataLen)
 {
   if(dataLen == 0)
@@ -410,6 +411,7 @@ void InjectFunctionCall(HANDLE hProcess, uintptr_t renderdoc_remote, const char 
 
   RDCDEBUG("Injecting call to %s", funcName);
 
+#if ENABLED(RDOC_DEVEL)
   HMODULE renderdoc_local = GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll");
 
   uintptr_t func_local = (uintptr_t)GetProcAddress(renderdoc_local, funcName);
@@ -418,6 +420,11 @@ void InjectFunctionCall(HANDLE hProcess, uintptr_t renderdoc_remote, const char 
   // so get the function
   // in the remote module (which might be loaded at a different base address
   uintptr_t func_remote = func_local + renderdoc_remote - (uintptr_t)renderdoc_local;
+#else
+  // Because the exported functions of the two DLLs are different, in the release version, their RVA addresses differ.
+  // Therefore, it is not possible to calculate the function addresses using the local DLL addresses as done in the development.
+  uintptr_t func_remote = renderdoc_remote + GetFunctionRVA(dllPath, funcName);
+#endif
 
   void *remoteMem = VirtualAllocEx(hProcess, NULL, dataLen, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
   SIZE_T numWritten;
@@ -996,18 +1003,21 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
     // safe to cast away the const as we know these functions don't modify the parameters
 
     if(!capturefile.empty())
-      InjectFunctionCall(hProcess, loc, "INTERNAL_SetCaptureFile", (void *)capturefile.c_str(),
+      InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_SetCaptureFile",
+                         (void *)capturefile.c_str(),
                          capturefile.size() + 1);
 
     rdcstr debugLogfile = RDCGETLOGFILE();
 
-    InjectFunctionCall(hProcess, loc, "INTERNAL_SetDebugLogFile", (void *)debugLogfile.c_str(),
+    InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_SetDebugLogFile", (void *)debugLogfile.c_str(),
                        debugLogfile.size() + 1);
 
-    InjectFunctionCall(hProcess, loc, "INTERNAL_SetCaptureOptions", (CaptureOptions *)&opts,
+    InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_SetCaptureOptions",
+                       (CaptureOptions *)&opts,
                        sizeof(CaptureOptions));
 
-    InjectFunctionCall(hProcess, loc, "INTERNAL_GetTargetControlIdent", &result.second,
+    InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_GetTargetControlIdent",
+                       &result.second,
                        sizeof(result.second));
 
     if(!env.empty())
@@ -1022,17 +1032,20 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
         if(name == "")
           break;
 
-        InjectFunctionCall(hProcess, loc, "INTERNAL_EnvModName", (void *)name.c_str(),
+        InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_EnvModName",
+                           (void *)name.c_str(),
                            name.size() + 1);
-        InjectFunctionCall(hProcess, loc, "INTERNAL_EnvModValue", (void *)value.c_str(),
+        InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_EnvModValue",
+                           (void *)value.c_str(),
                            value.size() + 1);
-        InjectFunctionCall(hProcess, loc, "INTERNAL_EnvSep", &sep, sizeof(sep));
-        InjectFunctionCall(hProcess, loc, "INTERNAL_EnvMod", &mod, sizeof(mod));
+        InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_EnvSep", &sep, sizeof(sep));
+        InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_EnvMod", &mod, sizeof(mod));
       }
 
       // parameter is unused
       void *dummy = NULL;
-      InjectFunctionCall(hProcess, loc, "INTERNAL_ApplyEnvMods", &dummy, sizeof(dummy));
+      InjectFunctionCall(hProcess, renderdocPath, loc, "INTERNAL_ApplyEnvMods", &dummy,
+                         sizeof(dummy));
     }
   }
 
