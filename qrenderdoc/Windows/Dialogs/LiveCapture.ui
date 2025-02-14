@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>680</width>
+    <width>765</width>
     <height>483</height>
    </rect>
   </property>
@@ -222,10 +222,24 @@
           <widget class="QPushButton" name="triggerImmediateCapture">
            <property name="styleSheet">
             <string notr="true">QPushButton {
-    background-color: #FFEEEE;
-    border: 2px solid red;
-    color: red;
-    padding: 5px 10px;
+    background: #FFEEEE; /* 橙黄到金黄色渐变 */
+    color: red; /* 字体颜色为白色 */
+    font-size: 18px; /* 设置字体大小 */
+    font-weight: bold; /* 设置字体加粗 */
+    border-radius: 10px; /* 设置圆角 */
+    border: 2px solid red; /* 金黄色边框 */
+    padding: 10px 20px; /* 设置内边距 */
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #FFD700, stop: 1 #FFA500); /* 悬停时颜色反转 */
+    border: 2px solid #FF8C00; /* 悬停时边框变成橙红色 */
+}
+
+QPushButton:pressed {
+    background: #FF8C00; /* 按下时背景变为橙红色 */
+    border: 2px solid #FF4500; /* 按下时边框变为更深的橙红色 */
 }
 
 QPushButton:hover {

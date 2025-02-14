@@ -191,7 +191,28 @@ LiveCapture::LiveCapture(ICaptureContext &ctx, const QString &hostname, const QS
       QColor inverseColor;
       inverseColor.setHsl((this->m_ButtonColorHue + 180) % 360, 255, 128);    // 对比色色相 + 180
       this->ui->triggerImmediateCapture->setStyleSheet(
-          QString(tr("background-color: %1; color: %2;"))
+          QString(tr(R"(QPushButton {
+                            background: %1;
+                            color: %2;
+                            font-size: 18px;
+                            font-weight: bold;
+                            border-radius: 10px;
+                            border: 2px solid %2;
+                            padding: 10px 20px;
+                        }
+
+                        QPushButton:hover {
+                            background: %2;
+                            border: 2px solid %1;
+                            color: %1;
+                        }
+
+                        QPushButton:pressed {
+                            background: #FF8C00; /* 按下时背景变为橙红色 */
+                            border: 2px solid #FF4500; /* 按下时边框变为更深的橙红色 */
+                        }
+
+        )"))
           .arg(color.name())
           .arg(inverseColor.name()));
     });
