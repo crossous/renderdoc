@@ -1294,8 +1294,10 @@
   FUNC(wglDXObjectAccessNV, wglDXObjectAccessNV); \
   FUNC(wglDXLockObjectsNV, wglDXLockObjectsNV); \
   FUNC(wglDXUnlockObjectsNV, wglDXUnlockObjectsNV); \
-
-
+  FUNC(glEGLImageTargetRenderbufferStorageOES, glEGLImageTargetRenderbufferStorageOES); \
+  FUNC(glEGLImageTargetTexStorageEXT, glEGLImageTargetTexStorageEXT); \
+  FUNC(glEGLImageTargetTexture2DOES, glEGLImageTargetTexture2DOES); \
+  FUNC(glEGLImageTargetTextureStorageEXT, glEGLImageTargetTextureStorageEXT); \
 
 
 #define DefineSupportedHooks() \
@@ -2558,8 +2560,10 @@
   FuncWrapper2(BOOL, wglDXObjectAccessNV, HANDLE, hObject, GLenum, access); \
   FuncWrapper3(BOOL, wglDXLockObjectsNV, HANDLE, hDevice, GLint, count, HANDLE *, hObjects); \
   FuncWrapper3(BOOL, wglDXUnlockObjectsNV, HANDLE, hDevice, GLint, count, HANDLE *, hObjects); \
-
-
+  FuncWrapper2(void, glEGLImageTargetRenderbufferStorageOES, GLenum, target, GLeglImageOES, image); \
+  FuncWrapper3(void, glEGLImageTargetTexStorageEXT, GLenum, target, GLeglImageOES, image, const GLint*, attrib_list); \
+  FuncWrapper2(void, glEGLImageTargetTexture2DOES, GLenum, target, GLeglImageOES, image); \
+  FuncWrapper3(void, glEGLImageTargetTextureStorageEXT, GLuint, texture, GLeglImageOES, image, const GLint*, attrib_list); \
 
 
 #define ForEachUnsupported(FUNC) \
@@ -2864,10 +2868,6 @@
   FUNC(glEdgeFlagPointer); \
   FUNC(glEdgeFlag); \
   FUNC(glEdgeFlagv); \
-  FUNC(glEGLImageTargetRenderbufferStorageOES); \
-  FUNC(glEGLImageTargetTexStorageEXT); \
-  FUNC(glEGLImageTargetTexture2DOES); \
-  FUNC(glEGLImageTargetTextureStorageEXT); \
   FUNC(glElementPointerAPPLE); \
   FUNC(glElementPointerATI); \
   FUNC(glEnableClientStateiEXT); \
@@ -4773,10 +4773,6 @@
   UnsupportedWrapper2(void, glEdgeFlagPointer, GLsizei, stride, const void *, pointer); \
   UnsupportedWrapper1(void, glEdgeFlag, GLboolean, flag); \
   UnsupportedWrapper1(void, glEdgeFlagv, const GLboolean *, flag); \
-  UnsupportedWrapper2(void, glEGLImageTargetRenderbufferStorageOES, GLenum, target, GLeglImageOES, image); \
-  UnsupportedWrapper3(void, glEGLImageTargetTexStorageEXT, GLenum, target, GLeglImageOES, image, const GLint*, attrib_list); \
-  UnsupportedWrapper2(void, glEGLImageTargetTexture2DOES, GLenum, target, GLeglImageOES, image); \
-  UnsupportedWrapper3(void, glEGLImageTargetTextureStorageEXT, GLuint, texture, GLeglImageOES, image, const GLint*, attrib_list); \
   UnsupportedWrapper2(void, glElementPointerAPPLE, GLenum, type, const void *, pointer); \
   UnsupportedWrapper2(void, glElementPointerATI, GLenum, type, const void *, pointer); \
   UnsupportedWrapper2(void, glEnableClientStateiEXT, GLenum, array, GLuint, index); \

@@ -2251,6 +2251,11 @@ enum class GLChunk : uint32_t
 
   SetCommandAnnotation,
 
+  glEGLImageTargetTexture2DOES,
+  glEGLImageTargetRenderbufferStorageOES,
+  glEGLImageTargetTexStorageEXT,
+  glEGLImageTargetTextureStorageEXT,
+
   Max,
 };
 
