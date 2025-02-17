@@ -1514,9 +1514,9 @@ void WrappedOpenGL::glCopyImageSubData(GLuint srcName, GLenum srcTarget, GLint s
             // image size is not an integer multiple of the block size, so we need to take into
             // account that in the loop
             size_t roundedUpDepth =
-                srcIsCompressed ? AlignUp((uint32_t)srcDepth, srcBlockSize[2]) : srcDepth;
+                srcIsCompressed ? AlignToMultiple((uint32_t)srcDepth, srcBlockSize[2]) : srcDepth;
             size_t roundedUpHeight =
-                srcIsCompressed ? AlignUp((uint32_t)srcHeight, srcBlockSize[1]) : srcHeight;
+                srcIsCompressed ? AlignToMultiple((uint32_t)srcHeight, srcBlockSize[1]) : srcHeight;
             for(size_t z = 0; z < roundedUpDepth; z += srcBlockSize[2])
             {
               size_t srcOffset = srcSliceSize * ((srcZ + z) / (GLsizei)srcBlockSize[2]) +
@@ -3813,7 +3813,7 @@ void WrappedOpenGL::StoreCompressedTexData(ResourceId texId, GLenum target, GLin
           // GetCompressedByteSize() will factor in the 'partial' blocks at image edges when the
           // image size is not an integer multiple of the block size, so we need to take into
           // account that in the loop
-          size_t roundedUpHeight = AlignUp((uint32_t)height, blockSize[1]);
+          size_t roundedUpHeight = AlignToMultiple((uint32_t)height, blockSize[1]);
           for(size_t y = 0; y < roundedUpHeight; y += blockSize[1])
           {
             memcpy(cdData.data() + dstOffset, srcPixels + srcOffset, srcRowSize);
