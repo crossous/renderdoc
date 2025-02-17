@@ -1520,15 +1520,15 @@ ExecuteResult AndroidRemoteServer::ExecuteAndInject(const rdcstr &packageAndActi
     {
       RDCLOG("Checking for existing library, found '%s'", RDCLib.c_str());
     }
-    // some versions of adb/android return the error message on stdout, so try to detect those and
-    // clear the output.
-    if(RDCLib.size() < installedPath.size() || RDCLib.substr(0, installedPath.size()) != installedPath)
-      RDCLib.clear();
+    //// some versions of adb/android return the error message on stdout, so try to detect those and
+    //// clear the output.
+    //if(RDCLib.size() < installedPath.size() || RDCLib.substr(0, installedPath.size()) != installedPath)
+    //  RDCLib.clear();
 
-    // some versions of adb/android also don't print any error message at all! Look to see if the
-    // wildcard glob is still present.
-    if(RDCLib.find("/lib/*/" RENDERDOC_ANDROID_LIBRARY) >= 0)
-      RDCLib.clear();
+    //// some versions of adb/android also don't print any error message at all! Look to see if the
+    //// wildcard glob is still present.
+    //if(RDCLib.find("/lib/*/" RENDERDOC_ANDROID_LIBRARY) >= 0)
+    //  RDCLib.clear();
 
     if(RDCLib.empty())
     {
