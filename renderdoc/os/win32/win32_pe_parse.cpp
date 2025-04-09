@@ -20,7 +20,7 @@ std::vector<BYTE> ReadFileToMemory(const wchar_t* filePath)
   std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
 
-  std::vector<BYTE> buffer(size);
+  std::vector<BYTE> buffer(static_cast<unsigned int>(size));
   if(!file.read((char *)buffer.data(), size))
   {
     throw std::runtime_error("Function not found");
