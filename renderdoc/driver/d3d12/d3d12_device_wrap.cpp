@@ -39,6 +39,14 @@ RDOC_EXTERN_CONFIG(bool, Replay_Debug_SingleThreadedCompilation);
 
 RDOC_EXTERN_CONFIG(bool, D3D12_Debug_RT_Auditing);
 
+// capture-time hack: some titles ship amd_ags_x64.dll and will use AGS shader intrinsics even on
+// non-AMD GPUs, which makes captures require AGS on replay. Allow forcing captures to *not* become
+// AGS-dependent.
+RDOC_CONFIG(bool, D3D12_Hack_SuppressAGSRequirement, false,
+            "If enabled, RenderDoc will avoid recording AMD AGS vendor shader extension usage (magic UAV) "
+            "into D3D12 captures. This can improve replay portability but may change shader behaviour and/or "
+            "break correctness if the application relies on AGS intrinsics.");
+
 static RDResult DeferredPipelineCompile(ID3D12Device *device,
                                         const D3D12_GRAPHICS_PIPELINE_STATE_DESC &Descriptor,
                                         WrappedID3D12PipelineState *wrappedPipe)
@@ -716,15 +724,24 @@ void WrappedID3D12Device::ProcessCreatedGraphicsPSO(ID3D12PipelineState *real,
          UsesExtensionUAV(pDesc->GS, vendorExtReg, vendorExtSpace) ||
          UsesExtensionUAV(pDesc->PS, vendorExtReg, vendorExtSpace))
       {
-        // don't set initparams until we've seen at least one shader actually created using the
-        // extensions.
-        m_InitParams.VendorExtensions = m_VendorEXT;
+        // If this is AMD/Samsung vendor extensions, allow suppressing the replay requirement.
+        // Note: NVAPI captures are not suppressed here because they are generally only present
+        // on NVIDIA systems and are used for correctness.
+        const bool suppressAGS = (m_VendorEXT == GPUVendor::AMD || m_VendorEXT == GPUVendor::Samsung) &&
+                                 D3D12_Hack_SuppressAGSRequirement();
 
-        // if this shader uses the UAV slot registered for vendor extensions, serialise that out
-        // too
-        SCOPED_SERIALISE_CHUNK(D3D12Chunk::SetShaderExtUAV);
-        Serialise_SetShaderExtUAV(ser, m_VendorEXT, vendorExtReg, vendorExtSpace, true);
-        vendorChunk = scope.Get();
+        if(!suppressAGS)
+        {
+          // don't set initparams until we've seen at least one shader actually created using the
+          // extensions.
+          m_InitParams.VendorExtensions = m_VendorEXT;
+
+          // if this shader uses the UAV slot registered for vendor extensions, serialise that out
+          // too
+          SCOPED_SERIALISE_CHUNK(D3D12Chunk::SetShaderExtUAV);
+          Serialise_SetShaderExtUAV(ser, m_VendorEXT, vendorExtReg, vendorExtSpace, true);
+          vendorChunk = scope.Get();
+        }
       }
     }
 
@@ -970,15 +987,21 @@ void WrappedID3D12Device::ProcessCreatedComputePSO(ID3D12PipelineState *real, ui
     {
       if(UsesExtensionUAV(pDesc->CS, vendorExtReg, vendorExtSpace))
       {
-        // don't set initparams until we've seen at least one shader actually created using the
-        // extensions.
-        m_InitParams.VendorExtensions = m_VendorEXT;
+        const bool suppressAGS = (m_VendorEXT == GPUVendor::AMD || m_VendorEXT == GPUVendor::Samsung) &&
+                                 D3D12_Hack_SuppressAGSRequirement();
 
-        // if this shader uses the UAV slot registered for vendor extensions, serialise that out
-        // too
-        SCOPED_SERIALISE_CHUNK(D3D12Chunk::SetShaderExtUAV);
-        Serialise_SetShaderExtUAV(ser, m_VendorEXT, vendorExtReg, vendorExtSpace, true);
-        vendorChunk = scope.Get();
+        if(!suppressAGS)
+        {
+          // don't set initparams until we've seen at least one shader actually created using the
+          // extensions.
+          m_InitParams.VendorExtensions = m_VendorEXT;
+
+          // if this shader uses the UAV slot registered for vendor extensions, serialise that out
+          // too
+          SCOPED_SERIALISE_CHUNK(D3D12Chunk::SetShaderExtUAV);
+          Serialise_SetShaderExtUAV(ser, m_VendorEXT, vendorExtReg, vendorExtSpace, true);
+          vendorChunk = scope.Get();
+        }
       }
     }
 
