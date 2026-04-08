@@ -217,6 +217,7 @@
     <ClInclude Include="common\wrapped_pool.h" />
     <ClInclude Include="core\bit_flag_iterator.h" />
     <ClInclude Include="core\gpu_address_range_tracker.h" />
+    <ClInclude Include="core\rdcbytetrie.h" />
     <ClInclude Include="core\settings.h" />
     <ClInclude Include="core\core.h" />
     <ClInclude Include="core\crash_handler.h" />
@@ -263,6 +264,7 @@
     <ClInclude Include="serialise\serialiser.h" />
     <ClInclude Include="serialise\streamio.h" />
     <ClInclude Include="serialise\zstdio.h" />
+    <ClInclude Include="shaders\controlflow.h" />
     <ClInclude Include="strings\string_utils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -668,6 +670,7 @@
     <ClCompile Include="serialise\streamio.cpp" />
     <ClCompile Include="serialise\streamio_tests.cpp" />
     <ClCompile Include="serialise\zstdio.cpp" />
+    <ClCompile Include="shaders\controlflow.cpp" />
     <ClCompile Include="strings\grisu2.cpp" />
     <ClCompile Include="strings\string_utils.cpp" />
     <ClCompile Include="strings\utf8printf.cpp" />
