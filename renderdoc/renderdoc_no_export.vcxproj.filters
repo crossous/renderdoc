@@ -396,6 +396,9 @@
     <ClInclude Include="serialise\zstdio.h">
       <Filter>Common\Serialise\Compressors</Filter>
     </ClInclude>
+    <ClInclude Include="shaders\controlflow.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
     <ClInclude Include="serialise\rdcfile.h">
       <Filter>Common\Serialise\Container File</Filter>
     </ClInclude>
@@ -565,6 +568,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="core\gpu_address_range_tracker.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\rdcbytetrie.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="replay\common\var_dispatch_helpers.h">
@@ -838,6 +844,9 @@
     </ClCompile>
     <ClCompile Include="serialise\zstdio.cpp">
       <Filter>Common\Serialise\Compressors</Filter>
+    </ClCompile>
+    <ClCompile Include="shaders\controlflow.cpp">
+      <Filter>Shaders</Filter>
     </ClCompile>
     <ClCompile Include="serialise\streamio.cpp">
       <Filter>Common\Serialise\Stream I/O</Filter>
