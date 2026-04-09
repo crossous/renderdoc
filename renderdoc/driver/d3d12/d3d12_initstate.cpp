@@ -128,8 +128,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
     if(FAILED(hr))
     {
       RDResult error;
-      SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                       "Couldn't create query heap readback buffer: HRESULT: %s", ToStr(hr).c_str());
+      SET_ERROR_RESULT(
+          error, ResultCode::OutOfMemory,
+          "Couldn't create query heap readback buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+          RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+              ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU memory "
+                "usage during capture."
+              : "");
       m_Device->ReportFatalError(error);
       return false;
     }
@@ -173,6 +178,33 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
     }
 
     D3D12_RESOURCE_DESC desc = unwrappedResource->GetDesc();
+
+    // softMemoryLimit: estimate the size of this resource and flush to disk if we'd exceed the limit
+    {
+      uint64_t estimatedSize = 0;
+      if(desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+      {
+        estimatedSize = desc.Width;
+      }
+      else
+      {
+        // for textures, estimate based on dimensions and format
+        estimatedSize = GetByteSize(
+            (int)desc.Width, (int)desc.Height, (int)desc.DepthOrArraySize, desc.Format, 0);
+        if(desc.MipLevels > 1)
+          estimatedSize *= 2;    // conservative mip chain estimate
+        if(desc.SampleDesc.Count > 1)
+          estimatedSize *= desc.SampleDesc.Count;
+      }
+
+      uint32_t softMemoryLimit = RenderDoc::Inst().GetCaptureOptions().softMemoryLimit;
+      if(softMemoryLimit > 0 && !m_Device->m_PreparedNotSerialisedInitStates.empty() &&
+         m_Device->m_TotalInitialStateBytes + estimatedSize >
+             (uint64_t)softMemoryLimit * 1024 * 1024ULL)
+      {
+        m_Device->FlushInitialStatesToDisk();
+      }
+    }
 
     D3D12InitialContents initContents;
 
@@ -233,8 +265,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
         else
         {
           RDResult error;
-          SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                           "Couldn't map directly readback buffer: HRESULT: %s", ToStr(hr).c_str());
+          SET_ERROR_RESULT(
+              error, ResultCode::OutOfMemory,
+              "Couldn't map directly readback buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+              RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                  ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU "
+                    "memory usage during capture."
+                  : "");
           m_Device->ReportFatalError(error);
           return false;
         }
@@ -288,8 +325,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
       else
       {
         RDResult error;
-        SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                         "Couldn't create readback buffer: HRESULT: %s", ToStr(hr).c_str());
+        SET_ERROR_RESULT(
+            error, ResultCode::OutOfMemory,
+            "Couldn't create readback buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+            RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU memory "
+                  "usage during capture."
+                : "");
         m_Device->ReportFatalError(error);
         return false;
       }
@@ -484,8 +526,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
       else
       {
         RDResult error;
-        SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                         "Couldn't create readback buffer: HRESULT: %s", ToStr(hr).c_str());
+        SET_ERROR_RESULT(
+            error, ResultCode::OutOfMemory,
+            "Couldn't create readback buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+            RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU memory "
+                  "usage during capture."
+                : "");
         m_Device->ReportFatalError(error);
         return false;
       }
@@ -525,6 +572,23 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
     initContents.sparseTable = sparseTable;
 
     SetInitialContents(GetResID(res), initContents);
+
+    // softMemoryLimit: track this prepared resource and its size
+    {
+      uint32_t softMemoryLimit = RenderDoc::Inst().GetCaptureOptions().softMemoryLimit;
+      if(softMemoryLimit > 0)
+      {
+        uint64_t resourceBytes = 0;
+        if(initContents.resource)
+          resourceBytes = ((ID3D12Resource *)initContents.resource)->GetDesc().Width;
+        else if(initContents.tag == D3D12InitialContents::MapDirect)
+          resourceBytes = initContents.dataSize;
+
+        m_Device->m_TotalInitialStateBytes += resourceBytes;
+        m_Device->m_PreparedNotSerialisedInitStates.push_back(GetResID(res));
+      }
+    }
+
     return true;
   }
   else if(type == Resource_AccelerationStructure)
@@ -579,7 +643,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
         if(!serSize)
         {
           RDResult error;
-          SET_ERROR_RESULT(error, ResultCode::OutOfMemory, "Couldn't map AS query buffer");
+          SET_ERROR_RESULT(
+              error, ResultCode::OutOfMemory,
+              "Couldn't map AS query buffer.%s",
+              RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                  ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU "
+                    "memory usage during capture."
+                  : "");
           m_Device->ReportFatalError(error);
           return false;
         }
@@ -599,8 +669,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
       if(FAILED(hr))
       {
         RDResult error;
-        SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                         "Couldn't create serialisation buffer: HRESULT: %s", ToStr(hr).c_str());
+        SET_ERROR_RESULT(
+            error, ResultCode::OutOfMemory,
+            "Couldn't create serialisation buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+            RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU memory "
+                  "usage during capture."
+                : "");
         m_Device->ReportFatalError(error);
         return false;
       }
@@ -629,8 +704,13 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
       else
       {
         RDResult error;
-        SET_ERROR_RESULT(error, ResultCode::OutOfMemory,
-                         "Couldn't create readback buffer: HRESULT: %s", ToStr(hr).c_str());
+        SET_ERROR_RESULT(
+            error, ResultCode::OutOfMemory,
+            "Couldn't create readback buffer: HRESULT: %s.%s", ToStr(hr).c_str(),
+            RenderDoc::Inst().GetCaptureOptions().softMemoryLimit == 0
+                ? " Consider setting 'Soft Memory Limit' in capture settings to reduce GPU memory "
+                  "usage during capture."
+                : "");
         m_Device->ReportFatalError(error);
         return false;
       }

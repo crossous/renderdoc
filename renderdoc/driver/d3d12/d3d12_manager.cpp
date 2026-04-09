@@ -3974,6 +3974,31 @@ ResourceId D3D12ResourceManager::GetID(ID3D12DeviceChild *res)
   return GetResID(res);
 }
 
+bool D3D12ResourceManager::IsResourceTrackedForPersistency(ID3D12DeviceChild *const &res)
+{
+  D3D12ResourceType type = IdentifyTypeByPtr((ID3D12Object *)res);
+  return type == Resource_Resource || type == Resource_Heap;
+}
+
+void D3D12ResourceManager::Begin_PrepareInitialBatch()
+{
+}
+
+void D3D12ResourceManager::End_PrepareInitialBatch()
+{
+  // Close, execute, and flush any open initial state command lists.
+  // This is critical for mid-frame Prepare_InitialState calls triggered by
+  // postponed resources being referenced during active capture. Without this,
+  // an open command list on m_Alloc would cause E_INVALIDARG when
+  // EndFrameCapture tries to create a new command list with the same allocator.
+  if(m_Device->initStateCurList)
+  {
+    m_Device->CloseInitialStateList();
+    m_Device->ExecuteLists(NULL, true);
+    m_Device->FlushLists();
+  }
+}
+
 bool D3D12ResourceManager::ResourceTypeRelease(ID3D12DeviceChild *res)
 {
   if(res)
