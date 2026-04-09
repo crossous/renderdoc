@@ -1620,6 +1620,7 @@ void CaptureContext::SetEventID(const rdcarray<ICaptureViewer *> &exclude, uint3
   // we can't return until the event is selected, but a blocking invoke on the UI thread can cause
   // the UI to stall. We ideally want to have at least an interactive UI and a progress bar.
   m_Replay.AsyncInvoke(tag, [this, eventId, force, &done](IReplayController *r) {
+    r->SetSelectedEventID(m_SelectedEventID);
     r->SetFrameEvent(eventId, force);
     m_CurD3D11PipelineState = r->GetD3D11PipelineState();
     m_CurD3D12PipelineState = r->GetD3D12PipelineState();

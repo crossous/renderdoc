@@ -144,6 +144,12 @@ public:
   void FileChanged();
 
   void SetFrameEvent(uint32_t eventId, bool force);
+  void SetSelectedEventID(uint32_t selectedEventId)
+  {
+    m_PrevSelectedEventID = m_SelectedEventID;
+    m_SelectedEventID = selectedEventId;
+  }
+  uint32_t GetSelectedEventID() const { return m_SelectedEventID; }
 
   const D3D11Pipe::State *GetD3D11PipelineState();
   const D3D12Pipe::State *GetD3D12PipelineState();
@@ -275,6 +281,8 @@ private:
   ResultDetails m_FatalErrorResult = {ResultCode::Succeeded};
 
   uint32_t m_EventID;
+  uint32_t m_SelectedEventID = 0;
+  uint32_t m_PrevSelectedEventID = 0;
 
   std::map<uint32_t, uint32_t> m_EventRemap;
 

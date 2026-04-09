@@ -255,6 +255,11 @@ public:
 class IReplayDriver : public IRemoteDriver
 {
 public:
+  // When non-empty, overlay backends should render wireframe/drawcall for all listed child EIDs
+  // instead of just the current eventId. Set by ReplayOutput::RefreshOverlay when user selects
+  // a MultiAction parent node.
+  rdcarray<uint32_t> m_OverlayMultiActionEvents;
+
   virtual bool IsRemoteProxy() = 0;
 
   virtual IReplayDriver *MakeDummyDriver() = 0;

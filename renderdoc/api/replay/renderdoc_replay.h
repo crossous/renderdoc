@@ -483,6 +483,13 @@ function must be called from another thread.
 )");
   virtual void SetFrameEvent(uint32_t eventId, bool force) = 0;
 
+  DOCUMENT(R"(Sets the user-selected event ID, used to distinguish between selecting a MultiAction
+parent (where effectiveEID maps to the last child) and selecting the last child directly.
+
+:param int selectedEventId: The event ID of the item the user actually selected in the UI.
+)");
+  virtual void SetSelectedEventID(uint32_t selectedEventId) = 0;
+
   DOCUMENT(R"(Retrieve the current :class:`D3D11State` pipeline state.
 
 The return value will be ``None`` if the capture is not using the D3D11 API.

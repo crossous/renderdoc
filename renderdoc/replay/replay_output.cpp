@@ -220,6 +220,7 @@ void ReplayOutput::SetFrameEvent(int eventId)
   m_EventID = eventId;
 
   m_OverlayDirty = (m_RenderData.texDisplay.overlay != DebugOverlay::NoOverlay);
+
   m_CustomDirty = true;
   m_MainOutput.dirty = true;
 
@@ -282,10 +283,26 @@ void ReplayOutput::RefreshOverlay()
     {
       FloatVector f = m_RenderData.texDisplay.backgroundColor;
 
+      // when user selects a MultiAction parent, the effective EID maps to the last child.
+      // detect this by comparing selectedEventID with m_EventID.
+      m_pDevice->m_OverlayMultiActionEvents.clear();
+      uint32_t selectedEID = m_pController->GetSelectedEventID();
+      if(selectedEID != m_EventID && action->parent &&
+         (action->parent->flags & ActionFlags::MultiAction))
+      {
+        for(const ActionDescription &child : action->parent->children)
+        {
+          if(child.flags & ActionFlags::Drawcall)
+            m_pDevice->m_OverlayMultiActionEvents.push_back(child.eventId);
+        }
+      }
+
       m_OverlayResourceId =
           m_pDevice->RenderOverlay(id, f, m_RenderData.texDisplay.overlay, m_EventID, passEvents);
       m_pController->FatalErrorCheck();
       m_OverlayDirty = false;
+
+      m_pDevice->m_OverlayMultiActionEvents.clear();
     }
     else
     {
