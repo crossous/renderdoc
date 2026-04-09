@@ -411,20 +411,10 @@ void InjectFunctionCall(HANDLE hProcess, const wchar_t* dllPath, uintptr_t rende
 
   RDCDEBUG("Injecting call to %s", funcName);
 
-#if ENABLED(RDOC_DEVEL)
-  HMODULE renderdoc_local = GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll");
-
-  uintptr_t func_local = (uintptr_t)GetProcAddress(renderdoc_local, funcName);
-
-  // we've found SetCaptureOptions in our local instance of the module, now calculate the offset and
-  // so get the function
-  // in the remote module (which might be loaded at a different base address
-  uintptr_t func_remote = func_local + renderdoc_remote - (uintptr_t)renderdoc_local;
-#else
-  // Because the exported functions of the two DLLs are different, in the release version, their RVA addresses differ.
-  // Therefore, it is not possible to calculate the function addresses using the local DLL addresses as done in the development.
+  // Always resolve function RVA from the actual remote DLL file on disk, because the local DLL
+  // (renderdoc.dll) and the remote DLL (system_load.dll) may have different export layouts
+  // even in Development builds, due to RENDERDOC_NO_EXPORTS changing linker output.
   uintptr_t func_remote = renderdoc_remote + GetFunctionRVA(dllPath, funcName);
-#endif
 
   void *remoteMem = VirtualAllocEx(hProcess, NULL, dataLen, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
   SIZE_T numWritten;
