@@ -1412,7 +1412,21 @@ ResourceId VulkanReplay::RenderOverlay(ResourceId texid, FloatVector clearCol, D
 
       if(patchedIndexCount == 0)
       {
-        m_pDriver->ReplayLog(0, eventId, eReplay_OnlyDraw);
+        const rdcarray<uint32_t> &multiActionEvents = m_OverlayMultiActionEvents;
+
+        if(!multiActionEvents.empty())
+        {
+          VulkanRenderState overlayState = state;
+          for(uint32_t childEID : multiActionEvents)
+          {
+            state = overlayState;
+            m_pDriver->ReplayLog(0, childEID, eReplay_OnlyDraw);
+          }
+        }
+        else
+        {
+          m_pDriver->ReplayLog(0, eventId, eReplay_OnlyDraw);
+        }
       }
       else
       {

@@ -88,6 +88,13 @@ void ReplayController::SetFrameEvent(uint32_t eventId, bool force)
 
     FetchPipelineState(eventId);
   }
+  else if(m_SelectedEventID != m_PrevSelectedEventID)
+  {
+    // effectiveEID didn't change but selectedEID did (e.g. switching between
+    // a MultiAction parent and its last child). refresh overlays only.
+    for(size_t i = 0; i < m_Outputs.size(); i++)
+      m_Outputs[i]->SetFrameEvent(eventId);
+  }
 }
 
 const D3D11Pipe::State *ReplayController::GetD3D11PipelineState()

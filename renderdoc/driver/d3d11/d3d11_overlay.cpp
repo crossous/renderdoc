@@ -334,7 +334,17 @@ ResourceId D3D11Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
 
     m_pImmediateContext->RSSetState(rs);
 
-    m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+    const rdcarray<uint32_t> &multiActionEvents = m_OverlayMultiActionEvents;
+
+    if(!multiActionEvents.empty())
+    {
+      for(uint32_t childEID : multiActionEvents)
+        m_pDevice->ReplayLog(0, childEID, eReplay_OnlyDraw);
+    }
+    else
+    {
+      m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+    }
 
     SAFE_RELEASE(os);
     SAFE_RELEASE(rs);
@@ -684,7 +694,17 @@ ResourceId D3D11Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
 
     m_pImmediateContext->RSSetState(rs);
 
-    m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+    const rdcarray<uint32_t> &multiActionEvents = m_OverlayMultiActionEvents;
+
+    if(!multiActionEvents.empty())
+    {
+      for(uint32_t childEID : multiActionEvents)
+        m_pDevice->ReplayLog(0, childEID, eReplay_OnlyDraw);
+    }
+    else
+    {
+      m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+    }
 
     SAFE_RELEASE(os);
     SAFE_RELEASE(rs);

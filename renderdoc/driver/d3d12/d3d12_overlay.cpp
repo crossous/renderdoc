@@ -1125,7 +1125,21 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
       for(D3D12_RECT &r : rs.scissors)
         r = {0, 0, 32768, 32768};
 
-      m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+      const rdcarray<uint32_t> &multiActionEvents = m_OverlayMultiActionEvents;
+
+      if(!multiActionEvents.empty())
+      {
+        D3D12RenderState overlayState = rs;
+        for(uint32_t childEID : multiActionEvents)
+        {
+          rs = overlayState;
+          m_pDevice->ReplayLog(0, childEID, eReplay_OnlyDraw);
+        }
+      }
+      else
+      {
+        m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+      }
 
       rs = prev;
 
@@ -1321,7 +1335,21 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
       rs.rts[0] = *GetWrapped(rtv);
       RDCEraseEl(rs.dsv);
 
-      m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+      const rdcarray<uint32_t> &multiActionEvents = m_OverlayMultiActionEvents;
+
+      if(!multiActionEvents.empty())
+      {
+        D3D12RenderState overlayState = rs;
+        for(uint32_t childEID : multiActionEvents)
+        {
+          rs = overlayState;
+          m_pDevice->ReplayLog(0, childEID, eReplay_OnlyDraw);
+        }
+      }
+      else
+      {
+        m_pDevice->ReplayLog(0, eventId, eReplay_OnlyDraw);
+      }
 
       rs = prev;
 
