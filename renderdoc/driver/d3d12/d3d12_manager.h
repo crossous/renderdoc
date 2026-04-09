@@ -1528,7 +1528,14 @@ public:
 
   void SetInternalResource(ID3D12DeviceChild *res);
 
+  bool IsResourceTrackedForPersistency(ID3D12DeviceChild *const &res) override;
+
+  void Begin_PrepareInitialBatch() override;
+  void End_PrepareInitialBatch() override;
+
 private:
+  friend class WrappedID3D12Device;
+
   ResourceId GetID(ID3D12DeviceChild *res);
 
   bool ResourceTypeRelease(ID3D12DeviceChild *res);

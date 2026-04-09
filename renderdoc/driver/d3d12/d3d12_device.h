@@ -1107,6 +1107,13 @@ public:
   rdcarray<ID3D12Heap *> m_InitialStateHeaps;
   UINT64 m_LastInitialStateHeapOffset = 0;
 
+  // softMemoryLimit support: flush initial states to disk in batches
+  rdcarray<ResourceId> m_PreparedNotSerialisedInitStates;
+  rdcarray<rdcstr> m_InitTempFiles;
+  uint64_t m_TotalInitialStateBytes = 0;
+  void FlushInitialStatesToDisk();
+  void FreeInitialStateHeaps();
+
   void ApplyInitialContents();
 
   void AddCaptureSubmission();
