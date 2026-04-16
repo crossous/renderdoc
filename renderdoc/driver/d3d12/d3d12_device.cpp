@@ -1656,79 +1656,6 @@ HRESULT WrappedID3D12Device::CreateInitialStateBuffer(const D3D12_RESOURCE_DESC 
   return ret;
 }
 
-void WrappedID3D12Device::FreeInitialStateHeaps()
-{
-  for(ID3D12Heap *h : m_InitialStateHeaps)
-    h->Release();
-  m_InitialStateHeaps.clear();
-  m_LastInitialStateHeapOffset = 0;
-}
-
-void WrappedID3D12Device::FlushInitialStatesToDisk()
-{
-  if(m_PreparedNotSerialisedInitStates.empty())
-    return;
-
-  // ensure all GPU copies are complete
-  if(initStateCurList)
-    CloseInitialStateList();
-  ExecuteLists(NULL, true);
-  FlushLists();
-
-  RDCLOG("Flushing batch of %zu initial states to disk (%llu bytes allocated)",
-         m_PreparedNotSerialisedInitStates.size(), m_TotalInitialStateBytes);
-
-  rdcstr tempFile = StringFormat::Fmt(
-      "%s/rdoc_%llu_%llu.bin", get_dirname(RenderDoc::Inst().GetCaptureFileTemplate()).c_str(),
-      Timing::GetTick(), Threading::GetCurrentID());
-  FileIO::CreateParentDirectory(tempFile);
-  m_InitTempFiles.push_back(tempFile);
-
-  WriteSerialiser ser(
-      new StreamWriter(FileIO::fopen(tempFile, FileIO::WriteBinary), Ownership::Stream),
-      Ownership::Stream);
-
-  D3D12ResourceManager *rm = GetResourceManager();
-
-  for(ResourceId flushId : m_PreparedNotSerialisedInitStates)
-  {
-    D3D12InitialContents initData = rm->GetInitialContents(flushId);
-
-    uint64_t start = ser.GetWriter()->GetOffset();
-    {
-      uint64_t size = rm->GetSize_InitialState(flushId, initData);
-
-      SCOPED_SERIALISE_CHUNK(SystemChunk::InitialContents, size);
-
-      rm->Serialise_InitialState(ser, flushId, rm->GetResourceRecord(flushId), &initData);
-
-      // Clear the existing init contents to free GPU memory
-      D3D12InitialContents clearedContents;
-      clearedContents.resourceType = initData.resourceType;
-      rm->SetInitialContents(flushId, clearedContents);
-    }
-    uint64_t end = ser.GetWriter()->GetOffset();
-
-    if(ser.IsErrored())
-      break;
-
-    rm->SetInitialFileStore(flushId, tempFile, start, end);
-  }
-
-  m_PreparedNotSerialisedInitStates.clear();
-
-  if(ser.IsErrored())
-  {
-    m_CaptureFailure = true;
-    m_LastCaptureError = ser.GetError();
-    return;
-  }
-
-  // Free the readback heaps now that data has been flushed to disk
-  FreeInitialStateHeaps();
-  m_TotalInitialStateBytes = 0;
-}
-
 ID3D12Resource *WrappedID3D12Device::GetUploadBuffer(uint64_t chunkOffset, uint64_t byteSize)
 {
   ID3D12Resource *buf = m_UploadBuffers[chunkOffset];
@@ -3424,12 +3351,6 @@ bool WrappedID3D12Device::EndFrameCapture(DeviceOwnedWindow devWnd)
     h->Release();
   m_InitialStateHeaps.clear();
 
-  // clean up temp files from softMemoryLimit flush
-  for(const rdcstr &f : m_InitTempFiles)
-    FileIO::Delete(f);
-  m_InitTempFiles.clear();
-  m_TotalInitialStateBytes = 0;
-
   WrappedID3D12CommandAllocator::ResumeResets();
 
   GetResourceManager()->MarkUnwrittenResources();
@@ -3440,6 +3361,7 @@ bool WrappedID3D12Device::EndFrameCapture(DeviceOwnedWindow devWnd)
 
   return true;
 }
+
 bool WrappedID3D12Device::DiscardFrameCapture(DeviceOwnedWindow devWnd)
 {
   if(!IsActiveCapturing(m_State))
@@ -3493,12 +3415,6 @@ bool WrappedID3D12Device::DiscardFrameCapture(DeviceOwnedWindow devWnd)
     h->Release();
   m_InitialStateHeaps.clear();
 
-  // clean up temp files from softMemoryLimit flush
-  for(const rdcstr &f : m_InitTempFiles)
-    FileIO::Delete(f);
-  m_InitTempFiles.clear();
-  m_TotalInitialStateBytes = 0;
-
   WrappedID3D12CommandAllocator::ResumeResets();
 
   GetResourceManager()->MarkUnwrittenResources();
@@ -3509,6 +3425,7 @@ bool WrappedID3D12Device::DiscardFrameCapture(DeviceOwnedWindow devWnd)
 
   return true;
 }
+
 uint32_t WrappedID3D12Device::SetObjectAnnotation(void *object, const char *key,
                                                   RENDERDOC_AnnotationType valueType,
                                                   uint32_t valueVectorWidth,
