@@ -41,7 +41,7 @@ echo x64 build OK.
 :: ---- Build Android ARM32 ----
 echo.
 echo [3/4] Building Android ARM32 Release ...
-"%MSYS2_BASH%" -l "%SCRIPTDIR%build_android_arm32.sh"
+"%MSYS2_BASH%" "%SCRIPTDIR%build_android_arm32.sh"
 if errorlevel 1 (
     echo ERROR: Android ARM32 build failed.
     exit /b 1
@@ -51,7 +51,7 @@ echo Android ARM32 build OK.
 :: ---- Build Android ARM64 ----
 echo.
 echo [4/4] Building Android ARM64 Release ...
-"%MSYS2_BASH%" -l "%SCRIPTDIR%build_android_arm64.sh"
+"%MSYS2_BASH%" "%SCRIPTDIR%build_android_arm64.sh"
 if errorlevel 1 (
     echo ERROR: Android ARM64 build failed.
     exit /b 1

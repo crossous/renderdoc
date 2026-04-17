@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 export JAVA_HOME='/c/Program Files/Java/jdk8u422-b05'
-export PATH="$JAVA_HOME/bin:$PATH"
+export PATH="/mingw64/bin:/usr/bin:$JAVA_HOME/bin:$PATH"
 export ANDROID_HOME='D:/Android/Sdk'
 export ANDROID_NDK_HOME='D:/Android/Sdk/ndk/android-ndk-r14b'
 
