@@ -5,6 +5,7 @@ set "MSBUILD=C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Cur
 set "SLNDIR=%~dp0.."
 set "SLN=%SLNDIR%\renderdoc.sln"
 set "MSYS2_BASH=C:\msys64\usr\bin\bash.exe"
+set "SCRIPTDIR=%~dp0"
 
 :: Parse version from version.h
 for /f "tokens=3" %%a in ('findstr /C:"RENDERDOC_VERSION_MAJOR" "%SLNDIR%\renderdoc\api\replay\version.h" ^| findstr /V STRINGIZE') do set "VER_MAJOR=%%a"
@@ -40,7 +41,7 @@ echo x64 build OK.
 :: ---- Build Android ARM32 ----
 echo.
 echo [3/4] Building Android ARM32 Release ...
-"%MSYS2_BASH%" -l -c "export JAVA_HOME='/c/Program Files/Java/jdk8u422-b05' && export PATH=\"$JAVA_HOME/bin:$PATH\" && export ANDROID_HOME='D:/Android/Sdk' && export ANDROID_NDK_HOME='D:/Android/Sdk/ndk/android-ndk-r14b' && cd 'D:/Project/CPP/renderdoc' && rm -rf build-android-arm32 && mkdir build-android-arm32 && cd build-android-arm32 && cmake -G 'MSYS Makefiles' -DCMAKE_TOOLCHAIN_FILE=\"$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake\" -DCMAKE_ANDROID_STL_TYPE=c++_static -DBUILD_ANDROID=1 -DANDROID_ABI=armeabi-v7a -DANDROID_STL=c++_static -DANDROID_TOOLCHAIN=clang -DCMAKE_BUILD_TYPE=Release -DSTRIP_ANDROID_LIBRARY=On .. && make -j$(nproc)"
+"%MSYS2_BASH%" -l "%SCRIPTDIR%build_android_arm32.sh"
 if errorlevel 1 (
     echo ERROR: Android ARM32 build failed.
     exit /b 1
@@ -50,7 +51,7 @@ echo Android ARM32 build OK.
 :: ---- Build Android ARM64 ----
 echo.
 echo [4/4] Building Android ARM64 Release ...
-"%MSYS2_BASH%" -l -c "export JAVA_HOME='/c/Program Files/Java/jdk8u422-b05' && export PATH=\"$JAVA_HOME/bin:$PATH\" && export ANDROID_HOME='D:/Android/Sdk' && export ANDROID_NDK_HOME='D:/Android/Sdk/ndk/android-ndk-r14b' && cd 'D:/Project/CPP/renderdoc' && rm -rf build-android-arm64 && mkdir build-android-arm64 && cd build-android-arm64 && cmake -G 'MSYS Makefiles' -DCMAKE_TOOLCHAIN_FILE=\"$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake\" -DCMAKE_ANDROID_STL_TYPE=c++_static -DBUILD_ANDROID=1 -DANDROID_ABI=arm64-v8a -DANDROID_STL=c++_static -DANDROID_TOOLCHAIN=clang -DCMAKE_BUILD_TYPE=Release -DSTRIP_ANDROID_LIBRARY=On .. && make -j$(nproc)"
+"%MSYS2_BASH%" -l "%SCRIPTDIR%build_android_arm64.sh"
 if errorlevel 1 (
     echo ERROR: Android ARM64 build failed.
     exit /b 1
