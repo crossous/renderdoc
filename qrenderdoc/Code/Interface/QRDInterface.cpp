@@ -111,6 +111,7 @@ CaptureSettings::operator QVariant() const
 
   ret[lit("queuedFrameCap")] = queuedFrameCap;
   ret[lit("numQueuedFrames")] = numQueuedFrames;
+  ret[lit("monitorScriptPath")] = monitorScriptPath;
 
   return ret;
 }
@@ -160,6 +161,9 @@ CaptureSettings::CaptureSettings(const QVariant &v)
     numQueuedFrames = data[lit("numQueuedFrames")].toUInt();
   else
     numQueuedFrames = 0;
+
+  if(data.contains(lit("monitorScriptPath")))
+    monitorScriptPath = data[lit("monitorScriptPath")].toString();
 }
 
 rdcstr ConfigFilePath(const rdcstr &filename)

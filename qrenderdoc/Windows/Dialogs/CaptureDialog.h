@@ -90,6 +90,8 @@ private slots:
   void on_workDirBrowse_clicked();
   void on_envVarEdit_clicked();
 
+  void on_monitorScriptBrowse_clicked();
+
   void on_processFilter_textChanged(const QString &arg1);
   void on_processRefesh_clicked();
 
@@ -134,4 +136,6 @@ private:
 
   void CheckAndroidSetup(QString &filename);
   AndroidFlags m_AndroidFlags;
+
+  void WritePendingMonitorScript();
 };

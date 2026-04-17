@@ -27,13 +27,14 @@
 #include "api/replay/renderdoc_replay.h"
 #include "common/threading.h"
 #include "core/core.h"
+#include "core/api_monitor.h"
 #include "jpeg-compressor/jpgd.h"
 #include "os/os_specific.h"
 #include "replay/replay_driver.h"
 #include "serialise/serialiser.h"
 #include "strings/string_utils.h"
 
-static const uint32_t TargetControlProtocolVersion = 9;
+static const uint32_t TargetControlProtocolVersion = 10;
 
 static bool IsProtocolVersionSupported(const uint32_t protocolVersion)
 {
@@ -65,6 +66,10 @@ static bool IsProtocolVersionSupported(const uint32_t protocolVersion)
   if(protocolVersion == 8)
     return true;
 
+  // 9 -> 10 add API Monitor packets (MonitorScript, MonitorControl, MonitorLog, MonitorStatus)
+  if(protocolVersion == 9)
+    return true;
+
   if(protocolVersion == TargetControlProtocolVersion)
     return true;
 
@@ -86,7 +91,13 @@ enum PacketType : uint32_t
   ePacket_CaptureProgress,
   ePacket_CycleActiveWindow,
   ePacket_CapturableWindowCount,
-  ePacket_RequestShow
+  ePacket_RequestShow,
+
+  // API Monitor packets (protocol v10)
+  ePacket_MonitorScript,       // UI -> DLL: send Python script source
+  ePacket_MonitorControl,      // UI -> DLL: start/stop/reload + python dll path
+  ePacket_MonitorLog,          // DLL -> UI: buffered log messages
+  ePacket_MonitorStatus,       // DLL -> UI: monitor status string
 };
 
 DECLARE_REFLECTION_ENUM(PacketType);
@@ -109,6 +120,10 @@ rdcstr DoStringise(const PacketType &el)
     STRINGISE_ENUM_NAMED(ePacket_CaptureProgress, "Capture Progress");
     STRINGISE_ENUM_NAMED(ePacket_CycleActiveWindow, "Cycle Active Window");
     STRINGISE_ENUM_NAMED(ePacket_CapturableWindowCount, "Capturable Window Count");
+    STRINGISE_ENUM_NAMED(ePacket_MonitorScript, "Monitor Script");
+    STRINGISE_ENUM_NAMED(ePacket_MonitorControl, "Monitor Control");
+    STRINGISE_ENUM_NAMED(ePacket_MonitorLog, "Monitor Log");
+    STRINGISE_ENUM_NAMED(ePacket_MonitorStatus, "Monitor Status");
   }
   END_ENUM_STRINGISE();
 }
@@ -329,6 +344,22 @@ void RenderDoc::TargetControlClientThread(uint32_t version, Network::Socket *cli
       }
     }
 
+#if RENDERDOC_ENABLE_API_MONITOR
+    // Send any pending API Monitor log messages (every tick if available)
+    if(version >= 10 && ApiMonitor::Inst().HasPendingLogs())
+    {
+      rdcarray<rdcstr> logs = ApiMonitor::Inst().DrainLogs();
+      if(!logs.empty())
+      {
+        WRITE_DATA_SCOPE();
+        {
+          SCOPED_SERIALISE_CHUNK(ePacket_MonitorLog);
+          SERIALISE_ELEMENT(logs);
+        }
+      }
+    }
+#endif
+
     if(curtime > pingtime)
     {
       WRITE_DATA_SCOPE();
@@ -411,6 +442,68 @@ void RenderDoc::TargetControlClientThread(uint32_t version, Network::Socket *cli
       {
         RenderDoc::Inst().CycleActiveWindow();
       }
+#if RENDERDOC_ENABLE_API_MONITOR
+      else if(type == ePacket_MonitorScript && version >= 10)
+      {
+        rdcstr scriptSource;
+
+        {
+          READ_DATA_SCOPE();
+          SERIALISE_ELEMENT(scriptSource);
+        }
+
+        rdcstr errorOut;
+        bool ok = ApiMonitor::Inst().LoadScript(scriptSource, errorOut);
+
+        // Send status back
+        {
+          WRITE_DATA_SCOPE();
+          SCOPED_SERIALISE_CHUNK(ePacket_MonitorStatus);
+          rdcstr status = ok ? ApiMonitor::Inst().GetStatus() : errorOut;
+          SERIALISE_ELEMENT(status);
+        }
+      }
+      else if(type == ePacket_MonitorControl && version >= 10)
+      {
+        rdcstr command;
+        rdcstr pythonDllPath;
+
+        {
+          READ_DATA_SCOPE();
+          SERIALISE_ELEMENT(command);
+          SERIALISE_ELEMENT(pythonDllPath);
+        }
+
+        rdcstr status;
+        if(command == "load_python")
+        {
+          bool ok = ApiMonitor::Inst().LoadPython(pythonDllPath);
+          status = ok ? "Python loaded" : ApiMonitor::Inst().GetPythonError();
+        }
+        else if(command == "unload")
+        {
+          ApiMonitor::Inst().UnloadScript();
+          status = "Script unloaded";
+        }
+        else if(command == "reload")
+        {
+          rdcstr errorOut;
+          bool ok = ApiMonitor::Inst().ReloadScript(errorOut);
+          status = ok ? ApiMonitor::Inst().GetStatus() : errorOut;
+        }
+        else if(command == "status")
+        {
+          status = ApiMonitor::Inst().GetStatus();
+        }
+
+        // Send status back
+        {
+          WRITE_DATA_SCOPE();
+          SCOPED_SERIALISE_CHUNK(ePacket_MonitorStatus);
+          SERIALISE_ELEMENT(status);
+        }
+      }
+#endif
 
       reader.EndChunk();
 
@@ -721,6 +814,33 @@ public:
       SAFE_DELETE(m_Socket);
   }
 
+  void SendMonitorScript(const rdcstr &scriptSource)
+  {
+    if(m_Version < 10)
+      return;
+
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(ePacket_MonitorScript);
+    SERIALISE_ELEMENT(scriptSource);
+
+    if(ser.IsErrored())
+      SAFE_DELETE(m_Socket);
+  }
+
+  void SendMonitorControl(const rdcstr &command, const rdcstr &pythonDllPath)
+  {
+    if(m_Version < 10)
+      return;
+
+    WRITE_DATA_SCOPE();
+    SCOPED_SERIALISE_CHUNK(ePacket_MonitorControl);
+    SERIALISE_ELEMENT(command);
+    SERIALISE_ELEMENT(pythonDllPath);
+
+    if(ser.IsErrored())
+      SAFE_DELETE(m_Socket);
+  }
+
   TargetControlMessage ReceiveMessage(RENDERDOC_ProgressCallback progress)
   {
     TargetControlMessage msg;
@@ -938,6 +1058,26 @@ public:
     else if(type == ePacket_RequestShow)
     {
       msg.type = TargetControlMessageType::RequestShow;
+      reader.EndChunk();
+      return msg;
+    }
+    else if(type == ePacket_MonitorLog)
+    {
+      msg.type = TargetControlMessageType::MonitorLog;
+      {
+        READ_DATA_SCOPE();
+        SERIALISE_ELEMENT(msg.monitorLogs);
+      }
+      reader.EndChunk();
+      return msg;
+    }
+    else if(type == ePacket_MonitorStatus)
+    {
+      msg.type = TargetControlMessageType::MonitorStatus;
+      {
+        READ_DATA_SCOPE();
+        SERIALISE_ELEMENT(msg.monitorStatus);
+      }
       reader.EndChunk();
       return msg;
     }

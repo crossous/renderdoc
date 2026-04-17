@@ -228,6 +228,8 @@
     <ClInclude Include="core\replay_proxy.h" />
     <ClInclude Include="core\resource_manager.h" />
     <ClInclude Include="core\sparse_page_table.h" />
+    <ClInclude Include="core\python_loader.h" />
+    <ClInclude Include="core\api_monitor.h" />
     <ClInclude Include="data\embedded_files.h" />
     <ClInclude Include="data\glsl\glsl_ubos.h" />
     <ClInclude Include="data\glsl\glsl_ubos_cpp.h" />
@@ -565,6 +567,10 @@
     <ClCompile Include="core\remote_server.cpp" />
     <ClCompile Include="core\replay_proxy.cpp" />
     <ClCompile Include="core\resource_manager.cpp" />
+    <ClCompile Include="core\python_loader.cpp" />
+    <ClCompile Include="core\api_monitor.cpp" />
+    <ClCompile Include="core\api_monitor_pymodule.cpp" />
+    <ClCompile Include="core\api_monitor_export.cpp" />
     <ClCompile Include="data\glsl_shaders.cpp" />
     <ClCompile Include="hooks\hooks.cpp" />
     <ClCompile Include="maths\camera.cpp" />

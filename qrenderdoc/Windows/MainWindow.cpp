@@ -38,11 +38,13 @@
 #include <QToolButton>
 #include <QToolTip>
 #include "Code/QRDUtils.h"
+#include "Code/CaptureContext.h"
 #include "Code/Resources.h"
 #include "Widgets/Extended/RDLabel.h"
 #include "Widgets/Extended/RDMenu.h"
 #include "Widgets/ReplayOptionsSelector.h"
 #include "Windows/Dialogs/AboutDialog.h"
+#include "Windows/ApiMonitorWindow.h"
 #include "Windows/Dialogs/CaptureDialog.h"
 #include "Windows/Dialogs/CrashDialog.h"
 #include "Windows/Dialogs/ExtensionManager.h"
@@ -112,6 +114,9 @@ void MainWindow::MakeNetworkRequest(QUrl url, std::function<void(QByteArray)> su
 MainWindow::MainWindow(ICaptureContext &ctx) : QMainWindow(NULL), ui(new Ui::MainWindow), m_Ctx(ctx)
 {
   ui->setupUi(this);
+
+  // Clean up any leftover monitor script from a previous session (crash, etc.)
+  QFile::remove(QDir::temp().filePath(lit("rdcmonitor_pending.py")));
 
   setProperty("ICaptureContext", QVariant::fromValue((void *)&ctx));
 
@@ -762,6 +767,13 @@ void MainWindow::OnCaptureTrigger(const QString &exe, const QString &workingDir,
           ret.ident, this, this);
       ShowLiveCapture(live);
       callback(live);
+
+      // Wire API Monitor window to this LiveCapture if it exists
+      {
+        CaptureContext &ctx = static_cast<CaptureContext &>(m_Ctx);
+        if(ctx.HasApiMonitorWindow())
+          ctx.GetApiMonitorWindow()->SetTargetConnection(live);
+      }
     });
   });
   th->setName(lit("ExecuteAndInject"));
@@ -801,6 +813,13 @@ void MainWindow::OnInjectTrigger(uint32_t PID, const rdcarray<EnvironmentModific
       LiveCapture *live = new LiveCapture(m_Ctx, QString(), QString(), ret.ident, this, this);
       ShowLiveCapture(live);
       callback(live);
+
+      // Wire API Monitor window to this LiveCapture if it exists
+      {
+        CaptureContext &ctx = static_cast<CaptureContext &>(m_Ctx);
+        if(ctx.HasApiMonitorWindow())
+          ctx.GetApiMonitorWindow()->SetTargetConnection(live);
+      }
     });
   });
   th->start();
@@ -2653,6 +2672,22 @@ void MainWindow::on_action_Python_Shell_triggered()
     ToolWindowManager::raiseToolWindow(py);
   else
     ui->toolWindowManager->addToolWindow(py, mainToolArea());
+}
+
+void MainWindow::on_action_API_Monitor_triggered()
+{
+  CaptureContext &ctx = static_cast<CaptureContext &>(m_Ctx);
+  ApiMonitorWindow *monWin = ctx.GetApiMonitorWindow();
+  QWidget *mon = monWin->Widget();
+
+  if(ui->toolWindowManager->toolWindows().contains(mon))
+    ToolWindowManager::raiseToolWindow(mon);
+  else
+    ui->toolWindowManager->addToolWindow(mon, mainToolArea());
+
+  // Auto-connect to the most recent LiveCapture if one exists and window is disconnected
+  if(!m_LiveCaptures.isEmpty())
+    monWin->SetTargetConnection(m_LiveCaptures.last());
 }
 
 void MainWindow::on_action_Resolve_Symbols_triggered()

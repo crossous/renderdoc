@@ -58,6 +58,10 @@ public:
   ~LiveCapture();
 
   void QueueCapture(int frameNumber, int numFrames);
+  void SetMonitorScriptPath(const QString &path);
+  void SendMonitorScript(const QString &scriptSource);
+  void SendMonitorControl(const QString &command);
+  QStringList GetMonitorLogCache();
   const QString &hostname() { return m_Hostname; }
   void cleanItems();
   void fileSaved(QString from, QString to);
@@ -66,6 +70,10 @@ public:
 
 public slots:
   bool checkAllowClose();
+
+signals:
+  void monitorLogsReceived(QStringList logs);
+  void monitorStatusReceived(QString status);
 
 private slots:
   void on_captures_itemSelectionChanged();
@@ -203,4 +211,16 @@ private:
 
   int m_ButtonColorHue = 0;
   QTimer *m_ButtonColorTimer;
+
+  // API Monitor support
+  QString m_MonitorScriptPath;
+  QSemaphore m_SendMonitorScript;
+  QString m_PendingScriptSource;
+  QMutex m_PendingScriptLock;
+  QSemaphore m_SendMonitorControl;
+  QString m_PendingControlCmd;
+  QMutex m_PendingControlLock;
+  QMutex m_MonitorLogCacheLock;
+  QStringList m_MonitorLogCache;
+  static const int MAX_CACHED_LOGS = 10000;
 };

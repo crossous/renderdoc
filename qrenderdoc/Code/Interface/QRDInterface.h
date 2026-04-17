@@ -147,6 +147,11 @@ struct CaptureSettings
 :type: int
 )");
   uint32_t queuedFrameCap;
+  DOCUMENT(R"(The path to a Python monitor script to auto-load on launch. Empty for none.
+
+:type: str
+)");
+  rdcstr monitorScriptPath;
 };
 
 DECLARE_REFLECTION_STRUCT(CaptureSettings);

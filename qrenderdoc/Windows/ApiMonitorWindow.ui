@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ApiMonitorWindow</class>
+ <widget class="QFrame" name="ApiMonitorWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>API Monitor</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>2</number>
+   </property>
+   <property name="leftMargin">
+    <number>3</number>
+   </property>
+   <property name="topMargin">
+    <number>3</number>
+   </property>
+   <property name="rightMargin">
+    <number>3</number>
+   </property>
+   <property name="bottomMargin">
+    <number>3</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="toolbar">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>28</height>
+      </size>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Panel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <layout class="QHBoxLayout" name="toolbarLayout">
+      <property name="spacing">
+       <number>2</number>
+      </property>
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>2</number>
+      </property>
+      <property name="rightMargin">
+       <number>6</number>
+      </property>
+      <property name="bottomMargin">
+       <number>2</number>
+      </property>
+      <item>
+       <widget class="QToolButton" name="openScript">
+        <property name="toolTip">
+         <string>Open a Python monitor script</string>
+        </property>
+        <property name="text">
+         <string>Open</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../Resources/resources.qrc">
+          <normaloff>:/folder_page_white.png</normaloff>:/folder_page_white.png</iconset>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonTextBesideIcon</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="saveScript">
+        <property name="toolTip">
+         <string>Save the current script to disk</string>
+        </property>
+        <property name="text">
+         <string>Save</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../Resources/resources.qrc">
+          <normaloff>:/save.png</normaloff>:/save.png</iconset>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonTextBesideIcon</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="sep1">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="applyScript">
+        <property name="toolTip">
+         <string>Send script to the target application</string>
+        </property>
+        <property name="text">
+         <string>Apply</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../Resources/resources.qrc">
+          <normaloff>:/arrow_right.png</normaloff>:/arrow_right.png</iconset>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonTextBesideIcon</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="unloadScript">
+        <property name="toolTip">
+         <string>Unload the active script from the target</string>
+        </property>
+        <property name="text">
+         <string>Unload</string>
+        </property>
+        <property name="icon">
+         <iconset resource="../Resources/resources.qrc">
+          <normaloff>:/del.png</normaloff>:/del.png</iconset>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonTextBesideIcon</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="sep2">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="clearLog">
+        <property name="toolTip">
+         <string>Clear the log output</string>
+        </property>
+        <property name="text">
+         <string>Clear Log</string>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonTextBesideIcon</enum>
+        </property>
+        <property name="autoRaise">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="toolbarSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="statusLabel">
+        <property name="text">
+         <string>Disconnected</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="splitter">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="childrenCollapsible">
+      <bool>false</bool>
+     </property>
+     <widget class="RDTextEdit" name="logOutput">
+      <property name="verticalScrollBarPolicy">
+       <enum>Qt::ScrollBarAlwaysOn</enum>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+      <property name="textInteractionFlags">
+       <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+      </property>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>RDTextEdit</class>
+   <extends>QTextEdit</extends>
+   <header>Widgets/Extended/RDTextEdit.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="../Resources/resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

@@ -4330,6 +4330,8 @@ enum class TargetControlMessageType : uint32_t
   CaptureProgress,
   CapturableWindowCount,
   RequestShow,
+  MonitorLog,
+  MonitorStatus,
 };
 
 DECLARE_REFLECTION_ENUM(TargetControlMessageType);

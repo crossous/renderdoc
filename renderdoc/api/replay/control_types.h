@@ -1089,6 +1089,18 @@ or has finished, it will be -1.0
 :type: int
 )");
   uint32_t capturableWindowCount = 0;
+
+  DOCUMENT(R"(API Monitor log messages received from the target.
+
+:type: List[str]
+)");
+  rdcarray<rdcstr> monitorLogs;
+
+  DOCUMENT(R"(API Monitor status string from the target.
+
+:type: str
+)");
+  rdcstr monitorStatus;
 };
 
 DECLARE_REFLECTION_STRUCT(TargetControlMessage);

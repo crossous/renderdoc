@@ -52,6 +52,7 @@ class PerformanceCounterViewer;
 class StatisticsViewer;
 class TimelineBar;
 class PythonShell;
+class ApiMonitorWindow;
 class ResourceInspector;
 class ShaderViewer;
 class MiniQtHelper;
@@ -225,6 +226,7 @@ public:
   IStatisticsViewer *GetStatisticsViewer() override;
   ITimelineBar *GetTimelineBar() override;
   IPythonShell *GetPythonShell() override;
+  ApiMonitorWindow *GetApiMonitorWindow();
   IResourceInspector *GetResourceInspector() override;
 
   bool HasEventBrowser() override { return m_EventBrowser != NULL; }
@@ -241,6 +243,7 @@ public:
   bool HasStatisticsViewer() override { return m_StatisticsViewer != NULL; }
   bool HasTimelineBar() override { return m_TimelineBar != NULL; }
   bool HasPythonShell() override { return m_PythonShell != NULL; }
+  bool HasApiMonitorWindow() { return m_ApiMonitorWindow != NULL; }
   bool HasResourceInspector() override { return m_ResourceInspector != NULL; }
   void ShowEventBrowser() override;
   void ShowAPIInspector() override;
@@ -451,5 +454,6 @@ private:
   StatisticsViewer *m_StatisticsViewer = NULL;
   TimelineBar *m_TimelineBar = NULL;
   PythonShell *m_PythonShell = NULL;
+  ApiMonitorWindow *m_ApiMonitorWindow = NULL;
   ResourceInspector *m_ResourceInspector = NULL;
 };

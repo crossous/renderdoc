@@ -573,6 +573,12 @@
     <ClInclude Include="core\rdcbytetrie.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="core\python_loader.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\api_monitor.h">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="replay\common\var_dispatch_helpers.h">
       <Filter>Replay\Common</Filter>
     </ClInclude>
@@ -978,6 +984,18 @@
       <Filter>Replay</Filter>
     </ClCompile>
     <ClCompile Include="core\gpu_address_range_tracker.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\python_loader.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\api_monitor.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\api_monitor_pymodule.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\api_monitor_export.cpp">
       <Filter>Core</Filter>
     </ClCompile>
     <ClCompile Include="common\jobsystem.cpp">

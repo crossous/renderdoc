@@ -1239,6 +1239,20 @@ The details of the types of messages that can be received are listed under
   DOCUMENT("Cycle the currently active window if there are more windows to capture.");
   virtual void CycleActiveWindow() = 0;
 
+  DOCUMENT(R"(Send a Python monitor script to the target for execution.
+
+:param str scriptSource: The Python script source code.
+)");
+  virtual void SendMonitorScript(const rdcstr &scriptSource) = 0;
+
+  DOCUMENT(R"(Send a monitor control command to the target.
+
+:param str command: The command string (load_python, unload, reload, status).
+:param str pythonDllPath: Optional path to python36.dll for load_python command.
+)");
+  virtual void SendMonitorControl(const rdcstr &command,
+                                  const rdcstr &pythonDllPath = rdcstr()) = 0;
+
 protected:
   ITargetControl() = default;
   ~ITargetControl() = default;

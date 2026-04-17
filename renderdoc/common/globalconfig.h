@@ -222,3 +222,13 @@ enum
 #define ENABLE_UNIT_TESTS RDOC_DEVEL
 
 #endif
+
+/////////////////////////////////////////////////
+// API Monitor configuration
+// Enable the scriptable real-time API monitoring feature.
+// Requires python36.dll to be present at runtime (dynamically loaded).
+#if ENABLED(RDOC_WIN32)
+#define RENDERDOC_ENABLE_API_MONITOR 1
+#else
+#define RENDERDOC_ENABLE_API_MONITOR 0
+#endif

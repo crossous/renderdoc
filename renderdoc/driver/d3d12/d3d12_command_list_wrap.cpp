@@ -30,6 +30,7 @@
 #include "d3d12_command_queue.h"
 #include "d3d12_debug.h"
 #include "d3d12_replay.h"
+#include "d3d12_api_monitor.h"
 
 RDOC_EXTERN_CONFIG(bool, D3D12_Debug_RT_Auditing);
 
@@ -605,6 +606,26 @@ void WrappedID3D12GraphicsCommandList::ResourceBarrier(UINT NumBarriers,
   }
 
   SERIALISE_TIME_CALL(m_pList->ResourceBarrier(NumBarriers, barriers));
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive() && NumBarriers > 0)
+  {
+    ResourceId *resIds = new ResourceId[NumBarriers];
+    for(UINT i = 0; i < NumBarriers; i++)
+    {
+      if(pBarriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION && pBarriers[i].Transition.pResource)
+        resIds[i] = GetResID(pBarriers[i].Transition.pResource);
+      else if(pBarriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_UAV && pBarriers[i].UAV.pResource)
+        resIds[i] = GetResID(pBarriers[i].UAV.pResource);
+      else if(pBarriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING && pBarriers[i].Aliasing.pResourceAfter)
+        resIds[i] = GetResID(pBarriers[i].Aliasing.pResourceAfter);
+      else
+        resIds[i] = ResourceId();
+    }
+    D3D12ApiMonitor::OnResourceBarrier(NumBarriers, resIds);
+    delete[] resIds;
+  }
+#endif
 
   if(IsCaptureMode(m_State))
   {
@@ -3452,6 +3473,12 @@ void WrappedID3D12GraphicsCommandList::DrawInstanced(UINT VertexCountPerInstance
   SERIALISE_TIME_CALL(m_pList->DrawInstanced(VertexCountPerInstance, InstanceCount,
                                              StartVertexLocation, StartInstanceLocation));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnDrawInstanced(VertexCountPerInstance, InstanceCount, StartVertexLocation,
+                                     StartInstanceLocation);
+#endif
+
   if(IsCaptureMode(m_State))
   {
     CACHE_THREAD_SERIALISER();
@@ -3534,6 +3561,12 @@ void WrappedID3D12GraphicsCommandList::DrawIndexedInstanced(UINT IndexCountPerIn
                                                     StartIndexLocation, BaseVertexLocation,
                                                     StartInstanceLocation));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnDrawIndexedInstanced(IndexCountPerInstance, InstanceCount, StartIndexLocation,
+                                            BaseVertexLocation, StartInstanceLocation);
+#endif
+
   if(IsCaptureMode(m_State))
   {
     CACHE_THREAD_SERIALISER();
@@ -3602,6 +3635,11 @@ void WrappedID3D12GraphicsCommandList::Dispatch(UINT ThreadGroupCountX, UINT Thr
                                                 UINT ThreadGroupCountZ)
 {
   SERIALISE_TIME_CALL(m_pList->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ));
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnDispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+#endif
 
   if(IsCaptureMode(m_State))
   {
@@ -5344,6 +5382,12 @@ void WrappedID3D12GraphicsCommandList::CopyBufferRegion(ID3D12Resource *pDstBuff
   SERIALISE_TIME_CALL(m_pList->CopyBufferRegion(Unwrap(pDstBuffer), DstOffset, Unwrap(pSrcBuffer),
                                                 SrcOffset, NumBytes));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnCopyBufferRegion(GetResID(pDstBuffer), DstOffset, GetResID(pSrcBuffer),
+                                        SrcOffset, NumBytes);
+#endif
+
   if(IsCaptureMode(m_State))
   {
     CACHE_THREAD_SERIALISER();
@@ -5467,6 +5511,16 @@ void WrappedID3D12GraphicsCommandList::CopyTextureRegion(const D3D12_TEXTURE_COP
 
   SERIALISE_TIME_CALL(m_pList->CopyTextureRegion(&dst, DstX, DstY, DstZ, &src, pSrcBox));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+  {
+    UINT dstSub = (pDst->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX) ? pDst->SubresourceIndex : 0;
+    UINT srcSub = (pSrc->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX) ? pSrc->SubresourceIndex : 0;
+    D3D12ApiMonitor::OnCopyTextureRegion(GetResID(pDst->pResource), dstSub,
+                                         GetResID(pSrc->pResource), srcSub);
+  }
+#endif
+
   if(IsCaptureMode(m_State))
   {
     CACHE_THREAD_SERIALISER();
@@ -5553,6 +5607,11 @@ void WrappedID3D12GraphicsCommandList::CopyResource(ID3D12Resource *pDstResource
                                                     ID3D12Resource *pSrcResource)
 {
   SERIALISE_TIME_CALL(m_pList->CopyResource(Unwrap(pDstResource), Unwrap(pSrcResource)));
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnCopyResource(GetResID(pDstResource), GetResID(pSrcResource));
+#endif
 
   if(IsCaptureMode(m_State))
   {

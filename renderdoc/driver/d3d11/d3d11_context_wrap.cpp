@@ -31,6 +31,7 @@
 #include "d3d11_renderstate.h"
 #include "d3d11_replay.h"
 #include "d3d11_resources.h"
+#include "d3d11_api_monitor.h"
 
 #ifndef DXGI_ERROR_INVALID_CALL
 #define DXGI_ERROR_INVALID_CALL MAKE_DXGI_HRESULT(1)
@@ -4212,6 +4213,11 @@ void WrappedID3D11DeviceContext::Draw(UINT VertexCount, UINT StartVertexLocation
 
   SERIALISE_TIME_CALL(m_pRealContext->Draw(VertexCount, StartVertexLocation));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D11ApiMonitor::OnDraw(VertexCount, StartVertexLocation);
+#endif
+
   LatchSOProperties();
 
   if(IsActiveCapturing(m_State))
@@ -5996,6 +6002,12 @@ void WrappedID3D11DeviceContext::CopyResource(ID3D11Resource *pDstResource,
   SERIALISE_TIME_CALL(
       m_pRealContext->CopyResource(UnwrapResource(pDstResource), UnwrapResource(pSrcResource)));
 
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D11ApiMonitor::OnCopyResource(GetIDForDeviceChild(pDstResource),
+                                    GetIDForDeviceChild(pSrcResource));
+#endif
+
   if(IsActiveCapturing(m_State))
   {
     USE_SCRATCH_SERIALISER();
@@ -6108,6 +6120,12 @@ void WrappedID3D11DeviceContext::UpdateSubresource(ID3D11Resource *pDstResource,
 
   SERIALISE_TIME_CALL(m_pRealContext->UpdateSubresource(
       UnwrapResource(pDstResource), DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch));
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D11ApiMonitor::OnUpdateSubresource(GetIDForDeviceChild(pDstResource), DstSubresource,
+                                         pDstBox, SrcRowPitch, SrcDepthPitch);
+#endif
 
   if(pDstBox && m_NeedUpdateSubWorkaround && GetType() == D3D11_DEVICE_CONTEXT_DEFERRED)
   {
