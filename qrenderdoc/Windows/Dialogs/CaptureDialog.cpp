@@ -219,6 +219,15 @@ CaptureDialog::CaptureDialog(ICaptureContext &ctx, OnCaptureMethod captureCallba
 
   SetSettings(CaptureSettings());
 
+  // Auto-discover rdcmonitor_autoload.py next to our executable for first-time convenience
+  if(ui->monitorScriptPath->text().isEmpty())
+  {
+    QString defaultScript =
+        QDir(QCoreApplication::applicationDirPath()).filePath(lit("rdcmonitor_autoload.py"));
+    if(QFileInfo::exists(defaultScript))
+      ui->monitorScriptPath->setText(defaultScript);
+  }
+
   UpdateGlobalHook();
 
   PopulateMostRecent();
@@ -752,6 +761,21 @@ void CaptureDialog::on_envVarEdit_clicked()
     SetEnvironmentModifications(envEditor.modifications());
 }
 
+void CaptureDialog::on_monitorScriptBrowse_clicked()
+{
+  QString initDir;
+  if(!ui->monitorScriptPath->text().isEmpty())
+    initDir = QFileInfo(ui->monitorScriptPath->text()).absolutePath();
+  else if(!ui->exePath->text().isEmpty())
+    initDir = QFileInfo(ui->exePath->text()).absolutePath();
+
+  QString filename = RDDialog::getOpenFileName(this, tr("Open Monitor Script"), initDir,
+                                               tr("Python Scripts (*.py);;All Files (*)"));
+
+  if(!filename.isEmpty())
+    ui->monitorScriptPath->setText(filename);
+}
+
 void CaptureDialog::on_toggleGlobal_clicked()
 {
   if(!ui->toggleGlobal->isEnabled())
@@ -828,6 +852,9 @@ void CaptureDialog::on_toggleGlobal_clicked()
     QString exe = ui->exePath->text();
 
     QString capturefile = m_Ctx.TempCaptureFilename(QFileInfo(exe).baseName());
+
+    // Write monitor script to temp file for the target DLL to pick up
+    WritePendingMonitorScript();
 
     ResultDetails success = RENDERDOC_StartGlobalHook(exe, capturefile, Settings().options);
 
@@ -947,6 +974,8 @@ void CaptureDialog::SetSettings(CaptureSettings settings)
     ui->queueFrameCap->setChecked(false);
   }
 
+  ui->monitorScriptPath->setText(settings.monitorScriptPath);
+
   if(settings.autoStart)
   {
     TriggerCapture();
@@ -984,6 +1013,8 @@ CaptureSettings CaptureDialog::Settings()
     ret.queuedFrameCap = (uint32_t)ui->queuedFrame->value();
     ret.numQueuedFrames = (uint32_t)ui->numFrames->value();
   }
+
+  ret.monitorScriptPath = ui->monitorScriptPath->text();
 
   return ret;
 }
@@ -1168,8 +1199,40 @@ void CaptureDialog::SetEnvironmentModifications(const rdcarray<EnvironmentModifi
   ui->envVar->setText(envModText);
 }
 
+void CaptureDialog::WritePendingMonitorScript()
+{
+  QString scriptPath = ui->monitorScriptPath->text().trimmed();
+
+  QString pendingPath = QDir::temp().filePath(lit("rdcmonitor_pending.py"));
+
+  // Always clean up any leftover pending file first
+  QFile::remove(pendingPath);
+
+  if(scriptPath.isEmpty())
+    return;
+
+  QFile scriptFile(scriptPath);
+  if(!scriptFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    return;
+
+  QByteArray content = scriptFile.readAll();
+  scriptFile.close();
+
+  QFile pendingFile(pendingPath);
+  if(pendingFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  {
+    pendingFile.write(content);
+    pendingFile.close();
+  }
+}
+
 void CaptureDialog::TriggerCapture()
 {
+  // Write monitor script to temp file for the target DLL to pick up.
+  // Works for all modes: Launch, Inject, Global Hook.
+  // For Launch/Inject, LiveCapture also sends via target control as a secondary channel.
+  WritePendingMonitorScript();
+
   if(IsInjectMode())
   {
     QModelIndexList sel = ui->processList->selectionModel()->selectedRows();
@@ -1188,6 +1251,9 @@ void CaptureDialog::TriggerCapture()
           PID, Settings().environment, name, Settings().options, [this](LiveCapture *live) {
             if(ui->queueFrameCap->isChecked())
               live->QueueCapture((int)ui->queuedFrame->value(), (int)ui->numFrames->value());
+            QString scriptPath = ui->monitorScriptPath->text().trimmed();
+            if(!scriptPath.isEmpty())
+              live->SetMonitorScriptPath(scriptPath);
           });
     }
     else
@@ -1262,6 +1328,9 @@ void CaptureDialog::TriggerCapture()
                         if(ui->queueFrameCap->isChecked())
                           live->QueueCapture((int)ui->queuedFrame->value(),
                                              (int)ui->numFrames->value());
+                        QString scriptPath = ui->monitorScriptPath->text().trimmed();
+                        if(!scriptPath.isEmpty())
+                          live->SetMonitorScriptPath(scriptPath);
                       });
   }
 }

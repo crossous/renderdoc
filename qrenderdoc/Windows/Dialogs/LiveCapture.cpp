@@ -24,6 +24,7 @@
 
 #include "LiveCapture.h"
 #include <QDesktopServices>
+#include <QFile>
 #include <QHostInfo>
 #include <QMenu>
 #include <QMetaProperty>
@@ -32,6 +33,7 @@
 #include <QProcess>
 #include <QScrollBar>
 #include <QStyledItemDelegate>
+#include <QTextStream>
 #include <QToolBar>
 #include <QToolButton>
 #include <QPropertyAnimation>
@@ -1337,6 +1339,11 @@ void LiveCapture::connectionThreadEntry()
     ui->connectionStatus->setText(tr("Established"));
   });
 
+  // Auto-send monitor script if one was configured in CaptureDialog.
+  // This is checked inside the message loop via m_SendMonitorScript semaphore,
+  // because SetMonitorScriptPath() may be called after the connection is already established
+  // (race between showEvent starting this thread and the callback setting the path).
+
   while(conn && conn->Connected())
   {
     if(m_TriggerCapture.tryAcquire())
@@ -1362,6 +1369,20 @@ void LiveCapture::connectionThreadEntry()
     if(m_CycleWindow.tryAcquire())
     {
       conn->CycleActiveWindow();
+    }
+
+    if(m_SendMonitorControl.tryAcquire())
+    {
+      QMutexLocker l(&m_PendingControlLock);
+      conn->SendMonitorControl(m_PendingControlCmd);
+      m_PendingControlCmd.clear();
+    }
+
+    if(m_SendMonitorScript.tryAcquire())
+    {
+      QMutexLocker l(&m_PendingScriptLock);
+      conn->SendMonitorScript(m_PendingScriptSource);
+      m_PendingScriptSource.clear();
     }
 
     QVector<uint32_t> dels;
@@ -1482,6 +1503,29 @@ void LiveCapture::connectionThreadEntry()
     {
       GUIInvoke::call(this, [this]() { m_Main->BringToFront(); });
     }
+
+    if(msg.type == TargetControlMessageType::MonitorLog)
+    {
+      QStringList logs;
+      for(const rdcstr &s : msg.monitorLogs)
+        logs.append(QString(s));
+
+      // Cache logs so ApiMonitorWindow can retrieve history when connected later
+      {
+        QMutexLocker l(&m_MonitorLogCacheLock);
+        m_MonitorLogCache.append(logs);
+        while(m_MonitorLogCache.size() > MAX_CACHED_LOGS)
+          m_MonitorLogCache.removeFirst();
+      }
+
+      GUIInvoke::call(this, [this, logs]() { emit monitorLogsReceived(logs); });
+    }
+
+    if(msg.type == TargetControlMessageType::MonitorStatus)
+    {
+      QString status = msg.monitorStatus;
+      GUIInvoke::call(this, [this, status]() { emit monitorStatusReceived(status); });
+    }
   }
 
   if(conn)
@@ -1514,4 +1558,36 @@ bool LiveCapture::isLocal() const
 {
   return m_Hostname.isEmpty() || QHostInfo::localHostName() == m_Hostname ||
          QLatin1String("0.0.0.0") == m_Hostname || QHostAddress(m_Hostname).isLoopback();
+}
+
+void LiveCapture::SetMonitorScriptPath(const QString &path)
+{
+  m_MonitorScriptPath = path;
+  // The script is delivered via temp file (rdcmonitor_pending.py) which the DLL picks up.
+  // The LiveCapture semaphore channel (SendMonitorScript) is used for the ApiMonitorWindow
+  // manual Apply button only.
+}
+
+QStringList LiveCapture::GetMonitorLogCache()
+{
+  QMutexLocker l(&m_MonitorLogCacheLock);
+  return m_MonitorLogCache;
+}
+
+void LiveCapture::SendMonitorScript(const QString &scriptSource)
+{
+  {
+    QMutexLocker l(&m_PendingScriptLock);
+    m_PendingScriptSource = scriptSource;
+  }
+  m_SendMonitorScript.release();
+}
+
+void LiveCapture::SendMonitorControl(const QString &command)
+{
+  {
+    QMutexLocker l(&m_PendingControlLock);
+    m_PendingControlCmd = command;
+  }
+  m_SendMonitorControl.release();
 }

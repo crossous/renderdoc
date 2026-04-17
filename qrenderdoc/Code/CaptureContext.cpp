@@ -40,6 +40,7 @@
 #include "Code/pyrenderdoc/PythonContext.h"
 #include "Widgets/AnnotationDisplay.h"
 #include "Windows/APIInspector.h"
+#include "Windows/ApiMonitorWindow.h"
 #include "Windows/BufferViewer.h"
 #include "Windows/CommentView.h"
 #include "Windows/DebugMessageView.h"
@@ -2421,6 +2422,18 @@ IPythonShell *CaptureContext::GetPythonShell()
   return m_PythonShell;
 }
 
+ApiMonitorWindow *CaptureContext::GetApiMonitorWindow()
+{
+  if(m_ApiMonitorWindow)
+    return m_ApiMonitorWindow;
+
+  m_ApiMonitorWindow = new ApiMonitorWindow(*this, m_MainWindow);
+  m_ApiMonitorWindow->setObjectName(lit("apiMonitorWindow"));
+  setupDockWindow(m_ApiMonitorWindow, true);
+
+  return m_ApiMonitorWindow;
+}
+
 IResourceInspector *CaptureContext::GetResourceInspector()
 {
   if(m_ResourceInspector)
@@ -2742,6 +2755,10 @@ QWidget *CaptureContext::CreateBuiltinWindow(const rdcstr &objectName)
   {
     return GetPythonShell()->Widget();
   }
+  else if(objectName == "apiMonitorWindow")
+  {
+    return GetApiMonitorWindow()->Widget();
+  }
   else if(objectName == "resourceInspector")
   {
     return GetResourceInspector()->Widget();
@@ -2780,6 +2797,8 @@ void CaptureContext::BuiltinWindowClosed(QWidget *window)
     m_TimelineBar = NULL;
   else if(m_PythonShell && m_PythonShell->Widget() == window)
     m_PythonShell = NULL;
+  else if(m_ApiMonitorWindow && m_ApiMonitorWindow->Widget() == window)
+    m_ApiMonitorWindow = NULL;
   else if(m_ResourceInspector && m_ResourceInspector->Widget() == window)
     m_ResourceInspector = NULL;
   else if(m_PerformanceCounterViewer && m_PerformanceCounterViewer->Widget() == window)

@@ -121,6 +121,8 @@
     <ClCompile Include="d3d11_device2_wrap.cpp" />
     <ClCompile Include="d3d11_device3_wrap.cpp" />
     <ClCompile Include="d3d11_device_wrap.cpp" />
+    <ClCompile Include="d3d11_api_monitor.cpp" />
+    <ClCompile Include="d3d11_monitor_readback.cpp" />
     <ClCompile Include="d3d11_hooks.cpp" />
     <ClCompile Include="d3d11_initstate.cpp" />
     <ClCompile Include="d3d11_manager.cpp" />
@@ -141,6 +143,7 @@
     <ClInclude Include="d3d11_context.h" />
     <ClInclude Include="d3d11_debug.h" />
     <ClInclude Include="d3d11_device.h" />
+    <ClInclude Include="d3d11_api_monitor.h" />
     <ClInclude Include="d3d11_hooks.h" />
     <ClInclude Include="d3d11_manager.h" />
     <ClInclude Include="d3d11_renderstate.h" />

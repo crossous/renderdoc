@@ -99,6 +99,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="d3d12_api_monitor.cpp" />
+    <ClCompile Include="d3d12_monitor_readback.cpp" />
     <ClCompile Include="d3d12_commands.cpp" />
     <ClCompile Include="d3d12_command_list10_wrap.cpp" />
     <ClCompile Include="d3d12_command_list1_wrap.cpp" />
@@ -160,6 +162,7 @@
   <ItemGroup>
     <ClInclude Include="..\dx\official\D3D11On12On7.h" />
     <ClInclude Include="..\dx\official\D3D12Downlevel.h" />
+    <ClInclude Include="d3d12_api_monitor.h" />
     <ClInclude Include="d3d12_commands.h" />
     <ClInclude Include="d3d12_command_list.h" />
     <ClInclude Include="d3d12_command_queue.h" />

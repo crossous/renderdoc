@@ -24,6 +24,7 @@
  ******************************************************************************/
 
 #include "core/core.h"
+#include "core/api_monitor.h"
 #include <time.h>
 #include <algorithm>
 #include "api/replay/version.h"
@@ -752,10 +753,21 @@ void RenderDoc::Initialise()
     RDCLOGOUTPUT();
 
   ProcessConfig();
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  // Only initialize API Monitor when injected into a target process, not in the UI/replay process.
+  // The UI has its own Python interpreter and they would conflict.
+  if(!IsReplayApp())
+    ApiMonitor::Inst().Initialise();
+#endif
 }
 
 RenderDoc::~RenderDoc()
 {
+#if RENDERDOC_ENABLE_API_MONITOR
+  ApiMonitor::Inst().Shutdown();
+#endif
+
   if(m_ExHandler)
   {
     UnloadCrashHandler();
@@ -1258,6 +1270,10 @@ void RenderDoc::Tick()
     Threading::JoinThread(t);
     Threading::CloseThread(t);
   }
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  ApiMonitor::Inst().Tick();
+#endif
 }
 
 void RenderDoc::CycleActiveWindow()

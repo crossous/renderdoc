@@ -27,6 +27,7 @@
 #include "d3d11_context.h"
 #include "d3d11_debug.h"
 #include "d3d11_resources.h"
+#include "d3d11_api_monitor.h"
 
 void WrappedID3D11Device::MaskResourceMiscFlags(UINT &MiscFlags)
 {
@@ -243,6 +244,11 @@ HRESULT WrappedID3D11Device::CreateBuffer(const D3D11_BUFFER_DESC *pDesc,
     }
 
     *ppBuffer = wrapped;
+
+#if RENDERDOC_ENABLE_API_MONITOR
+    if(ApiMonitor::Inst().IsActive())
+      D3D11ApiMonitor::OnCreateBuffer(pDesc, GetIDForDeviceChild(wrapped));
+#endif
   }
   else
   {
@@ -627,6 +633,11 @@ HRESULT WrappedID3D11Device::CreateTexture2D(const D3D11_TEXTURE2D_DESC *pDesc,
     }
 
     *ppTexture2D = wrapped;
+
+#if RENDERDOC_ENABLE_API_MONITOR
+    if(ApiMonitor::Inst().IsActive())
+      D3D11ApiMonitor::OnCreateTexture2D(pDesc, GetIDForDeviceChild(wrapped));
+#endif
   }
   else
   {
@@ -757,6 +768,11 @@ HRESULT WrappedID3D11Device::CreateTexture3D(const D3D11_TEXTURE3D_DESC *pDesc,
     }
 
     *ppTexture3D = wrapped;
+
+#if RENDERDOC_ENABLE_API_MONITOR
+    if(ApiMonitor::Inst().IsActive())
+      D3D11ApiMonitor::OnCreateTexture3D(pDesc, GetIDForDeviceChild(wrapped));
+#endif
   }
   else
   {

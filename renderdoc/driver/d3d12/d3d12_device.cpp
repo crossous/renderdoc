@@ -25,6 +25,7 @@
 #include "d3d12_device.h"
 #include <algorithm>
 #include "core/core.h"
+#include "core/api_monitor.h"
 #include "core/settings.h"
 #include "data/hlsl/hlsl_cbuffers.h"
 #include "driver/dxgi/dxgi_common.h"
@@ -2498,6 +2499,10 @@ HRESULT WrappedID3D12Device::Present(ID3D12GraphicsCommandList *pOverlayCommandL
     RenderDoc::Inst().Tick();
 
   m_FrameCounter++;    // first present becomes frame #1, this function is at the end of the frame
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  ApiMonitor::Inst().SetFrameNumber(m_FrameCounter);
+#endif
 
   DeviceOwnedWindow devWnd((ID3D12Device *)this, swapper->GetHWND());
 

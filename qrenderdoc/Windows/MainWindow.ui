@@ -155,6 +155,7 @@
     <addaction name="separator"/>
     <addaction name="action_Launch_Application_Window"/>
     <addaction name="action_Python_Shell"/>
+    <addaction name="action_API_Monitor"/>
     <addaction name="action_Event_Browser"/>
     <addaction name="action_Texture_Viewer"/>
     <addaction name="action_Pipeline_State"/>
@@ -252,6 +253,11 @@
   <action name="action_Python_Shell">
    <property name="text">
     <string>P&amp;ython Shell</string>
+   </property>
+  </action>
+  <action name="action_API_Monitor">
+   <property name="text">
+    <string>API &amp;Monitor</string>
    </property>
   </action>
   <action name="action_Event_Browser">

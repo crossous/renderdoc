@@ -603,7 +603,13 @@
     <ClCompile Include="$(IntDir)generated\moc_PythonShell.cpp">
       <Filter>Generated Files</Filter>
     </ClCompile>
+    <ClCompile Include="$(IntDir)generated\moc_ApiMonitorWindow.cpp">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
     <ClCompile Include="Windows\PythonShell.cpp">
+      <Filter>Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="Windows\ApiMonitorWindow.cpp">
       <Filter>Windows</Filter>
     </ClCompile>
     <ClCompile Include="Widgets\Extended\RDTextEdit.cpp">
@@ -1094,6 +1100,9 @@
     <ClInclude Include="$(IntDir)generated\ui_PythonShell.h">
       <Filter>Generated Files</Filter>
     </ClInclude>
+    <ClInclude Include="$(IntDir)generated\ui_ApiMonitorWindow.h">
+      <Filter>Generated Files</Filter>
+    </ClInclude>
     <ClInclude Include="Code\precompiled.h">
       <Filter>PCH</Filter>
     </ClInclude>
@@ -1484,7 +1493,13 @@
     <CustomBuild Include="Windows\PythonShell.h">
       <Filter>Windows</Filter>
     </CustomBuild>
+    <CustomBuild Include="Windows\ApiMonitorWindow.h">
+      <Filter>Windows</Filter>
+    </CustomBuild>
     <CustomBuild Include="Windows\PythonShell.ui">
+      <Filter>Windows</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Windows\ApiMonitorWindow.ui">
       <Filter>Windows</Filter>
     </CustomBuild>
     <CustomBuild Include="Widgets\Extended\RDToolButton.h">

@@ -25,6 +25,7 @@
 
 #include "d3d11_device.h"
 #include "core/core.h"
+#include "core/api_monitor.h"
 #include "core/settings.h"
 #include "driver/dxgi/dxgi_wrapped.h"
 #include "jpeg-compressor/jpge.h"
@@ -2728,6 +2729,10 @@ HRESULT WrappedID3D11Device::Present(IDXGISwapper *swapper, UINT SyncInterval, U
   m_pImmediateContext->EndFrame();
 
   m_FrameCounter++;    // first present becomes frame #1, this function is at the end of the frame
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  ApiMonitor::Inst().SetFrameNumber(m_FrameCounter);
+#endif
 
   m_pImmediateContext->BeginFrame();
 

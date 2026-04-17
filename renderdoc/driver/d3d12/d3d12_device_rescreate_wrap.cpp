@@ -25,6 +25,7 @@
 #include "d3d12_device.h"
 #include "driver/dxgi/dxgi_common.h"
 #include "d3d12_resources.h"
+#include "d3d12_api_monitor.h"
 
 bool WrappedID3D12Device::Serialise_CreateResource(
     D3D12Chunk chunkType, ID3D12Heap *pHeap, UINT64 HeapOffset, D3D12_HEAP_PROPERTIES &props,
@@ -448,6 +449,11 @@ HRESULT WrappedID3D12Device::CreateResource(
 
   WrappedID3D12Resource *wrapped =
       new WrappedID3D12Resource(ResourceId(), realRes, pHeap, HeapOffset, this);
+
+#if RENDERDOC_ENABLE_API_MONITOR
+  if(ApiMonitor::Inst().IsActive())
+    D3D12ApiMonitor::OnCreateResource(desc, pHeapProperties, HeapFlags, GetResID(wrapped));
+#endif
 
   if(IsCaptureMode(m_State))
   {
