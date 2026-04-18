@@ -24,12 +24,6 @@
 
 #include <windows.h>
 
-// Enable D3D12 Agility SDK - allows loading a newer D3D12Core.dll from the D3D12 subdirectory.
-// This is required for replaying captures that use ID3D12Device10+ features on Windows 10
-// where the system D3D12 runtime is too old.
-extern "C" __declspec(dllexport) extern const UINT D3D12SDKVersion = 618;
-extern "C" __declspec(dllexport) extern const char *D3D12SDKPath = ".\\D3D12\\";
-
 int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine,
                     _In_ int nShowCmd)
 {

@@ -590,10 +590,11 @@ D3D12DevConfiguration *D3D12_PrepareReplaySDKVersion(bool untrustedCapture, UINT
           config1->CreateDeviceFactory(OverrideDllVersion, D3D12Core_Override_Path.c_str(),
                                        __uuidof(ID3D12DeviceFactory), (void **)&devfactory);
         }
-        SAFE_RELEASE(config);
 
         if(devfactory)
         {
+          SAFE_RELEASE(config);
+
           ID3D12Debug *debug = NULL;
           hr = devfactory->GetConfigurationInterface(CLSID_D3D12Debug, __uuidof(ID3D12Debug),
                                                      (void **)&debug);
@@ -623,10 +624,28 @@ D3D12DevConfiguration *D3D12_PrepareReplaySDKVersion(bool untrustedCapture, UINT
         }
         else
         {
-          RDCLOG("Couldn't get device factory");
+          // CreateDeviceFactory not available (e.g. Win10 lacks ID3D12SDKConfiguration1).
+          // Fall back to the older SetSDKVersion API which is available on Win10.
+          // This tells d3d12.dll to use the specified D3D12Core.dll version/path for
+          // subsequent D3D12CreateDevice calls, without needing exe-level Agility SDK exports.
+          RDCLOG("Couldn't get device factory, trying SetSDKVersion fallback");
+          hr = config->SetSDKVersion(OverrideDllVersion, D3D12Core_Override_Path.c_str());
+          if(SUCCEEDED(hr))
+          {
+            RDCLOG("Successfully set SDK version %u from %s via SetSDKVersion",
+                   OverrideDllVersion, D3D12Core_Override_Path.c_str());
+            SAFE_RELEASE(config1);
+            SAFE_RELEASE(config);
+            return NULL;    // d3d12.dll will now load the correct D3D12Core version
+          }
+          else
+          {
+            RDCLOG("SetSDKVersion failed: %s, falling back to hooks", ToStr(hr).c_str());
+          }
         }
 
         SAFE_RELEASE(config1);
+        SAFE_RELEASE(config);
       }
       else
       {
