@@ -54,9 +54,46 @@ static RDResult DeferredPipelineCompile(ID3D12Device *device,
   D3D12_GRAPHICS_PIPELINE_STATE_DESC unwrappedDesc = Descriptor;
   unwrappedDesc.pRootSignature = Unwrap(unwrappedDesc.pRootSignature);
 
-  ID3D12PipelineState *realPipe;
-  HRESULT hr = device->CreateGraphicsPipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
-                                                   (void **)&realPipe);
+  ID3D12PipelineState *realPipe = NULL;
+  HRESULT hr;
+
+  if(!unwrappedDesc.pRootSignature)
+  {
+    // No explicit root signature. The shader may have a root signature embedded in the DXIL IR
+    // (not as a separate RTS0 chunk). The legacy CreateGraphicsPipelineState API requires an
+    // explicit pRootSignature, but the stream-based CreatePipelineState (Device2) can auto-extract
+    // from DXIL by omitting the root signature subobject. Use that path instead.
+    ID3D12Device2 *device2 = NULL;
+    hr = device->QueryInterface(__uuidof(ID3D12Device2), (void **)&device2);
+    if(SUCCEEDED(hr) && device2)
+    {
+      D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC expandedDesc(unwrappedDesc);
+      D3D12_PACKED_PIPELINE_STATE_STREAM_DESC packedDesc(expandedDesc);
+
+      hr = device2->CreatePipelineState(packedDesc.AsDescStream(),
+                                        __uuidof(ID3D12PipelineState), (void **)&realPipe);
+      device2->Release();
+
+      if(SUCCEEDED(hr))
+      {
+        RDCLOG("Graphics PSO with NULL root sig: created via stream-based API (DXIL auto-extract)");
+      }
+      else
+      {
+        RDCWARN("Graphics PSO stream-based fallback failed, HRESULT: %s", ToStr(hr).c_str());
+      }
+    }
+    else
+    {
+      hr = device->CreateGraphicsPipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
+                                               (void **)&realPipe);
+    }
+  }
+  else
+  {
+    hr = device->CreateGraphicsPipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
+                                             (void **)&realPipe);
+  }
 
   wrappedPipe->SetNewReal(realPipe);
 
@@ -76,9 +113,49 @@ static RDResult DeferredPipelineCompile(ID3D12Device *device,
   D3D12_COMPUTE_PIPELINE_STATE_DESC unwrappedDesc = Descriptor;
   unwrappedDesc.pRootSignature = Unwrap(unwrappedDesc.pRootSignature);
 
-  ID3D12PipelineState *realPipe;
-  HRESULT hr = device->CreateComputePipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
-                                                  (void **)&realPipe);
+  ID3D12PipelineState *realPipe = NULL;
+  HRESULT hr;
+
+  if(!unwrappedDesc.pRootSignature)
+  {
+    // No explicit root signature. The shader may have a root signature embedded in the DXIL IR
+    // (not as a separate RTS0 chunk). The legacy CreateComputePipelineState API requires an
+    // explicit pRootSignature, but the stream-based CreatePipelineState (Device2) can auto-extract
+    // from DXIL by omitting the root signature subobject. Use that path instead.
+    ID3D12Device2 *device2 = NULL;
+    hr = device->QueryInterface(__uuidof(ID3D12Device2), (void **)&device2);
+    if(SUCCEEDED(hr) && device2)
+    {
+      // Build a minimal compute pipeline stream with just CS, NodeMask, CachedPSO, Flags
+      // but NO root signature subobject — D3D12 will extract from shader bytecode
+      D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC expandedDesc(unwrappedDesc);
+      D3D12_PACKED_PIPELINE_STATE_STREAM_DESC packedDesc(expandedDesc);
+
+      hr = device2->CreatePipelineState(packedDesc.AsDescStream(),
+                                        __uuidof(ID3D12PipelineState), (void **)&realPipe);
+      device2->Release();
+
+      if(SUCCEEDED(hr))
+      {
+        RDCLOG("Compute PSO with NULL root sig: created via stream-based API (DXIL auto-extract)");
+      }
+      else
+      {
+        RDCWARN("Compute PSO stream-based fallback failed, HRESULT: %s", ToStr(hr).c_str());
+      }
+    }
+    else
+    {
+      // Device2 not available, try legacy path anyway
+      hr = device->CreateComputePipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
+                                              (void **)&realPipe);
+    }
+  }
+  else
+  {
+    hr = device->CreateComputePipelineState(&unwrappedDesc, __uuidof(ID3D12PipelineState),
+                                            (void **)&realPipe);
+  }
 
   wrappedPipe->SetNewReal(realPipe);
 

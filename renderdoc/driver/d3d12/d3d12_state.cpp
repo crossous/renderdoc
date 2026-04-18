@@ -219,7 +219,8 @@ void D3D12RenderState::ApplyState(WrappedID3D12Device *dev, ID3D12GraphicsComman
   if(pipe != ResourceId())
   {
     pipeState = GetResourceManager()->GetResAs<ID3D12PipelineState>(pipe);
-    cmd->SetPipelineState(pipeState);
+    if(pipeState && Unwrap(pipeState))
+      cmd->SetPipelineState(pipeState);
   }
 
   if(predication.buffer != ResourceId())

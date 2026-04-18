@@ -38,7 +38,7 @@ static RDResult DeferredPipelineCompile(ID3D12Device2 *device2,
   D3D12_PACKED_PIPELINE_STATE_STREAM_DESC unwrappedDesc(Descriptor);
   unwrappedDesc.Unwrap();
 
-  ID3D12PipelineState *realPipe;
+  ID3D12PipelineState *realPipe = NULL;
   HRESULT hr = device2->CreatePipelineState(unwrappedDesc.AsDescStream(),
                                             __uuidof(ID3D12PipelineState), (void **)&realPipe);
 

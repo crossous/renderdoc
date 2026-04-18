@@ -1375,7 +1375,8 @@ bool WrappedID3D12GraphicsCommandList::Serialise_SetPipelineState(SerialiserType
     {
       if(m_Cmd->InRerecordRange(m_Cmd->m_LastCmdListID))
       {
-        Unwrap(m_Cmd->RerecordCmdList(m_Cmd->m_LastCmdListID))->SetPipelineState(Unwrap(pPipelineState));
+        if(Unwrap(pPipelineState))
+          Unwrap(m_Cmd->RerecordCmdList(m_Cmd->m_LastCmdListID))->SetPipelineState(Unwrap(pPipelineState));
 
         stateUpdate = true;
       }
@@ -1386,7 +1387,8 @@ bool WrappedID3D12GraphicsCommandList::Serialise_SetPipelineState(SerialiserType
     }
     else
     {
-      Unwrap(pCommandList)->SetPipelineState(Unwrap(pPipelineState));
+      if(Unwrap(pPipelineState))
+        Unwrap(pCommandList)->SetPipelineState(Unwrap(pPipelineState));
 
       stateUpdate = true;
     }

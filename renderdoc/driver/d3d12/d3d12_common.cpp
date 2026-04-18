@@ -1960,7 +1960,8 @@ ID3D12RootSignature *D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC::GetOrCreateRootS
 
 void D3D12_PACKED_PIPELINE_STATE_STREAM_DESC::Unwrap()
 {
-  *m_RootSigToUnwrap = ::Unwrap(*m_RootSigToUnwrap);
+  if(m_RootSigToUnwrap)
+    *m_RootSigToUnwrap = ::Unwrap(*m_RootSigToUnwrap);
 }
 
 D3D12_PACKED_PIPELINE_STATE_STREAM_DESC &D3D12_PACKED_PIPELINE_STATE_STREAM_DESC::operator=(
@@ -1997,9 +1998,18 @@ D3D12_PACKED_PIPELINE_STATE_STREAM_DESC &D3D12_PACKED_PIPELINE_STATE_STREAM_DESC
     else
     {
       ID3D12RootSignature *sig = expanded.GetRootSigIfPresent();
-      WRITE_VERSIONED_SUBOJBECT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, sig);
-
-      m_RootSigToUnwrap = ((ID3D12RootSignature **)ptr) - 1;
+      if(sig)
+      {
+        WRITE_VERSIONED_SUBOJBECT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, sig);
+        m_RootSigToUnwrap = ((ID3D12RootSignature **)ptr) - 1;
+      }
+      else
+      {
+        // No explicit root signature and no blob - the original PSO relied on an embedded
+        // root signature in the shader bytecode. Don't emit a ROOT_SIGNATURE subobject so
+        // D3D12 can auto-extract it from the shader, matching the original behavior.
+        m_RootSigToUnwrap = NULL;
+      }
     }
 
     m_VariableVersionedDataLength = ptr - start;
@@ -2042,9 +2052,18 @@ D3D12_PACKED_PIPELINE_STATE_STREAM_DESC &D3D12_PACKED_PIPELINE_STATE_STREAM_DESC
     else
     {
       ID3D12RootSignature *sig = expanded.GetRootSigIfPresent();
-      WRITE_VERSIONED_SUBOJBECT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, sig);
-
-      m_RootSigToUnwrap = ((ID3D12RootSignature **)ptr) - 1;
+      if(sig)
+      {
+        WRITE_VERSIONED_SUBOJBECT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, sig);
+        m_RootSigToUnwrap = ((ID3D12RootSignature **)ptr) - 1;
+      }
+      else
+      {
+        // No explicit root signature and no blob - the original PSO relied on an embedded
+        // root signature in the shader bytecode. Don't emit a ROOT_SIGNATURE subobject so
+        // D3D12 can auto-extract it from the shader, matching the original behavior.
+        m_RootSigToUnwrap = NULL;
+      }
     }
 
     // is the line rasterization mode narrow quadrilateral? if so we need version 2.

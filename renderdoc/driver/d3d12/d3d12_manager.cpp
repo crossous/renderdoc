@@ -3653,7 +3653,17 @@ void D3D12ResourceManager::ResolveDeferredWrappers()
   }
 
   for(ID3D12DeviceChild *wrapper : wrappers)
-    AddWrapper(wrapper, Unwrap(wrapper));
+  {
+    ID3D12DeviceChild *real = Unwrap(wrapper);
+    if(real)
+    {
+      AddWrapper(wrapper, real);
+    }
+    else
+    {
+      RDCWARN("ResolveDeferredWrappers: skipping wrapper with NULL real object (failed PSO creation?)");
+    }
+  }
 }
 
 void D3D12ResourceManager::ApplyBarriers(BarrierSet &barriers,
