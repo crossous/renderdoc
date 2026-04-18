@@ -98,25 +98,32 @@ bool WrappedID3D12Device::Serialise_CreateResource(
     m_OrigGPUAddresses.AddTo(range);
   }
 
-  // check for device requirement
+  // check for device requirement, with automatic downgrade fallback
   switch(chunkType)
   {
     case D3D12Chunk::Device_CreateCommittedResource1:
     case D3D12Chunk::Device_CreateReservedResource1:
       if(!m_pDevice4)
       {
-        SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
-                         "Capture requires ID3D12Device4 which isn't available");
-        return false;
+        RDCWARN("Downgrading %s: ID3D12Device4 unavailable, falling back to base Device",
+                ToStr(chunkType).c_str());
+        if(chunkType == D3D12Chunk::Device_CreateCommittedResource1)
+          chunkType = D3D12Chunk::Device_CreateCommittedResource;
+        else
+          chunkType = D3D12Chunk::Device_CreateReservedResource;
       }
       break;
     case D3D12Chunk::Device_CreateCommittedResource2:
     case D3D12Chunk::Device_CreatePlacedResource1:
       if(!m_pDevice8)
       {
-        SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
-                         "Capture requires ID3D12Device8 which isn't available");
-        return false;
+        RDCWARN("Downgrading %s: ID3D12Device8 unavailable, falling back to lower version",
+                ToStr(chunkType).c_str());
+        if(chunkType == D3D12Chunk::Device_CreateCommittedResource2)
+          chunkType = m_pDevice4 ? D3D12Chunk::Device_CreateCommittedResource1
+                                 : D3D12Chunk::Device_CreateCommittedResource;
+        else
+          chunkType = D3D12Chunk::Device_CreatePlacedResource;
       }
       break;
     case D3D12Chunk::Device_CreateCommittedResource3:
@@ -124,9 +131,31 @@ bool WrappedID3D12Device::Serialise_CreateResource(
     case D3D12Chunk::Device_CreateReservedResource2:
       if(!m_pDevice10)
       {
-        SET_ERROR_RESULT(m_FailedReplayResult, ResultCode::APIHardwareUnsupported,
-                         "Capture requires ID3D12Device10 which isn't available");
-        return false;
+        RDCWARN("Downgrading %s: ID3D12Device10 unavailable, falling back to lower version",
+                ToStr(chunkType).c_str());
+        if(chunkType == D3D12Chunk::Device_CreateCommittedResource3)
+        {
+          if(m_pDevice8)
+            chunkType = D3D12Chunk::Device_CreateCommittedResource2;
+          else if(m_pDevice4)
+            chunkType = D3D12Chunk::Device_CreateCommittedResource1;
+          else
+            chunkType = D3D12Chunk::Device_CreateCommittedResource;
+        }
+        else if(chunkType == D3D12Chunk::Device_CreatePlacedResource2)
+        {
+          if(m_pDevice8)
+            chunkType = D3D12Chunk::Device_CreatePlacedResource1;
+          else
+            chunkType = D3D12Chunk::Device_CreatePlacedResource;
+        }
+        else    // CreateReservedResource2
+        {
+          if(m_pDevice4)
+            chunkType = D3D12Chunk::Device_CreateReservedResource1;
+          else
+            chunkType = D3D12Chunk::Device_CreateReservedResource;
+        }
       }
       break;
     default: break;

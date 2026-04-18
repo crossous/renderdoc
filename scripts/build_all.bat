@@ -79,6 +79,12 @@ set "WINSDK=C:\Program Files (x86)\Windows Kits\10\Redist\D3D"
 if exist "%WINSDK%\x64\d3dcompiler_47.dll" copy /y "%WINSDK%\x64\d3dcompiler_47.dll" dist\Release64\ >nul
 if exist "%WINSDK%\x86\d3dcompiler_47.dll" copy /y "%WINSDK%\x86\d3dcompiler_47.dll" dist\Release32\ >nul
 
+:: Copy D3D12 Agility SDK runtime
+mkdir dist\Release64\D3D12
+mkdir dist\Release32\D3D12
+if exist "3rdparty\d3d12\x64\D3D12Core.dll" copy /y "3rdparty\d3d12\x64\D3D12Core.dll" dist\Release64\D3D12\ >nul
+if exist "3rdparty\d3d12\win32\D3D12Core.dll" copy /y "3rdparty\d3d12\win32\D3D12Core.dll" dist\Release32\D3D12\ >nul
+
 :: Copy LICENSE
 if exist LICENSE.md (
     copy /y LICENSE.md dist\Release64\ >nul
@@ -98,6 +104,11 @@ if exist build-android-arm64\bin\org.renderdoc.renderdoccmd.arm64.apk (
 mkdir dist\Release64\x86
 for %%f in (d3dcompiler_47.dll renderdoc.dll renderdoc.json render_soco_docshim32.dll render_soco_doccmd.exe system_load.dll system_load.json dbghelp.dll symsrv.dll symsrv.yes) do (
     if exist "dist\Release32\%%f" copy /y "dist\Release32\%%f" dist\Release64\x86\ >nul
+)
+:: Bundle x86 D3D12 Agility SDK into x64 package
+if exist "dist\Release32\D3D12\D3D12Core.dll" (
+    mkdir dist\Release64\x86\D3D12
+    copy /y "dist\Release32\D3D12\D3D12Core.dll" dist\Release64\x86\D3D12\ >nul
 )
 
 :: Remove PDBs and build artifacts

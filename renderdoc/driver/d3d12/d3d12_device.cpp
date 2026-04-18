@@ -55,6 +55,11 @@ RDOC_DEBUG_CONFIG(bool, D3D12_Debug_SingleSubmitFlushing, false,
 RDOC_DEBUG_CONFIG(bool, D3D12_Debug_RT_Overlay, false, "Add some RT tracking to the overlay.");
 RDOC_EXTERN_CONFIG(bool, D3D12_Debug_RT_Auditing);
 
+RDOC_CONFIG(uint32_t, D3D12_Hack_MaxDeviceVersion, 0,
+            "If non-zero, caps the maximum ID3D12Device version exposed to the application "
+            "during capture. For example, setting to 8 prevents the app from using Device10+ "
+            "features, improving replay portability. Set to 0 to disable (default).");
+
 WRAPPED_POOL_INST(WrappedID3D12Device);
 
 Threading::CriticalSection WrappedID3D12Device::m_DeviceWrappersLock;
@@ -1064,6 +1069,11 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
 
   HRESULT hr = S_OK;
 
+  // capture-side device version cap: if configured, reject QueryInterface for device versions
+  // above the cap to force applications to fall back to older API calls
+  uint32_t maxDevVer = D3D12_Hack_MaxDeviceVersion();
+  bool capDeviceCap = IsCaptureMode(m_State) && maxDevVer > 0;
+
   if(riid == __uuidof(IUnknown))
   {
     *ppvObject = (IUnknown *)(ID3D12Device *)this;
@@ -1158,7 +1168,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device1))
   {
-    if(m_pDevice1)
+    if(m_pDevice1 && !(capDeviceCap && 1 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device1 *)this;
@@ -1171,7 +1181,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device2))
   {
-    if(m_pDevice2)
+    if(m_pDevice2 && !(capDeviceCap && 2 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device2 *)this;
@@ -1184,7 +1194,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device3))
   {
-    if(m_pDevice3)
+    if(m_pDevice3 && !(capDeviceCap && 3 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device3 *)this;
@@ -1197,7 +1207,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device4))
   {
-    if(m_pDevice4)
+    if(m_pDevice4 && !(capDeviceCap && 4 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device4 *)this;
@@ -1210,7 +1220,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device5))
   {
-    if(m_pDevice5)
+    if(m_pDevice5 && !(capDeviceCap && 5 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device5 *)this;
@@ -1223,7 +1233,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device6))
   {
-    if(m_pDevice6)
+    if(m_pDevice6 && !(capDeviceCap && 6 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device6 *)this;
@@ -1236,7 +1246,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device7))
   {
-    if(m_pDevice7)
+    if(m_pDevice7 && !(capDeviceCap && 7 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device7 *)this;
@@ -1249,7 +1259,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device8))
   {
-    if(m_pDevice8)
+    if(m_pDevice8 && !(capDeviceCap && 8 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device8 *)this;
@@ -1262,7 +1272,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device9))
   {
-    if(m_pDevice9)
+    if(m_pDevice9 && !(capDeviceCap && 9 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device9 *)this;
@@ -1275,7 +1285,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device10))
   {
-    if(m_pDevice10)
+    if(m_pDevice10 && !(capDeviceCap && 10 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device10 *)this;
@@ -1288,7 +1298,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device11))
   {
-    if(m_pDevice11)
+    if(m_pDevice11 && !(capDeviceCap && 11 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device11 *)this;
@@ -1301,7 +1311,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device12))
   {
-    if(m_pDevice12)
+    if(m_pDevice12 && !(capDeviceCap && 12 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device12 *)this;
@@ -1314,7 +1324,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device13))
   {
-    if(m_pDevice13)
+    if(m_pDevice13 && !(capDeviceCap && 13 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device13 *)this;
@@ -1327,7 +1337,7 @@ HRESULT WrappedID3D12Device::QueryInterface(REFIID riid, void **ppvObject)
   }
   else if(riid == __uuidof(ID3D12Device14))
   {
-    if(m_pDevice14)
+    if(m_pDevice14 && !(capDeviceCap && 14 > maxDevVer))
     {
       AddRef();
       *ppvObject = (ID3D12Device14 *)this;

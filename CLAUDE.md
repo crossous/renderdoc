@@ -131,6 +131,11 @@ cp "C:/Program Files (x86)/Windows Kits/10/Redist/D3D/x86/d3dcompiler_47.dll" di
 cp LICENSE.md dist/Release64/
 cp LICENSE.md dist/Release32/
 
+# Copy D3D12 Agility SDK runtime
+mkdir -p dist/Release64/D3D12 dist/Release32/D3D12
+[ -f "3rdparty/d3d12/x64/D3D12Core.dll" ] && cp "3rdparty/d3d12/x64/D3D12Core.dll" dist/Release64/D3D12/
+[ -f "3rdparty/d3d12/win32/D3D12Core.dll" ] && cp "3rdparty/d3d12/win32/D3D12Core.dll" dist/Release32/D3D12/
+
 # Copy Android APKs
 mkdir -p dist/Release64/plugins/android/
 cp build-android-arm32/bin/org.renderdoc.renderdoccmd.arm32.apk dist/Release64/plugins/android/
@@ -141,6 +146,11 @@ mkdir -p dist/Release64/x86
 for f in d3dcompiler_47.dll renderdoc.dll renderdoc.json render_soco_docshim32.dll render_soco_doccmd.exe system_load.dll system_load.json dbghelp.dll symsrv.dll symsrv.yes; do
     [ -f "dist/Release32/$f" ] && cp "dist/Release32/$f" dist/Release64/x86/
 done
+# Bundle x86 D3D12 Agility SDK
+if [ -f "dist/Release32/D3D12/D3D12Core.dll" ]; then
+    mkdir -p dist/Release64/x86/D3D12
+    cp "dist/Release32/D3D12/D3D12Core.dll" dist/Release64/x86/D3D12/
+fi
 
 # Remove PDBs and build artifacts from release
 find dist/Release64/ -name '*.pdb' -exec rm '{}' \;
@@ -166,6 +176,8 @@ RenderSocoDoc_X.XX_64/
 ├── render_soco_docshim64.dll      # Global hook shim
 ├── renderdoc.json / system_load.json
 ├── d3dcompiler_47.dll
+├── D3D12/                         # D3D12 Agility SDK
+│   └── D3D12Core.dll
 ├── Qt5*.dll, python36.dll, dbghelp.dll, symsrv.dll, ...
 ├── LICENSE.md
 ├── x86/                           # 32-bit support
@@ -173,6 +185,8 @@ RenderSocoDoc_X.XX_64/
 │   ├── system_load.dll
 │   ├── render_soco_doccmd.exe
 │   ├── render_soco_docshim32.dll
+│   ├── D3D12/
+│   │   └── D3D12Core.dll
 │   └── ...
 └── plugins/android/
     ├── org.renderdoc.renderdoccmd.arm32.apk
