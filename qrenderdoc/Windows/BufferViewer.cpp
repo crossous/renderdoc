@@ -24,6 +24,8 @@
 
 #include "BufferViewer.h"
 #include <float.h>
+#include <QApplication>
+#include <QClipboard>
 #include <QDoubleSpinBox>
 #include <QFontDatabase>
 #include <QItemSelection>
@@ -2502,6 +2504,9 @@ BufferViewer::BufferViewer(ICaptureContext &ctx, bool meshview, QWidget *parent)
   m_DebugVert = new QAction(tr("&Debug this Vertex"), this);
   m_DebugVert->setIcon(Icons::wrench());
 
+  m_CopyCSV = new QAction(tr("&Copy as CSV"), this);
+  m_CopyCSV->setIcon(Icons::copy());
+
   m_DebugMeshThread = new QAction(tr("&Debug Mesh Thread"), this);
   m_DebugMeshThread->setIcon(Icons::wrench());
 
@@ -3127,6 +3132,29 @@ void BufferViewer::stageRowMenu(MeshDataStage stage, QMenu *menu, const QPoint &
   menu->setToolTipsVisible(true);
 
   QModelIndex idx = m_CurView->selectionModel()->currentIndex();
+
+  QModelIndexList selectedRows = m_CurView->selectionModel()->selectedRows();
+  bool multiSelected = selectedRows.count() > 1;
+
+  if(multiSelected)
+  {
+    // build CSV now while selection is still valid
+    QString csvData = m_CurView->buildSelectedCSV();
+
+    m_CopyCSV->disconnect();
+    QObject::connect(m_CopyCSV, &QAction::triggered, [csvData]() {
+      QClipboard *clipboard = QApplication::clipboard();
+      clipboard->setText(csvData);
+    });
+
+    menu->addAction(m_CopyCSV);
+    menu->addSeparator();
+    menu->addAction(m_ExportCSV);
+    menu->addAction(m_ExportBytes);
+
+    menu->popup(m_CurView->viewport()->mapToGlobal(pos));
+    return;
+  }
 
   const ActionDescription *action = m_Ctx.CurAction();
 

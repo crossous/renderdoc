@@ -229,6 +229,62 @@ void RDTableView::copySelectedIndices()
   copyIndices(selectionModel()->selectedIndexes());
 }
 
+void RDTableView::copySelectedAsCSV()
+{
+  QString csvData = buildSelectedCSV();
+  if(!csvData.isEmpty())
+  {
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(csvData);
+  }
+}
+
+QString RDTableView::buildSelectedCSV()
+{
+  QModelIndexList sel = selectionModel()->selectedRows();
+  if(sel.isEmpty())
+    return QString();
+
+  std::sort(sel.begin(), sel.end(), [](const QModelIndex &a, const QModelIndex &b) {
+    return a.row() < b.row();
+  });
+
+  int colCount = model()->columnCount();
+
+  QString csvData;
+
+  // header row
+  for(int col = 0; col < colCount; col++)
+  {
+    if(col > 0)
+      csvData += lit(",");
+    QString header = model()->headerData(col, Qt::Horizontal).toString();
+    if(header.contains(QLatin1Char(',')) || header.contains(QLatin1Char('"')))
+      csvData += lit("\"") + header.replace(lit("\""), lit("\"\"")) + lit("\"");
+    else
+      csvData += header;
+  }
+  csvData += lit("\n");
+
+  // data rows
+  for(const QModelIndex &idx : sel)
+  {
+    for(int col = 0; col < colCount; col++)
+    {
+      if(col > 0)
+        csvData += lit(",");
+      QString text = model()->data(model()->index(idx.row(), col)).toString();
+      if(text.contains(QLatin1Char(',')) || text.contains(QLatin1Char('"')))
+        csvData += lit("\"") + text.replace(lit("\""), lit("\"\"")) + lit("\"");
+      else
+        csvData += text;
+    }
+    csvData += lit("\n");
+  }
+
+  return csvData.trimmed();
+}
+
 void RDTableView::keyboardSearch(const QString &search)
 {
   if(m_allowKeyboardSearches)

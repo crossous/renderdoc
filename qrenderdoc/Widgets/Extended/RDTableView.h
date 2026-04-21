@@ -47,6 +47,8 @@ public:
 
   void copyIndices(const QModelIndexList &sel);
   void copySelectedIndices();
+  QString buildSelectedCSV();
+  void copySelectedAsCSV();
 
   void setAllowKeyboardSearches(bool allow) { m_allowKeyboardSearches = allow; }
   bool allowKeyboardSearches() const { return m_allowKeyboardSearches; }

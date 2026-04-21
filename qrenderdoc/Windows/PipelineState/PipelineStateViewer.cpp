@@ -23,6 +23,8 @@
  ******************************************************************************/
 
 #include "PipelineStateViewer.h"
+#include <QApplication>
+#include <QClipboard>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -1164,6 +1166,29 @@ void PipelineStateViewer::ShowResourceContextMenu(RDTreeWidget *widget, const QP
 
   QMenu contextMenu(this);
 
+  QModelIndexList selectedRows = widget->selectionModel()->selectedRows();
+  bool multiSelected = selectedRows.count() > 1;
+
+  if(multiSelected)
+  {
+    // build CSV now while selection is still valid
+    QString csvData = widget->buildSelectionCSV();
+
+    QAction copyCSV(tr("&Copy as CSV"), this);
+    copyCSV.setIcon(Icons::copy());
+
+    contextMenu.addAction(&copyCSV);
+
+    QObject::connect(&copyCSV, &QAction::triggered,
+                     [csvData]() {
+                       QClipboard *clipboard = QApplication::clipboard();
+                       clipboard->setText(csvData);
+                     });
+
+    RDDialog::show(&contextMenu, widget->viewport()->mapToGlobal(pos));
+    return;
+  }
+
   QAction copy(tr("&Copy"), this);
 
   contextMenu.addAction(&copy);
@@ -1310,6 +1335,7 @@ void PipelineStateViewer::SetupResourceView(RDTreeWidget *widget)
   };
 
   widget->setContextMenuPolicy(Qt::CustomContextMenu);
+  widget->setSelectionMode(QAbstractItemView::ExtendedSelection);
   QObject::connect(widget, &RDTreeWidget::customContextMenuRequested, handler);
 
   widget->setCustomTooltip(m_Tooltip);

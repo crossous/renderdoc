@@ -253,6 +253,8 @@ public:
   RDTreeWidgetItem *itemForIndex(QModelIndex idx) const;
 
   void copyItem(QPoint pos, RDTreeWidgetItem *item);
+  QString buildSelectionCSV();
+  void copySelectionAsCSV();
 
   typedef std::function<bool(int, Qt::SortOrder, const RDTreeWidgetItem *, const RDTreeWidgetItem *)>
       ComparisonFunction;
