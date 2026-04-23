@@ -35,16 +35,52 @@
 
 #include "common/common.h"
 #include "common/threading.h"
+#include "core/settings.h"
 #include "hooks/hooks.h"
 #include "os/os_specific.h"
 #include "strings/string_utils.h"
 #include "3rdparty/Detours/detours.h"
+
+// Per-DLL hook mode: 0 = disabled, 1 = IAT hook, 2 = Inline hook (Detours)
+// These appear in Settings under Hook > DLL > <name>
+RDOC_CONFIG(uint32_t, Hook_DLL_d3d11, 2, "d3d11.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_d3d12, 2, "d3d12.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_dxgi, 2, "dxgi.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_d3d9, 1, "d3d9.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_opengl32, 1, "opengl32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_libGLESv2, 1, "libGLESv2.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_gdi32, 1, "gdi32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_user32, 1, "user32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_d3d11on12, 2, "d3d11on12.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_kernel32, 1, "kernel32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_advapi32, 1, "advapi32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_ws2_32, 1, "ws2_32.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_nvapi, 1, "nvapi/nvapi64.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_nvEncodeAPI, 1, "nvEncodeAPI/nvEncodeAPI64.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_atidxx, 1, "atidxx32/atidxx64.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_amdxc, 1, "amdxc32/amdxc64.dll hook mode: 0=off, 1=IAT, 2=Inline");
+RDOC_CONFIG(uint32_t, Hook_DLL_amd_ags, 1, "amd_ags_x64.dll hook mode: 0=off, 1=IAT, 2=Inline");
+
+enum HookMode
+{
+  HookMode_Disabled = 0,
+  HookMode_IAT = 1,
+  HookMode_Inline = 2,
+};
 
 #define VERBOSE_DEBUG_HOOK OPTION_OFF
 
 // map from address of IAT entry, to original contents
 std::map<void **, void *> s_InstalledHooks;
 Threading::CriticalSection installedLock;
+
+// list of inline (Detours) hooks for cleanup
+struct InlineHookEntry
+{
+  void **origPtr;    // pointer to location storing the original function
+  void *hookFunc;    // our hook function
+};
+static rdcarray<InlineHookEntry> s_InlineHooks;
 
 bool ApplyHook(FunctionHook &hook, void **IATentry, bool &already)
 {
@@ -931,37 +967,107 @@ void LibraryHooks::RegisterFunctionHook(const char *libraryName, const FunctionH
     }
   }
 
-  if(!_stricmp(libraryName, "d3d11.dll") || !_stricmp(libraryName, "dxgi.dll") ||
-     !_stricmp(libraryName, "d3d12.dll"))
-  {
-    std::cout << "inline hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+  // Determine hook mode for this DLL.
+  // Known DLLs: per-DLL config setting (0=off, 1=IAT, 2=Inline).
+  // Unknown DLLs: default IAT.
+  uint32_t hookMode = HookMode_IAT;
 
-    HMODULE module = GetModuleHandleA(libraryName);
-    if(module == NULL)
+  {
+    struct
     {
-      std::cout << "get module not found, try load library" << std::endl;
-      module = LoadLibraryA(libraryName);
-      if(module == NULL)
+      const char *dll;
+      uint32_t (*mode)();
+    } dllSettings[] = {
+        {"d3d11.dll", &Hook_DLL_d3d11},
+        {"d3d12.dll", &Hook_DLL_d3d12},
+        {"dxgi.dll", &Hook_DLL_dxgi},
+        {"d3d9.dll", &Hook_DLL_d3d9},
+        {"opengl32.dll", &Hook_DLL_opengl32},
+        {"libGLESv2.dll", &Hook_DLL_libGLESv2},
+        {"gdi32.dll", &Hook_DLL_gdi32},
+        {"user32.dll", &Hook_DLL_user32},
+        {"d3d11on12.dll", &Hook_DLL_d3d11on12},
+        {"kernel32.dll", &Hook_DLL_kernel32},
+        {"advapi32.dll", &Hook_DLL_advapi32},
+        {"ws2_32.dll", &Hook_DLL_ws2_32},
+        {"nvapi.dll", &Hook_DLL_nvapi},
+        {"nvapi64.dll", &Hook_DLL_nvapi},
+        {"nvEncodeAPI.dll", &Hook_DLL_nvEncodeAPI},
+        {"nvEncodeAPI64.dll", &Hook_DLL_nvEncodeAPI},
+        {"atidxx32.dll", &Hook_DLL_atidxx},
+        {"atidxx64.dll", &Hook_DLL_atidxx},
+        {"amdxc32.dll", &Hook_DLL_amdxc},
+        {"amdxc64.dll", &Hook_DLL_amdxc},
+        {"amd_ags_x64.dll", &Hook_DLL_amd_ags},
+    };
+
+    for(auto &s : dllSettings)
+    {
+      if(!_stricmp(libraryName, s.dll))
       {
-        std::cout << libraryName << "\t-\t" << hook.function.c_str()
-                  << "load module error, hook error!" << std::endl;
-        return;
+        hookMode = s.mode();
+        break;
       }
     }
 
-    *hook.orig = GetProcAddress(module, hook.function.c_str());
-
-    DetourTransactionBegin();
-    DetourUpdateThread(GetCurrentThread());
-    DetourAttach((PVOID *)hook.orig, hook.hook);
-
-    DetourTransactionCommit();
+    // api-set DLLs follow kernel32 setting
+    if(!_strnicmp(libraryName, "api-ms-win-core-libraryloader-", 30) ||
+       !_strnicmp(libraryName, "api-ms-win-core-processthreads-", 31))
+    {
+      hookMode = Hook_DLL_kernel32();
+    }
   }
-  else
+
+  // Disabled
+  if(hookMode == HookMode_Disabled)
   {
-    std::cout << "IAT hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
-    s_HookData->DllHooks[strlower(rdcstr(libraryName))].FunctionHooks.push_back(hook);
+    std::cout << "hook disabled " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+    return;
   }
+
+  // Inline hook
+  if(hookMode == HookMode_Inline)
+  {
+    HMODULE module = GetModuleHandleA(libraryName);
+    if(module == NULL)
+      module = LoadLibraryA(libraryName);
+
+    void *origFunc = module ? (void *)GetProcAddress(module, hook.function.c_str()) : NULL;
+
+    if(origFunc)
+    {
+      *hook.orig = origFunc;
+
+      DetourTransactionBegin();
+      DetourUpdateThread(GetCurrentThread());
+      LONG attachErr = DetourAttach((PVOID *)hook.orig, hook.hook);
+      LONG commitErr = DetourTransactionCommit();
+
+      if(attachErr != NO_ERROR || commitErr != NO_ERROR)
+      {
+        std::cout << "inline hook FAILED (attach=" << attachErr << " commit=" << commitErr
+                  << ") " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+        *hook.orig = origFunc;
+        return;
+      }
+
+      std::cout << "inline hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+
+      InlineHookEntry entry = {hook.orig, hook.hook};
+      s_InlineHooks.push_back(entry);
+      return;
+    }
+    else
+    {
+      std::cout << "inline hook skip (not exported) " << libraryName << "\t-\t"
+                << hook.function.c_str() << std::endl;
+      return;
+    }
+  }
+
+  // IAT hook
+  std::cout << "IAT hook " << libraryName << "\t-\t" << hook.function.c_str() << std::endl;
+  s_HookData->DllHooks[strlower(rdcstr(libraryName))].FunctionHooks.push_back(hook);
 }
 
 void LibraryHooks::RegisterLibraryHook(const char *libraryName, FunctionLoadCallback loadedCallback)
@@ -1024,6 +1130,18 @@ void LibraryHooks::RemoveHooks()
 {
   LibraryHooks::RemoveHookCallbacks();
 
+  // Clean up inline (Detours) hooks
+  if(!s_InlineHooks.empty())
+  {
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    for(size_t i = 0; i < s_InlineHooks.size(); i++)
+      DetourDetach((PVOID *)s_InlineHooks[i].origPtr, s_InlineHooks[i].hookFunc);
+    DetourTransactionCommit();
+    s_InlineHooks.clear();
+  }
+
+  // Clean up IAT hooks
   for(auto it = s_InstalledHooks.begin(); it != s_InstalledHooks.end(); ++it)
   {
     DWORD oldProtection = PAGE_EXECUTE;
