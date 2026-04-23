@@ -202,6 +202,42 @@
         </property>
        </widget>
       </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="customDllLabel">
+        <property name="toolTip">
+         <string>Custom DLL to inject instead of the default. Leave empty to use default (system_load.dll)</string>
+        </property>
+        <property name="text">
+         <string>Custom Inject DLL</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="2">
+       <widget class="RDLineEdit" name="customDllPath">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Custom DLL to inject instead of the default. Leave empty to use default (system_load.dll)</string>
+        </property>
+        <property name="placeholderText">
+         <string>system_load.dll (default)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="3">
+       <widget class="QToolButton" name="customDllBrowse">
+        <property name="toolTip">
+         <string>Browse for a custom DLL to inject</string>
+        </property>
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

@@ -28,10 +28,15 @@
 #include <windows.h>
 #include "common/common.h"
 #include "core/core.h"
+#include "core/settings.h"
 #include "hooks/hooks.h"
 #include "strings/string_utils.h"
 
 #include <iostream>
+
+RDOC_CONFIG(bool, Debug_OpenConsole, true,
+            "Open a debug console window when injected into a target process. "
+            "Disable this if the console interferes with the target application (e.g. SDK login windows).");
 
 static bool OpenConsole()
 {
@@ -41,6 +46,16 @@ static bool OpenConsole()
     SetConsoleTitle(L"Debug Console");
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE),
                             FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_RED);
+
+    // Enable text selection (right-click copy) in the console window
+    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD consoleMode = 0;
+    if(GetConsoleMode(hStdIn, &consoleMode))
+    {
+      consoleMode |= ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS;
+      SetConsoleMode(hStdIn, consoleMode);
+    }
+
     std::cout << "RenderDoc OpenConsole!" << std::endl;
     return true;
   }
@@ -96,6 +111,10 @@ static BOOL add_hooks()
 
   RenderDoc::Inst().Initialise();
 
+  // Open console after config is loaded so we can check the setting
+  if(Debug_OpenConsole())
+    OpenConsole();
+
   RDCLOG("Loading into %ls", curFile);
 
   LibraryHooks::RegisterHooks();
@@ -108,9 +127,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
   if(ul_reason_for_call == DLL_PROCESS_ATTACH)
   {
     bool isReplayApp = LibraryHooks::Detect(STRINGIZE(RDOC_BASE_NAME) "__replay__marker");
-
-    if(!isReplayApp)
-        OpenConsole();
 
     BOOL ret = add_hooks();
     SetLastError(0);

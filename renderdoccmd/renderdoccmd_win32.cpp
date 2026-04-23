@@ -776,6 +776,7 @@ private:
   std::string capfile;
   std::string debuglog;
   std::string opts;
+  std::string customdll;
 
 public:
   GlobalHookCommand() {}
@@ -785,6 +786,7 @@ public:
     parser.add<std::string>("capfile", 0, "");
     parser.add<std::string>("debuglog", 0, "");
     parser.add<std::string>("capopts", 0, "");
+    parser.add<std::string>("customdll", 0, "", false, "");
   }
   virtual const char *Description() { return "Internal use only!"; }
   virtual bool IsInternalOnly() { return true; }
@@ -795,6 +797,7 @@ public:
     capfile = parser.get<std::string>("capfile");
     debuglog = parser.get<std::string>("debuglog");
     opts = parser.get<std::string>("capopts");
+    customdll = parser.get<std::string>("customdll");
     return true;
   }
   virtual int Execute(const CaptureOptions &)
@@ -869,6 +872,13 @@ public:
         strncpy_s(shimdata->capfile, capfile.c_str(), _TRUNCATE);
         strncpy_s(shimdata->debuglog, debuglog.c_str(), _TRUNCATE);
         memcpy(shimdata->opts, &cmdopts, sizeof(CaptureOptions));
+
+        // Set custom DLL path if specified
+        if(!customdll.empty())
+        {
+          std::wstring wcustomdll = conv(customdll);
+          wcsncpy_s(shimdata->customdll, wcustomdll.c_str(), _TRUNCATE);
+        }
 
         static_assert(sizeof(CaptureOptions) <= sizeof(shimdata->opts),
                       "ShimData options is too small");

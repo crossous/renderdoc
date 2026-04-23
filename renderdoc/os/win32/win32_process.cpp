@@ -31,8 +31,15 @@
 #include <tlhelp32.h>
 #include "common/formatting.h"
 #include "core/core.h"
+#include "core/settings.h"
 #include "os/os_specific.h"
 #include "strings/string_utils.h"
+
+#include <iostream>
+
+RDOC_CONFIG(rdcstr, Inject_CustomDLLPath, "",
+            "Path to a custom DLL to inject instead of the default system_load.dll. "
+            "Leave empty to use the default. The DLL must match the target process architecture.");
 #include "win32_pe_parse.h"
 
 #include <string>
@@ -608,12 +615,21 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
   RDCLOG("Injecting renderdoc into process %lu", pid);
 
   wchar_t renderdocPath[MAX_PATH] = {0};
-  GetModuleFileNameW(GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll"), &renderdocPath[0],
-                                      MAX_PATH - 1);
-
-  size_t dirLen = wcslen(renderdocPath) - wcslen(TEXT(STRINGIZE(RDOC_BASE_NAME) ".dll"));
-  renderdocPath[dirLen] = L'\0';
-  wcscat(renderdocPath, TEXT(REMOTE_DLL_NAME));
+  rdcstr customDLL = Inject_CustomDLLPath();
+  if(!customDLL.empty())
+  {
+    rdcwstr wcustom = StringFormat::UTF82Wide(customDLL);
+    wcsncpy_s(renderdocPath, wcustom.c_str(), MAX_PATH - 1);
+    std::cout << "Using custom inject DLL: " << customDLL.c_str() << std::endl;
+  }
+  else
+  {
+    GetModuleFileNameW(GetModuleHandleA(STRINGIZE(RDOC_BASE_NAME) ".dll"), &renderdocPath[0],
+                                        MAX_PATH - 1);
+    size_t dirLen = wcslen(renderdocPath) - wcslen(TEXT(STRINGIZE(RDOC_BASE_NAME) ".dll"));
+    renderdocPath[dirLen] = L'\0';
+    wcscat(renderdocPath, TEXT(REMOTE_DLL_NAME));
+  }
 
   wchar_t renderdocPathLower[MAX_PATH] = {0};
   memcpy(renderdocPathLower, renderdocPath, MAX_PATH * sizeof(wchar_t));
@@ -842,8 +858,9 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
 
     _snwprintf_s(
         paramsAlloc, 2047, 2047,
-        L"\"%ls\" capaltbit --pid=%u --capfile=\"%ls\" --debuglog=\"%ls\" --capopts=\"%hs\"",
-        renderdocPath, pid, wcapturefile.c_str(), wdebugLogfile.c_str(), optstr.c_str());
+        L"\"%ls\" capaltbit --pid=%u --capfile=\"%ls\" --debuglog=\"%ls\" --capopts=\"%hs\" --customdll=\"%hs\"",
+        renderdocPath, pid, wcapturefile.c_str(), wdebugLogfile.c_str(), optstr.c_str(),
+        customDLL.c_str());
 
     RDCDEBUG("params %ls", paramsAlloc);
 
@@ -974,19 +991,49 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
 
   InjectDLL(hProcess, renderdocPath);
 
+  bool isCustomDLL = !customDLL.empty();
+
   const char *rdoc_dll = STRINGIZE(RDOC_BASE_NAME);
 
-  uintptr_t loc = FindRemoteDLL(pid, REMOTE_DLL_NAME);
+  // For custom DLLs, search for the custom DLL name; for default, search for REMOTE_DLL_NAME
+  const char *searchDllName = REMOTE_DLL_NAME;
+  if(isCustomDLL)
+  {
+    // Extract filename from full path
+    const char *lastSlash = strrchr(customDLL.c_str(), '\\');
+    const char *lastFwdSlash = strrchr(customDLL.c_str(), '/');
+    if(lastFwdSlash && (!lastSlash || lastFwdSlash > lastSlash))
+      lastSlash = lastFwdSlash;
+    searchDllName = lastSlash ? lastSlash + 1 : customDLL.c_str();
+  }
+
+  uintptr_t loc = FindRemoteDLL(pid, searchDllName);
 
   rdcpair<RDResult, uint32_t> result = {ResultCode::Succeeded, 0};
 
   if(loc == 0)
   {
-    SET_ERROR_RESULT(
-        result.first, ResultCode::InjectionFailed,
-        "Failed to inject %s.dll into process. Check that the process did not crash or exit "
-        "early in initialisation, e.g. if the working directory is incorrectly set.",
-        rdoc_dll);
+    if(isCustomDLL)
+    {
+      // Custom DLL injection failed
+      SET_ERROR_RESULT(
+          result.first, ResultCode::InjectionFailed,
+          "Failed to inject custom DLL '%s' into process.",
+          customDLL.c_str());
+    }
+    else
+    {
+      SET_ERROR_RESULT(
+          result.first, ResultCode::InjectionFailed,
+          "Failed to inject %s.dll into process. Check that the process did not crash or exit "
+          "early in initialisation, e.g. if the working directory is incorrectly set.",
+          rdoc_dll);
+    }
+  }
+  else if(isCustomDLL)
+  {
+    // Custom DLL injected successfully - skip INTERNAL_* calls since the DLL doesn't have them
+    std::cout << "Custom DLL injected successfully: " << customDLL.c_str() << std::endl;
   }
   else
   {
@@ -1574,11 +1621,12 @@ RDResult Process::StartGlobalHook(const rdcstr &pathmatch, const rdcstr &capture
   // serialise to string with two chars per byte
   rdcstr optstr = opts.EncodeAsString();
   rdcstr debugLogfile = RDCGETLOGFILE();
+  rdcstr customDLL = Inject_CustomDLLPath();
 
   rdcstr params = StringFormat::Fmt(
-      "\"%s\" globalhook --match \"%s\" --capfile \"%s\" --debuglog \"%s\" --capopts \"%s\"",
+      "\"%s\" globalhook --match \"%s\" --capfile \"%s\" --debuglog \"%s\" --capopts \"%s\" --customdll \"%s\"",
       cmdpathNative.c_str(), pathmatch.c_str(), capturefile.c_str(), debugLogfile.c_str(),
-      optstr.c_str());
+      optstr.c_str(), customDLL.c_str());
 
   rdcwstr paramsAlloc = StringFormat::UTF82Wide(params);
 

@@ -91,6 +91,7 @@ private slots:
   void on_envVarEdit_clicked();
 
   void on_monitorScriptBrowse_clicked();
+  void on_customDllBrowse_clicked();
 
   void on_processFilter_textChanged(const QString &arg1);
   void on_processRefesh_clicked();

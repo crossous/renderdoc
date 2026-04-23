@@ -46,11 +46,7 @@ typedef void(__cdecl *pINTERNAL_SetDebugLogFile)(const char *logfile);
   } while(0)
 #else
 // define this to something to get logging
-// #define LOGPRINT(txt) OutputDebugStringW(txt)
-#define LOGPRINT(txt) \
-  do                  \
-  {                   \
-  } while(0)
+#define LOGPRINT(txt) OutputDebugStringW(txt)
 #endif
 
 void CheckHook()
@@ -110,7 +106,23 @@ void CheckHook()
       LOGPRINT(data->pathmatchstring);
       LOGPRINT(L"'\n");
 
-      HMODULE mod = LoadLibraryW(data->rdocpath);
+      // Use custom DLL if specified, otherwise use the default rdocpath
+      const wchar_t *dllToLoad = data->rdocpath;
+      if(data->customdll[0] != 0)
+      {
+        dllToLoad = data->customdll;
+        LOGPRINT(L"renderdocshim: Using custom DLL: ");
+        LOGPRINT(data->customdll);
+        LOGPRINT(L"\n");
+      }
+      else
+      {
+        LOGPRINT(L"renderdocshim: Using default rdocpath: ");
+        LOGPRINT(data->rdocpath);
+        LOGPRINT(L"\n");
+      }
+
+      HMODULE mod = LoadLibraryW(dllToLoad);
 
       if(mod)
       {

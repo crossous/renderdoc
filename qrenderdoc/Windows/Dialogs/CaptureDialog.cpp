@@ -776,6 +776,21 @@ void CaptureDialog::on_monitorScriptBrowse_clicked()
     ui->monitorScriptPath->setText(filename);
 }
 
+void CaptureDialog::on_customDllBrowse_clicked()
+{
+  QString initDir;
+  if(!ui->customDllPath->text().isEmpty())
+    initDir = QFileInfo(ui->customDllPath->text()).absolutePath();
+  else
+    initDir = QCoreApplication::applicationDirPath();    // same dir as qrenderdoc.exe / system_load.dll
+
+  QString filename = RDDialog::getOpenFileName(this, tr("Choose Custom Inject DLL"), initDir,
+                                               tr("DLL Files (*.dll);;All Files (*)"));
+
+  if(!filename.isEmpty())
+    ui->customDllPath->setText(filename);
+}
+
 void CaptureDialog::on_toggleGlobal_clicked()
 {
   if(!ui->toggleGlobal->isEnabled())
@@ -855,6 +870,14 @@ void CaptureDialog::on_toggleGlobal_clicked()
 
     // Write monitor script to temp file for the target DLL to pick up
     WritePendingMonitorScript();
+
+    // Set custom inject DLL path in config before global hook
+    {
+      QString customDll = ui->customDllPath->text().trimmed();
+      SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
+      if(setting)
+        setting->data.str = customDll.toUtf8().data();
+    }
 
     ResultDetails success = RENDERDOC_StartGlobalHook(exe, capturefile, Settings().options);
 
@@ -1232,6 +1255,14 @@ void CaptureDialog::TriggerCapture()
   // Works for all modes: Launch, Inject, Global Hook.
   // For Launch/Inject, LiveCapture also sends via target control as a secondary channel.
   WritePendingMonitorScript();
+
+  // Set custom inject DLL path in config before launching
+  {
+    QString customDll = ui->customDllPath->text().trimmed();
+    SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
+    if(setting)
+      setting->data.str = customDll.toUtf8().data();
+  }
 
   if(IsInjectMode())
   {

@@ -30,6 +30,8 @@ struct ShimData
   char capfile[2048];
 
   unsigned char opts[512];
+
+  wchar_t customdll[2048];    // custom DLL path, empty = use rdocpath
 };
 
 #ifdef WIN64

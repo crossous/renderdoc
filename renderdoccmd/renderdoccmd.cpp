@@ -916,6 +916,7 @@ private:
   std::string debuglog;
   uint32_t pid;
   std::string capfile;
+  std::string customdll;
 
 public:
   CapAltBitCommand() : Command() {}
@@ -925,6 +926,7 @@ public:
     parser.add<std::string>("capfile", 0, "");
     parser.add<std::string>("debuglog", 0, "");
     parser.add<std::string>("capopts", 0, "");
+    parser.add<std::string>("customdll", 0, "", false, "");
     parser.stop_at_rest(true);
   }
   virtual const char *Description() { return "Internal use only!"; }
@@ -1012,12 +1014,21 @@ public:
     debuglog = parser.get<std::string>("debuglog");
     pid = parser.get<uint32_t>("pid");
     capfile = parser.get<std::string>("capfile");
+    customdll = parser.get<std::string>("customdll");
 
     return true;
   }
   virtual int Execute(const CaptureOptions &)
   {
     RENDERDOC_SetDebugLogFile(conv(debuglog));
+
+    // Set custom DLL path if specified
+    if(!customdll.empty())
+    {
+      SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
+      if(setting)
+        setting->data.str = conv(customdll);
+    }
 
     ExecuteResult result = RENDERDOC_InjectIntoProcess(pid, env, conv(capfile), cmdopts, false);
 
