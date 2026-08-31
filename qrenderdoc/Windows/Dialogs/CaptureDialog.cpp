@@ -219,14 +219,7 @@ CaptureDialog::CaptureDialog(ICaptureContext &ctx, OnCaptureMethod captureCallba
 
   SetSettings(CaptureSettings());
 
-  // Auto-discover rdcmonitor_autoload.py next to our executable for first-time convenience
-  if(ui->monitorScriptPath->text().isEmpty())
-  {
-    QString defaultScript =
-        QDir(QCoreApplication::applicationDirPath()).filePath(lit("rdcmonitor_autoload.py"));
-    if(QFileInfo::exists(defaultScript))
-      ui->monitorScriptPath->setText(defaultScript);
-  }
+  UpdateOptionalSettingsVisibility();
 
   UpdateGlobalHook();
 
@@ -871,13 +864,8 @@ void CaptureDialog::on_toggleGlobal_clicked()
     // Write monitor script to temp file for the target DLL to pick up
     WritePendingMonitorScript();
 
-    // Set custom inject DLL path in config before global hook
-    {
-      QString customDll = ui->customDllPath->text().trimmed();
-      SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
-      if(setting)
-        setting->data.str = customDll.toUtf8().data();
-    }
+    // Set or clear the custom inject DLL path before enabling the global hook.
+    ApplyCustomInjectDLLSetting();
 
     ResultDetails success = RENDERDOC_StartGlobalHook(exe, capturefile, Settings().options);
 
@@ -1224,12 +1212,15 @@ void CaptureDialog::SetEnvironmentModifications(const rdcarray<EnvironmentModifi
 
 void CaptureDialog::WritePendingMonitorScript()
 {
-  QString scriptPath = ui->monitorScriptPath->text().trimmed();
-
   QString pendingPath = QDir::temp().filePath(lit("rdcmonitor_pending.py"));
 
   // Always clean up any leftover pending file first
   QFile::remove(pendingPath);
+
+  if(!m_Ctx.Config().CaptureDialog_ShowMonitorScript)
+    return;
+
+  QString scriptPath = ui->monitorScriptPath->text().trimmed();
 
   if(scriptPath.isEmpty())
     return;
@@ -1249,6 +1240,45 @@ void CaptureDialog::WritePendingMonitorScript()
   }
 }
 
+void CaptureDialog::ApplyCustomInjectDLLSetting()
+{
+  QString customDll;
+  if(m_Ctx.Config().CaptureDialog_ShowCustomInjectDLL)
+    customDll = ui->customDllPath->text().trimmed();
+
+  SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
+  if(setting)
+    setting->data.str = customDll.toUtf8().data();
+}
+
+void CaptureDialog::UpdateOptionalSettingsVisibility()
+{
+  const bool showMonitorScript = m_Ctx.Config().CaptureDialog_ShowMonitorScript;
+  ui->monitorScriptLabel->setVisible(showMonitorScript);
+  ui->monitorScriptPath->setVisible(showMonitorScript);
+  ui->monitorScriptBrowse->setVisible(showMonitorScript);
+
+  // Auto-discover the default script only when the feature is enabled.
+  if(showMonitorScript && ui->monitorScriptPath->text().isEmpty())
+  {
+    QString defaultScript =
+        QDir(QCoreApplication::applicationDirPath()).filePath(lit("rdcmonitor_autoload.py"));
+    if(QFileInfo::exists(defaultScript))
+      ui->monitorScriptPath->setText(defaultScript);
+  }
+
+  if(!showMonitorScript)
+    QFile::remove(QDir::temp().filePath(lit("rdcmonitor_pending.py")));
+
+  const bool showCustomInjectDLL = m_Ctx.Config().CaptureDialog_ShowCustomInjectDLL;
+  ui->customDllLabel->setVisible(showCustomInjectDLL);
+  ui->customDllPath->setVisible(showCustomInjectDLL);
+  ui->customDllBrowse->setVisible(showCustomInjectDLL);
+
+  if(!showCustomInjectDLL)
+    ApplyCustomInjectDLLSetting();
+}
+
 void CaptureDialog::TriggerCapture()
 {
   // Write monitor script to temp file for the target DLL to pick up.
@@ -1256,13 +1286,8 @@ void CaptureDialog::TriggerCapture()
   // For Launch/Inject, LiveCapture also sends via target control as a secondary channel.
   WritePendingMonitorScript();
 
-  // Set custom inject DLL path in config before launching
-  {
-    QString customDll = ui->customDllPath->text().trimmed();
-    SDObject *setting = RENDERDOC_SetConfigSetting("Inject_CustomDLLPath");
-    if(setting)
-      setting->data.str = customDll.toUtf8().data();
-  }
+  // Set or clear the custom inject DLL path before launching.
+  ApplyCustomInjectDLLSetting();
 
   if(IsInjectMode())
   {
@@ -1282,9 +1307,12 @@ void CaptureDialog::TriggerCapture()
           PID, Settings().environment, name, Settings().options, [this](LiveCapture *live) {
             if(ui->queueFrameCap->isChecked())
               live->QueueCapture((int)ui->queuedFrame->value(), (int)ui->numFrames->value());
-            QString scriptPath = ui->monitorScriptPath->text().trimmed();
-            if(!scriptPath.isEmpty())
-              live->SetMonitorScriptPath(scriptPath);
+            if(m_Ctx.Config().CaptureDialog_ShowMonitorScript)
+            {
+              QString scriptPath = ui->monitorScriptPath->text().trimmed();
+              if(!scriptPath.isEmpty())
+                live->SetMonitorScriptPath(scriptPath);
+            }
           });
     }
     else
@@ -1359,9 +1387,12 @@ void CaptureDialog::TriggerCapture()
                         if(ui->queueFrameCap->isChecked())
                           live->QueueCapture((int)ui->queuedFrame->value(),
                                              (int)ui->numFrames->value());
-                        QString scriptPath = ui->monitorScriptPath->text().trimmed();
-                        if(!scriptPath.isEmpty())
-                          live->SetMonitorScriptPath(scriptPath);
+                        if(m_Ctx.Config().CaptureDialog_ShowMonitorScript)
+                        {
+                          QString scriptPath = ui->monitorScriptPath->text().trimmed();
+                          if(!scriptPath.isEmpty())
+                            live->SetMonitorScriptPath(scriptPath);
+                        }
                       });
   }
 }

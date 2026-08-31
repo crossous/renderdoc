@@ -69,6 +69,8 @@ private slots:
   void on_CheckUpdate_AllowChecks_toggled(bool checked);
   void on_Font_PreferMonospaced_toggled(bool checked);
   void on_AlwaysReplayLocally_toggled(bool checked);
+  void on_CaptureDialog_ShowMonitorScript_toggled(bool checked);
+  void on_CaptureDialog_ShowCustomInjectDLL_toggled(bool checked);
   void on_analyticsAutoSubmit_toggled(bool checked);
   void on_analyticsManualCheck_toggled(bool checked);
   void on_analyticsOptOut_toggled(bool checked);
@@ -126,6 +128,7 @@ private:
 
   void addProcessor(const ShaderProcessingTool &disasm);
   bool editTool(int existing, ShaderProcessingTool &disasm);
+  void updateCaptureDialogOptionalSettings();
 
   ReplayOptionsSelector *m_ReplayOptions;
 

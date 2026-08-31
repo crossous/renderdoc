@@ -198,6 +198,10 @@ SettingsDialog::SettingsDialog(ICaptureContext &ctx, QWidget *parent)
   ui->TextureViewer_PerTexYFlip->setEnabled(ui->TextureViewer_PerTexSettings->isChecked());
 
   ui->AlwaysReplayLocally->setChecked(m_Ctx.Config().AlwaysReplayLocally);
+  ui->CaptureDialog_ShowMonitorScript->setChecked(
+      m_Ctx.Config().CaptureDialog_ShowMonitorScript);
+  ui->CaptureDialog_ShowCustomInjectDLL->setChecked(
+      m_Ctx.Config().CaptureDialog_ShowCustomInjectDLL);
 
   {
     const SDObject *getPaths = RENDERDOC_GetConfigSetting("DXBC.Debug.SearchDirPaths");
@@ -558,6 +562,31 @@ void SettingsDialog::on_AlwaysReplayLocally_toggled(bool checked)
   m_Ctx.Config().AlwaysReplayLocally = ui->AlwaysReplayLocally->isChecked();
 
   m_Ctx.Config().Save();
+}
+
+void SettingsDialog::updateCaptureDialogOptionalSettings()
+{
+  if(!m_Ctx.HasCaptureDialog())
+    return;
+
+  CaptureDialog *captureDialog =
+      qobject_cast<CaptureDialog *>(m_Ctx.GetCaptureDialog()->Widget());
+  if(captureDialog)
+    captureDialog->UpdateOptionalSettingsVisibility();
+}
+
+void SettingsDialog::on_CaptureDialog_ShowMonitorScript_toggled(bool checked)
+{
+  m_Ctx.Config().CaptureDialog_ShowMonitorScript = checked;
+  m_Ctx.Config().Save();
+  updateCaptureDialogOptionalSettings();
+}
+
+void SettingsDialog::on_CaptureDialog_ShowCustomInjectDLL_toggled(bool checked)
+{
+  m_Ctx.Config().CaptureDialog_ShowCustomInjectDLL = checked;
+  m_Ctx.Config().Save();
+  updateCaptureDialogOptionalSettings();
 }
 
 void SettingsDialog::on_analyticsAutoSubmit_toggled(bool checked)

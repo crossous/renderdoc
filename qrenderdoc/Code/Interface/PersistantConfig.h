@@ -373,7 +373,23 @@ DECLARE_REFLECTION_STRUCT(BugReport);
       ""                                                                                           \
       ":type: bool");                                                                              \
   CONFIG_SETTING_VAL(public, bool, bool, AlwaysReplayLocally, false)                               \
-                                                                                                   \
+                                                                                                    \
+  DOCUMENT(                                                                                        \
+      "``True`` if the Monitor Script controls should be shown in the Capture Dialog.\n"          \
+      "\n"                                                                                         \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
+  CONFIG_SETTING_VAL(public, bool, bool, CaptureDialog_ShowMonitorScript, false)                   \
+                                                                                                    \
+  DOCUMENT(                                                                                        \
+      "``True`` if the Custom Inject DLL controls should be shown in the Capture Dialog.\n"       \
+      "\n"                                                                                         \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
+  CONFIG_SETTING_VAL(public, bool, bool, CaptureDialog_ShowCustomInjectDLL, false)                 \
+                                                                                                    \
   DOCUMENT(                                                                                        \
       "The index of the local proxy API to use when using remote context replay. ``-1`` if the "   \
       "default proxy should be used.\n"                                                            \

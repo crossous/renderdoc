@@ -473,7 +473,47 @@ This option overrides that and will always replay locally if the local context i
             </property>
            </widget>
           </item>
+          <item row="19" column="0">
+           <widget class="QLabel" name="monitorScriptVisibilityLabel">
+            <property name="toolTip">
+             <string>Shows the optional Monitor Script path in the Launch Application panel.</string>
+            </property>
+            <property name="text">
+             <string>Show Monitor Script controls in Capture Dialog</string>
+            </property>
+           </widget>
+          </item>
           <item row="19" column="1">
+           <widget class="QCheckBox" name="CaptureDialog_ShowMonitorScript">
+            <property name="toolTip">
+             <string>Shows the optional Monitor Script path in the Launch Application panel.</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="20" column="0">
+           <widget class="QLabel" name="customInjectDllVisibilityLabel">
+            <property name="toolTip">
+             <string>Shows the optional Custom Inject DLL path in the Launch Application panel.</string>
+            </property>
+            <property name="text">
+             <string>Show Custom Inject DLL controls in Capture Dialog</string>
+            </property>
+           </widget>
+          </item>
+          <item row="20" column="1">
+           <widget class="QCheckBox" name="CaptureDialog_ShowCustomInjectDLL">
+            <property name="toolTip">
+             <string>Shows the optional Custom Inject DLL path in the Launch Application panel.</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="21" column="1">
            <spacer name="verticalSpacer">
             <property name="orientation">
              <enum>Qt::Vertical</enum>

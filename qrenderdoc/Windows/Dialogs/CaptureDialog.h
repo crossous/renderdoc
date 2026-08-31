@@ -79,6 +79,7 @@ public:
   void SaveSettings(const rdcstr &filename) override;
   void UpdateGlobalHook() override;
   void UpdateRemoteHost() override;
+  void UpdateOptionalSettingsVisibility();
 
 public slots:
   bool checkAllowClose();
@@ -139,4 +140,5 @@ private:
   AndroidFlags m_AndroidFlags;
 
   void WritePendingMonitorScript();
+  void ApplyCustomInjectDLLSetting();
 };
