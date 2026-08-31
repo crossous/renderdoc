@@ -1564,6 +1564,9 @@ VkResult WrappedVulkan::vkQueueSubmit(VkQueue queue, uint32_t submitCount,
     SERIALISE_TIME_CALL(ret = ObjDisp(queue)->QueueSubmit(Unwrap(queue), submitCount,
                                                           unwrappedSubmits, Unwrap(fence)));
 
+    if(capframe && ret == VK_SUCCESS && !commandBuffers.empty())
+      Atomic::CmpExch32(&m_BridgeSubmitSeen, 0, 1);
+
     if(capframe)
     {
       {
@@ -1734,6 +1737,9 @@ VkResult WrappedVulkan::vkQueueSubmit2(VkQueue queue, uint32_t submitCount,
 
     SERIALISE_TIME_CALL(ret = ObjDisp(queue)->QueueSubmit2(Unwrap(queue), submitCount,
                                                            unwrappedSubmits, Unwrap(fence)));
+
+    if(capframe && ret == VK_SUCCESS && !commandBuffers.empty())
+      Atomic::CmpExch32(&m_BridgeSubmitSeen, 0, 1);
 
     if(capframe)
     {

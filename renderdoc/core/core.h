@@ -121,6 +121,10 @@ struct IFrameCapturer
   virtual bool EndFrameCapture(DeviceOwnedWindow devWnd) = 0;
   virtual bool DiscardFrameCapture(DeviceOwnedWindow devWnd) = 0;
 
+  // Used by capture bridges whose frame boundary comes from a different device. Normal frame
+  // capturers are always ready; bridged capturers can wait until real GPU work has been submitted.
+  virtual bool HasFrameCaptureWork() { return true; }
+
   virtual uint32_t SetObjectAnnotation(void *object, const char *key,
                                        RENDERDOC_AnnotationType valueType, uint32_t valueVectorWidth,
                                        const RENDERDOC_AnnotationValue *value) = 0;
@@ -596,6 +600,13 @@ public:
   void AddDeviceFrameCapturer(void *dev, IFrameCapturer *cap);
   void RemoveDeviceFrameCapturer(void *dev);
 
+  // Vulkan emulators can render and present through separate instances. Register capture-ready
+  // Vulkan devices here so a capture triggered on the presenting instance is mirrored to every
+  // rendering instance in the process.
+  void AddVulkanBridgeCapturer(IFrameCapturer *cap);
+  void RemoveVulkanBridgeCapturer(IFrameCapturer *cap);
+  bool IsVulkanBridgeCaptureReady(IFrameCapturer *primary);
+
   IFrameCapturer *MatchFrameCapturer(DeviceOwnedWindow devWnd);
 
   void StartFrameCapture(DeviceOwnedWindow devWnd);
@@ -756,6 +767,9 @@ private:
   std::map<DeviceOwnedWindow, FrameCap> m_WindowFrameCapturers;
   DeviceOwnedWindow m_ActiveWindow;
   std::map<void *, IFrameCapturer *> m_DeviceFrameCapturers;
+  rdcarray<IFrameCapturer *> m_VulkanBridgeCapturers;
+  PerformanceTimer m_VulkanBridgeCaptureTimer;
+  uint32_t m_VulkanBridgeEndDeferrals = 0;
 
   bool m_VendorExts[arraydim<VendorExtensions>()] = {};
 

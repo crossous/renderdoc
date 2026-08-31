@@ -56,6 +56,10 @@ RDOC_DEBUG_CONFIG(bool, Capture_Debug_SnapshotDiagnosticLog, false,
 RDOC_CONFIG(bool, Capture_IncludeExtendedThumbnail, false,
             "Save the thumbnail unresized and losslessly encoded during capture.");
 
+RDOC_CONFIG(bool, Vulkan_Hack_BridgeMultipleCapturers, true,
+            "Capture all Vulkan instances in a process together. This is needed for emulators "
+            "which render and present on separate Vulkan instances.");
+
 RDOC_CONFIG(bool, Replay_Debug_PrintChunkTimings, false, "Print stats of chunk processing times");
 
 RDOC_CONFIG(bool, Replay_Debug_SingleThreadedCompilation, false,
@@ -1133,7 +1137,43 @@ void RenderDoc::StartFrameCapture(DeviceOwnedWindow devWnd)
   IFrameCapturer *frameCap = MatchFrameCapturer(devWnd);
   if(frameCap)
   {
+    bool bridgedVulkanCapture = false;
+
+    // Some Android emulators render off-screen on one Vulkan instance and present from another.
+    // Start the rendering instances first so they cannot miss work submitted while the presenting
+    // instance transitions into capture mode.
+    {
+      SCOPED_LOCK(m_CapturerListLock);
+      if(m_VulkanBridgeCapturers.contains(frameCap))
+      {
+        if(m_VulkanBridgeCapturers.size() > 1)
+        {
+          bridgedVulkanCapture = true;
+          RDCLOG("Starting bridged Vulkan capture across %zu devices",
+                 m_VulkanBridgeCapturers.size());
+        }
+
+        for(IFrameCapturer *bridgeCap : m_VulkanBridgeCapturers)
+          if(bridgeCap != frameCap)
+            bridgeCap->StartFrameCapture(DeviceOwnedWindow(NULL, NULL));
+      }
+    }
+
     frameCap->StartFrameCapture(devWnd);
+
+    // Preparing initial contents can take several seconds. Start the bounded end-deferral timer
+    // only after every capturer has entered active capture, otherwise the first present after a
+    // slow capture start would immediately hit the timeout.
+    if(bridgedVulkanCapture)
+    {
+      SCOPED_LOCK(m_CapturerListLock);
+      if(m_VulkanBridgeCapturers.contains(frameCap) && m_VulkanBridgeCapturers.size() > 1)
+      {
+        m_VulkanBridgeCaptureTimer.Restart();
+        m_VulkanBridgeEndDeferrals = 0;
+      }
+    }
+
     m_CapturesActive++;
   }
 }
@@ -1163,7 +1203,21 @@ bool RenderDoc::EndFrameCapture(DeviceOwnedWindow devWnd)
   IFrameCapturer *frameCap = MatchFrameCapturer(devWnd);
   if(frameCap)
   {
-    bool ret = frameCap->EndFrameCapture(devWnd);
+    bool ret = true;
+
+    // Finish bridged rendering instances before the presenting instance. Apart from keeping all
+    // instances on the same frame boundary, this makes the useful rendering capture appear first.
+    {
+      SCOPED_LOCK(m_CapturerListLock);
+      if(m_VulkanBridgeCapturers.contains(frameCap))
+      {
+        for(IFrameCapturer *bridgeCap : m_VulkanBridgeCapturers)
+          if(bridgeCap != frameCap)
+            ret &= bridgeCap->EndFrameCapture(DeviceOwnedWindow(NULL, NULL));
+      }
+    }
+
+    ret &= frameCap->EndFrameCapture(devWnd);
     m_CapturesActive--;
     return ret;
   }
@@ -1175,7 +1229,19 @@ bool RenderDoc::DiscardFrameCapture(DeviceOwnedWindow devWnd)
   IFrameCapturer *frameCap = MatchFrameCapturer(devWnd);
   if(frameCap)
   {
-    bool ret = frameCap->DiscardFrameCapture(devWnd);
+    bool ret = true;
+
+    {
+      SCOPED_LOCK(m_CapturerListLock);
+      if(m_VulkanBridgeCapturers.contains(frameCap))
+      {
+        for(IFrameCapturer *bridgeCap : m_VulkanBridgeCapturers)
+          if(bridgeCap != frameCap)
+            ret &= bridgeCap->DiscardFrameCapture(DeviceOwnedWindow(NULL, NULL));
+      }
+    }
+
+    ret &= frameCap->DiscardFrameCapture(devWnd);
     m_CapturesActive--;
     return ret;
   }
@@ -2344,6 +2410,83 @@ void RenderDoc::RemoveDeviceFrameCapturer(void *dev)
 
   SCOPED_LOCK(m_CapturerListLock);
   m_DeviceFrameCapturers.erase(dev);
+}
+
+void RenderDoc::AddVulkanBridgeCapturer(IFrameCapturer *cap)
+{
+  if(IsReplayApp() || !Vulkan_Hack_BridgeMultipleCapturers())
+    return;
+
+  if(cap == NULL || cap->GetFrameCaptureDriver() != RDCDriver::Vulkan)
+  {
+    RDCERR("Invalid Vulkan bridge frame capturer %#p", cap);
+    return;
+  }
+
+  SCOPED_LOCK(m_CapturerListLock);
+
+  if(!m_VulkanBridgeCapturers.contains(cap))
+  {
+    RDCLOG("Adding Vulkan bridge frame capturer %#p", cap);
+    m_VulkanBridgeCapturers.push_back(cap);
+  }
+}
+
+void RenderDoc::RemoveVulkanBridgeCapturer(IFrameCapturer *cap)
+{
+  if(IsReplayApp())
+    return;
+
+  if(cap == NULL)
+    return;
+
+  SCOPED_LOCK(m_CapturerListLock);
+
+  if(m_VulkanBridgeCapturers.contains(cap))
+  {
+    RDCLOG("Removing Vulkan bridge frame capturer %#p", cap);
+    m_VulkanBridgeCapturers.removeOne(cap);
+  }
+}
+
+bool RenderDoc::IsVulkanBridgeCaptureReady(IFrameCapturer *primary)
+{
+  // A presenting emulator instance can be one or more frames ahead of or behind the instance that
+  // renders into the shared off-screen image. Do not end an automatic present-based capture until
+  // at least one other Vulkan instance has submitted real command buffers into the capture.
+  const double maxWaitMS = 500.0;
+  const uint32_t maxPresentDeferrals = 60;
+
+  SCOPED_LOCK(m_CapturerListLock);
+
+  if(!m_VulkanBridgeCapturers.contains(primary) || m_VulkanBridgeCapturers.size() <= 1)
+    return true;
+
+  for(IFrameCapturer *bridgeCap : m_VulkanBridgeCapturers)
+  {
+    if(bridgeCap != primary && bridgeCap->HasFrameCaptureWork())
+    {
+      RDCLOG("Ending bridged Vulkan capture after %u deferred presents (%.1f ms)",
+             m_VulkanBridgeEndDeferrals, m_VulkanBridgeCaptureTimer.GetMilliseconds());
+      return true;
+    }
+  }
+
+  const double elapsedMS = m_VulkanBridgeCaptureTimer.GetMilliseconds();
+  if(elapsedMS < maxWaitMS && m_VulkanBridgeEndDeferrals < maxPresentDeferrals)
+  {
+    m_VulkanBridgeEndDeferrals++;
+
+    if(m_VulkanBridgeEndDeferrals == 1 || (m_VulkanBridgeEndDeferrals % 15) == 0)
+      RDCLOG("Deferring bridged Vulkan capture end: no secondary queue submit after %.1f ms",
+             elapsedMS);
+
+    return false;
+  }
+
+  RDCWARN("Ending bridged Vulkan capture without a secondary queue submit after %u presents (%.1f ms)",
+          m_VulkanBridgeEndDeferrals, elapsedMS);
+  return true;
 }
 
 void RenderDoc::AddFrameCapturer(DeviceOwnedWindow devWnd, IFrameCapturer *cap)

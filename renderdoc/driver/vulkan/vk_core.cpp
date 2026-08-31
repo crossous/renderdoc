@@ -2703,6 +2703,7 @@ void WrappedVulkan::StartFrameCapture(DeviceOwnedWindow devWnd)
   m_AppControlledCapture = true;
 
   m_SubmitCounter = 0;
+  Atomic::CmpExch32(&m_BridgeSubmitSeen, 1, 0);
 
   FrameDescription frame;
   frame.frameNumber = ~0U;
@@ -3452,7 +3453,8 @@ void WrappedVulkan::Present(DeviceOwnedWindow devWnd)
   if(!activeWindow)
   {
     // first present to *any* window, even inactive, terminates frame 0
-    if(m_FirstFrameCapture && IsActiveCapturing(m_State))
+    if(m_FirstFrameCapture && IsActiveCapturing(m_State) &&
+       RenderDoc::Inst().IsVulkanBridgeCaptureReady(this))
     {
       RenderDoc::Inst().EndFrameCapture(DeviceOwnedWindow(LayerDisp(m_Instance), NULL));
       m_FirstFrameCapture = false;
@@ -3461,10 +3463,13 @@ void WrappedVulkan::Present(DeviceOwnedWindow devWnd)
     return;
   }
 
-  if(IsActiveCapturing(m_State) && !m_AppControlledCapture)
+  if(IsActiveCapturing(m_State) && !m_AppControlledCapture &&
+     RenderDoc::Inst().IsVulkanBridgeCaptureReady(this))
     RenderDoc::Inst().EndFrameCapture(devWnd);
 
-  if(RenderDoc::Inst().ShouldTriggerCapture(m_FrameCounter) && IsBackgroundCapturing(m_State))
+  // Check the state first. A bridged capture can be deliberately extended across presents, and
+  // must not consume a queued consecutive-frame trigger until the previous capture has ended.
+  if(IsBackgroundCapturing(m_State) && RenderDoc::Inst().ShouldTriggerCapture(m_FrameCounter))
   {
     RenderDoc::Inst().StartFrameCapture(devWnd);
 

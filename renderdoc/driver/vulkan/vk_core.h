@@ -362,6 +362,9 @@ private:
 
   bool m_MarkedActive = false;
   uint32_t m_SubmitCounter = 0;
+  // Set atomically after at least one successful, non-empty queue submission during capture. This
+  // is independent of m_SubmitCounter, which is only a best-effort progress estimate.
+  int32_t m_BridgeSubmitSeen = 0;
 
   uint64_t threadSerialiserTLSSlot;
 
@@ -606,6 +609,10 @@ private:
 
   // the instance corresponding to this WrappedVulkan
   VkInstance m_Instance;
+  // Only application instances with an initialised logical device participate in emulator
+  // multi-instance capture bridging. RenderDoc's internal Android instance must stay excluded.
+  bool m_VulkanBridgeEligible = false;
+  bool m_VulkanBridgeRegistered = false;
   // the instance's dbg msg callback handle
   VkDebugReportCallbackEXT m_DbgReportCallback;
   VkDebugUtilsMessengerEXT m_DbgUtilsCallback;
@@ -1214,6 +1221,10 @@ private:
   void StartFrameCapture(DeviceOwnedWindow devWnd);
   bool EndFrameCapture(DeviceOwnedWindow devWnd);
   bool DiscardFrameCapture(DeviceOwnedWindow devWnd);
+  bool HasFrameCaptureWork() override
+  {
+    return Atomic::CmpExch32(&m_BridgeSubmitSeen, 0, 0) != 0;
+  }
 
   ResourceId GetIDForUserObject(void *object);
   uint32_t SetObjectAnnotation(void *object, const char *key, RENDERDOC_AnnotationType valueType,

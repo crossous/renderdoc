@@ -584,6 +584,8 @@ VkResult WrappedVulkan::vkCreateInstance(const VkInstanceCreateInfo *pCreateInfo
       (pCreateInfo->pApplicationInfo && pCreateInfo->pApplicationInfo->pApplicationName &&
        rdcstr(pCreateInfo->pApplicationInfo->pApplicationName) == "RenderDoc forced instance");
 
+  m_VulkanBridgeEligible = !internalInstance;
+
   VkLayerInstanceCreateInfo *layerCreateInfo = (VkLayerInstanceCreateInfo *)pCreateInfo->pNext;
 
   // step through the chain of pNext until we get to the link info
@@ -1109,6 +1111,12 @@ void WrappedVulkan::vkDestroyInstance(VkInstance instance, const VkAllocationCal
     return;
 
   RDCASSERT(m_Instance == instance);
+
+  if(m_VulkanBridgeRegistered)
+  {
+    RenderDoc::Inst().RemoveVulkanBridgeCapturer(this);
+    m_VulkanBridgeRegistered = false;
+  }
 
   if(ObjDisp(m_Instance)->DestroyDebugReportCallbackEXT && m_DbgReportCallback != VK_NULL_HANDLE)
     ObjDisp(m_Instance)->DestroyDebugReportCallbackEXT(Unwrap(m_Instance), m_DbgReportCallback, NULL);
@@ -5293,6 +5301,12 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
     m_DebugManager = new VulkanDebugManager(this);
   }
 
+  if(m_VulkanBridgeEligible && !m_VulkanBridgeRegistered)
+  {
+    RenderDoc::Inst().AddVulkanBridgeCapturer(this);
+    m_VulkanBridgeRegistered = true;
+  }
+
   FirstFrame();
 
   return ret;
@@ -5302,6 +5316,12 @@ void WrappedVulkan::vkDestroyDevice(VkDevice device, const VkAllocationCallbacks
 {
   if(device == VK_NULL_HANDLE)
     return;
+
+  if(m_VulkanBridgeRegistered)
+  {
+    RenderDoc::Inst().RemoveVulkanBridgeCapturer(this);
+    m_VulkanBridgeRegistered = false;
+  }
 
   if(m_MemoryFreeThread)
   {
