@@ -251,8 +251,7 @@ bool ProcessImplicitLayersKey(HKEY key, const rdcstr &path, rdcarray<rdcstr> *ot
   wchar_t name[1025] = {};
   DWORD nameSize = 1024;
   DWORD idx = 0;
-
-  LONG ret = RegEnumValueW(key, idx++, name, &nameSize, NULL, NULL, NULL, NULL);
+  LONG ret = RegEnumValueW(key, idx, name, &nameSize, NULL, NULL, NULL, NULL);
 
   rdcwstr myJSON = StringFormat::UTF82Wide(path);
   for(size_t i = 0; i < myJSON.length(); i++)
@@ -277,12 +276,19 @@ bool ProcessImplicitLayersKey(HKEY key, const rdcstr &path, rdcarray<rdcstr> *ot
       if(otherJSONs)
         otherJSONs->push_back(utf8name);
 
-      if(deleteOthers)
-        RegDeleteValueW(key, name);
+      if(deleteOthers && RegDeleteValueW(key, name) == ERROR_SUCCESS)
+      {
+        // Deleting a value shifts the following value into this index, so enumerate the same index
+        // again instead of incrementing and skipping it.
+        nameSize = 1024;
+        ret = RegEnumValueW(key, idx, name, &nameSize, NULL, NULL, NULL, NULL);
+        continue;
+      }
     }
 
+    idx++;
     nameSize = 1024;
-    ret = RegEnumValueW(key, idx++, name, &nameSize, NULL, NULL, NULL, NULL);
+    ret = RegEnumValueW(key, idx, name, &nameSize, NULL, NULL, NULL, NULL);
   }
 
   return thisRegistered;
