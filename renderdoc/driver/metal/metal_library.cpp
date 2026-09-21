@@ -25,12 +25,13 @@
 #include "metal_library.h"
 #include "metal_device.h"
 #include "metal_function.h"
+#include "metal_replay.h"
 
 WrappedMTLLibrary::WrappedMTLLibrary(MTL::Library *realMTLLibrary, ResourceId objId,
                                      WrappedMTLDevice *wrappedMTLDevice)
     : WrappedMTLObject(realMTLLibrary, objId, wrappedMTLDevice, wrappedMTLDevice->GetStateRef())
 {
-  if(realMTLLibrary && objId != ResourceId())
+  if(realMTLLibrary && objId != ResourceId() && IsCaptureMode(m_State))
     AllocateObjCBridge(this);
 }
 
@@ -49,9 +50,16 @@ bool WrappedMTLLibrary::Serialise_newFunctionWithName(SerialiserType &ser,
   if(IsReplayingAndReading())
   {
     MTL::Function *realMTLFunction = Unwrap(Library)->newFunction(FunctionName);
+    if(!realMTLFunction)
+    {
+      RDCERR("Failed to recreate Metal function '%s'", FunctionName->utf8String());
+      return false;
+    }
     WrappedMTLFunction *wrappedMTLFunction;
-    GetResourceManager()->WrapResource(ResourceId(), realMTLFunction, wrappedMTLFunction);
+    GetResourceManager()->WrapResource(Function, realMTLFunction, wrappedMTLFunction, true);
     m_Device->AddResource(Function, ResourceType::Shader, "Function");
+    m_Device->GetReplay()->AddShader(Function, GetResID(Library), realMTLFunction,
+                                     FunctionName ? FunctionName->utf8String() : "");
     m_Device->DerivedResource(Library, Function);
   }
   return true;

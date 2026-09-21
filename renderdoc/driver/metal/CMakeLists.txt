@@ -7,6 +7,9 @@ set(sources
     metal_device.cpp
     metal_device.h
     metal_device_bridge.mm
+    metal_depth_stencil_state.cpp
+    metal_depth_stencil_state.h
+    metal_depth_stencil_state_bridge.mm
     metal_resources.cpp
     metal_resources.h
     metal_types_bridge.h
@@ -29,6 +32,9 @@ set(sources
     metal_render_pipeline_state.cpp
     metal_render_pipeline_state.h
     metal_render_pipeline_state_bridge.mm
+    metal_sampler_state.cpp
+    metal_sampler_state.h
+    metal_sampler_state_bridge.mm
     metal_texture.cpp
     metal_texture.h
     metal_texture_bridge.mm
@@ -65,3 +71,15 @@ endif ()
 add_library(rdoc_metal OBJECT ${sources})
 target_compile_definitions(rdoc_metal ${RDOC_DEFINITIONS})
 target_include_directories(rdoc_metal ${RDOC_INCLUDES})
+
+# The Objective-C bridge classes deliberately forward Metal protocol methods that
+# RenderDoc doesn't wrap to the real object. New SDKs add required protocol methods
+# regularly, so don't turn those forward-compatible omissions into build errors.
+# Wrapped Metal objects also intentionally embed the Objective-C bridge at offset 0;
+# Clang 17 diagnoses the existing compile-time layout check as invalid-offset-of.
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(rdoc_metal PRIVATE
+        -Wno-protocol
+        -Wno-objc-protocol-property-synthesis
+        -Wno-invalid-offsetof)
+endif()

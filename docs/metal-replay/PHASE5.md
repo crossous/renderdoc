@@ -1,0 +1,61 @@
+# 阶段 5 细化计划：T04 动态 uniform 与 fragment buffer binding
+
+T03 已关闭纹理/sampler 与 Pipeline UI 的第一条完整绑定链路。下一条纵向切片固定为 T04 动态
+uniform：用一个有明确对齐和已知字节的 buffer、两个 offset 和两次 draw，扩展 fragment buffer
+capture/replay、事件级状态、shader reflection 与标准 Pipeline 资源交互。页面继续复用 RenderDoc
+标准布局，不为 Metal 新建独立查看器。
+
+当前状态：未开始。第一任务为 P5.1，只建立并验证确定性 native fixture；在原生输出稳定前不扩大
+capture/replay 范围。
+
+## P5.1：建立确定性 T04 fixture
+
+- 新增 `Metal_Dynamic_Uniform`，使用无外部资产的简单几何和单个 shared uniform buffer。
+- buffer 内放置两个按 256 字节边界对齐、字节值固定的记录；fragment shader 通过直接
+  `[[buffer(0)]]` 参数读取颜色或等价的可见数据。
+- 第一条 draw 绑定 offset 0，第二条 draw 通过 `setFragmentBufferOffset` 或等价 Metal API 切换到
+  offset 256；左右区域输出不同固定颜色，使事件和 offset 可由像素独立验证。
+- 固定入口、slot、draw count、viewport/scissor 与参考像素，不依赖窗口时序或随机数据。
+
+验收：未注入运行稳定；左右参考像素与 uniform 原始字节一致；测试程序可由现有 demos 构建入口执行。
+
+## P5.2：补齐 fragment buffer capture 与 GPU replay
+
+- 包装并序列化 T04 实际调用的 fragment buffer bind/offset 更新，不顺带声称支持批量或 argument
+  buffer API。
+- replay 恢复 buffer 内容、初始 binding 和第二条 draw 前的 offset 更新，并生成两条独立 action/event。
+- 按 action event 保存 draw-time snapshot，确保 EID 往返不会把第一条 draw 的 offset 覆盖为第二条。
+
+验收：structured XML 精确包含 ResourceId、slot、0/256 offset 和两条 draw；CLI replay 的整帧及
+clear -> draw1 -> draw2 -> draw1 往返像素均与预期一致。
+
+## P5.3：descriptor、reflection 与 Pipeline State
+
+- 将 fragment buffer 纳入 Metal descriptor store、`DescriptorAccess`、`GetDescriptors()` 和
+  `PipeState` 查询，保留物理 slot、byte offset、有效范围及资源身份。
+- 从 Metal pipeline argument reflection 枚举 buffer 名称、slot、数组长度、访问类型和 active 状态；
+  不从实际 binding 推断 shader 声明。
+- Metal Pipeline 的 FS 页复用现有 `RDTreeWidget`、used/unused、资源上下文菜单与 Buffer Viewer
+  自动格式路径，并保持 IA/VS/RS/OM 布局不退化。
+
+验收：两条 draw 的 FS 表引用同一 Buffer ResourceId 但分别显示 0/256 offset；shader binding 与
+fixture 声明一致；双击进入标准 Buffer Viewer 的精确子范围。
+
+## P5.4：自动回归与 qrenderdoc 实机验收
+
+- 将 T04 native/capture/XML/replay/readback/binding/lifecycle 并入
+  `test_metal_capture_macos.sh`，T00-T03 不退化。
+- 对两条 draw 的 event seek、buffer 原始字节、descriptor offset、shader reflection 和输出像素增加
+  自动断言。
+- 启动最终构建的 qrenderdoc，实机核对 Event Browser、FS buffer 行、两条 draw 的 offset 切换、
+  Buffer Viewer 跳转、used/unused 行为和状态栏。
+- 同步更新 `PLAN.md`、`STATUS.md`、`TEST_MATRIX.md`、`DECISIONS.md` 与 `HANDOFF.md`。
+
+验收：完整 T00-T04 回归通过；最终 qrenderdoc 状态栏为 `No problems detected`，并保持运行供复核。
+
+## 当前明确不在本切片内
+
+- argument buffer、批量 buffer binding、vertex texture/sampler。
+- indirect draw、base vertex/base instance 和 instancing。
+- private/managed buffer 的 CPU 更新追踪、跨 command buffer 同步和 compute binding。
+- 为填满页面而添加没有 capture/replay 证据的 pipeline 字段。

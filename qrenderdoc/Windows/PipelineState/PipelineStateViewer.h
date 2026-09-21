@@ -46,6 +46,7 @@ class CustomPaintWidget;
 class D3D11PipelineStateViewer;
 class D3D12PipelineStateViewer;
 class GLPipelineStateViewer;
+class MetalPipelineStateViewer;
 class VulkanPipelineStateViewer;
 
 class PipelineStateViewer;
@@ -169,6 +170,7 @@ private:
   void setToD3D11();
   void setToD3D12();
   void setToGL();
+  void setToMetal();
   void setToVulkan();
   void reset();
 
@@ -177,6 +179,7 @@ private:
   D3D11PipelineStateViewer *m_D3D11;
   D3D12PipelineStateViewer *m_D3D12;
   GLPipelineStateViewer *m_GL;
+  MetalPipelineStateViewer *m_Metal;
   VulkanPipelineStateViewer *m_Vulkan;
   ICaptureViewer *m_Current;
 };

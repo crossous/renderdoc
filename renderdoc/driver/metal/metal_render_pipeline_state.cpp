@@ -31,5 +31,6 @@ WrappedMTLRenderPipelineState::WrappedMTLRenderPipelineState(
     : WrappedMTLObject(realMTLRenderPipelineState, objId, wrappedMTLDevice,
                        wrappedMTLDevice->GetStateRef())
 {
-  AllocateObjCBridge(this);
+  if(realMTLRenderPipelineState && objId != ResourceId() && IsCaptureMode(m_State))
+    AllocateObjCBridge(this);
 }

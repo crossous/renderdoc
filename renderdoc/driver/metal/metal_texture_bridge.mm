@@ -329,8 +329,7 @@
             withBytes:(const void *)pixelBytes
           bytesPerRow:(NSUInteger)bytesPerRow
 {
-  METAL_NOT_HOOKED();
-  [self.real replaceRegion:region mipmapLevel:level withBytes:pixelBytes bytesPerRow:bytesPerRow];
+  GetWrapped(self)->replaceRegion((MTL::Region &)region, level, pixelBytes, bytesPerRow);
 }
 
 - (nullable id<MTLTexture>)newTextureViewWithPixelFormat:(MTLPixelFormat)pixelFormat

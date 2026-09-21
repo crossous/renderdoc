@@ -235,9 +235,11 @@ ReplayProxy::ReplayProxy(ReadSerialiser &reader, WriteSerialiser &writer, IRemot
     m_GLPipelineState = new GLPipe::State;
   else if(m_APIProps.pipelineType == GraphicsAPI::Vulkan)
     m_VulkanPipelineState = new VKPipe::State;
+  else if(m_APIProps.pipelineType == GraphicsAPI::Metal)
+    m_MetalPipelineState = new MetalPipe::State;
 
   m_Remote->SetPipelineStates(m_D3D11PipelineState, m_D3D12PipelineState, m_GLPipelineState,
-                              m_VulkanPipelineState);
+                              m_VulkanPipelineState, m_MetalPipelineState);
 }
 
 ReplayProxy::ReplayProxy(ReadSerialiser &reader, WriteSerialiser &writer, IReplayDriver *proxy)
@@ -263,6 +265,7 @@ ReplayProxy::~ReplayProxy()
     SAFE_DELETE(m_D3D12PipelineState);
     SAFE_DELETE(m_GLPipelineState);
     SAFE_DELETE(m_VulkanPipelineState);
+    SAFE_DELETE(m_MetalPipelineState);
   }
 
   ShutdownRemoteExecutionThread();
@@ -1896,6 +1899,10 @@ void ReplayProxy::Proxied_SavePipelineState(ParamSerialiser &paramser, ReturnSer
     {
       SERIALISE_ELEMENT(*m_VulkanPipelineState);
     }
+    else if(m_APIProps.pipelineType == GraphicsAPI::Metal)
+    {
+      SERIALISE_ELEMENT(*m_MetalPipelineState);
+    }
     SERIALISE_ELEMENT(packet);
     ser.EndChunk();
 
@@ -1956,6 +1963,20 @@ void ReplayProxy::Proxied_SavePipelineState(ParamSerialiser &paramser, ReturnSer
             &m_VulkanPipelineState->tessEvalShader, &m_VulkanPipelineState->geometryShader,
             &m_VulkanPipelineState->fragmentShader, &m_VulkanPipelineState->computeShader,
             &m_VulkanPipelineState->taskShader,     &m_VulkanPipelineState->meshShader,
+        };
+
+        for(size_t i = 0; i < ARRAY_COUNT(stages); i++)
+        {
+          if(stages[i]->reflection != 0)
+            stages[i]->reflection =
+                GetShaderReflectionByPointer((uint64_t)(uintptr_t)stages[i]->reflection);
+        }
+      }
+      else if(m_APIProps.pipelineType == GraphicsAPI::Metal && m_MetalPipelineState)
+      {
+        MetalPipe::Shader *stages[] = {
+            &m_MetalPipelineState->vertexShader,
+            &m_MetalPipelineState->fragmentShader,
         };
 
         for(size_t i = 0; i < ARRAY_COUNT(stages); i++)

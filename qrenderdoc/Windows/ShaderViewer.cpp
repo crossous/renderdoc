@@ -1643,8 +1643,10 @@ ScintillaEdit *ShaderViewer::AddFileScintilla(const QString &name, const QString
 {
   ScintillaEdit *scintilla =
       MakeEditor(lit("scintilla") + name, text,
-                 encoding == ShaderEncoding::HLSL || encoding == ShaderEncoding::Slang ? SCLEX_HLSL
-                                                                                       : SCLEX_GLSL);
+                 encoding == ShaderEncoding::HLSL || encoding == ShaderEncoding::Slang ||
+                         encoding == ShaderEncoding::MSL
+                     ? SCLEX_HLSL
+                     : SCLEX_GLSL);
   scintilla->setReadOnly(true);
   scintilla->setWindowTitle(name);
   ((QWidget *)scintilla)->setProperty("name", name);

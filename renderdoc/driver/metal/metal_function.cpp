@@ -29,5 +29,6 @@ WrappedMTLFunction::WrappedMTLFunction(MTL::Function *realMTLFunction, ResourceI
                                        WrappedMTLDevice *wrappedMTLDevice)
     : WrappedMTLObject(realMTLFunction, objId, wrappedMTLDevice, wrappedMTLDevice->GetStateRef())
 {
-  AllocateObjCBridge(this);
+  if(realMTLFunction && objId != ResourceId() && IsCaptureMode(m_State))
+    AllocateObjCBridge(this);
 }

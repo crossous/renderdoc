@@ -292,8 +292,7 @@
 
 - (void)setFrontFacingWinding:(MTLWinding)frontFacingWinding
 {
-  METAL_NOT_HOOKED();
-  return [self.real setFrontFacingWinding:frontFacingWinding];
+  GetWrapped(self)->setFrontFacingWinding((MTL::Winding)frontFacingWinding);
 }
 
 - (void)setVertexAmplificationCount:(NSUInteger)count
@@ -306,8 +305,7 @@
 
 - (void)setCullMode:(MTLCullMode)cullMode
 {
-  METAL_NOT_HOOKED();
-  return [self.real setCullMode:cullMode];
+  GetWrapped(self)->setCullMode((MTL::CullMode)cullMode);
 }
 
 - (void)setDepthClipMode:(MTLDepthClipMode)depthClipMode API_AVAILABLE(macos(10.11), ios(11.0))
@@ -324,8 +322,7 @@
 
 - (void)setScissorRect:(MTLScissorRect)rect
 {
-  METAL_NOT_HOOKED();
-  return [self.real setScissorRect:rect];
+  GetWrapped(self)->setScissorRect((MTL::ScissorRect &)rect);
 }
 
 - (void)setScissorRects:(const MTLScissorRect[__nonnull])scissorRects
@@ -385,8 +382,7 @@
 
 - (void)setFragmentSamplerState:(nullable id<MTLSamplerState>)sampler atIndex:(NSUInteger)index
 {
-  METAL_NOT_HOOKED();
-  return [self.real setFragmentSamplerState:sampler atIndex:index];
+  GetWrapped(self)->setFragmentSamplerState(GetWrapped(sampler), index);
 }
 
 - (void)setFragmentSamplerStates:(const id<MTLSamplerState> __nullable[__nonnull])samplers
@@ -471,8 +467,7 @@
 
 - (void)setDepthStencilState:(nullable id<MTLDepthStencilState>)depthStencilState
 {
-  METAL_NOT_HOOKED();
-  return [self.real setDepthStencilState:depthStencilState];
+  GetWrapped(self)->setDepthStencilState(GetWrapped(depthStencilState));
 }
 
 - (void)setStencilReferenceValue:(uint32_t)referenceValue
@@ -831,12 +826,9 @@
                   indexBuffer:(id<MTLBuffer>)indexBuffer
             indexBufferOffset:(NSUInteger)indexBufferOffset
 {
-  METAL_NOT_HOOKED();
-  return [self.real drawIndexedPrimitives:primitiveType
-                               indexCount:indexCount
-                                indexType:indexType
-                              indexBuffer:indexBuffer
-                        indexBufferOffset:indexBufferOffset];
+  GetWrapped(self)->drawIndexedPrimitives((MTL::PrimitiveType)primitiveType, indexCount,
+                                          (MTL::IndexType)indexType, GetWrapped(indexBuffer),
+                                          indexBufferOffset);
 }
 
 - (void)drawPrimitives:(MTLPrimitiveType)primitiveType

@@ -27,6 +27,7 @@
 #include "d3d11_pipestate.h"
 #include "d3d12_pipestate.h"
 #include "gl_pipestate.h"
+#include "metal_pipestate.h"
 #include "vk_pipestate.h"
 
 DOCUMENT(R"(
@@ -58,6 +59,7 @@ public:
     m_D3D12 = NULL;
     m_GL = NULL;
     m_Vulkan = NULL;
+    m_Metal = NULL;
   }
   void SetState(const D3D12Pipe::State *d3d12)
   {
@@ -66,6 +68,7 @@ public:
     m_D3D12 = d3d12;
     m_GL = NULL;
     m_Vulkan = NULL;
+    m_Metal = NULL;
   }
   void SetState(const GLPipe::State *gl)
   {
@@ -74,6 +77,7 @@ public:
     m_D3D12 = NULL;
     m_GL = gl;
     m_Vulkan = NULL;
+    m_Metal = NULL;
   }
   void SetState(const VKPipe::State *vk)
   {
@@ -82,6 +86,16 @@ public:
     m_D3D12 = NULL;
     m_GL = NULL;
     m_Vulkan = vk;
+    m_Metal = NULL;
+  }
+  void SetState(const MetalPipe::State *metal)
+  {
+    m_PipelineType = GraphicsAPI::Metal;
+    m_D3D11 = NULL;
+    m_D3D12 = NULL;
+    m_GL = NULL;
+    m_Vulkan = NULL;
+    m_Metal = metal;
   }
 
   void SetDescriptorAccess(rdcarray<DescriptorAccess> &&descriptorAccess,
@@ -100,7 +114,8 @@ public:
 )");
   bool IsCaptureLoaded() const
   {
-    return m_D3D11 != NULL || m_D3D12 != NULL || m_GL != NULL || m_Vulkan != NULL;
+    return m_D3D11 != NULL || m_D3D12 != NULL || m_GL != NULL || m_Vulkan != NULL ||
+           m_Metal != NULL;
   }
 
   DOCUMENT(R"(Determines whether or not a D3D11 capture is currently loaded.
@@ -141,6 +156,28 @@ public:
   bool IsCaptureVK() const
   {
     return IsCaptureLoaded() && m_PipelineType == GraphicsAPI::Vulkan && m_Vulkan != NULL;
+  }
+
+  DOCUMENT(R"(Determines whether or not a Metal capture is currently loaded.
+
+:return: A boolean indicating if a Metal capture is currently loaded.
+:rtype: bool
+)");
+  bool IsCaptureMetal() const
+  {
+    return IsCaptureLoaded() && m_PipelineType == GraphicsAPI::Metal && m_Metal != NULL;
+  }
+
+  DOCUMENT(R"(Retrieves the current Metal-specific pipeline state.
+
+The return value is ``None`` if the current capture is not Metal.
+
+:return: The current Metal pipeline state.
+:rtype: MetalState
+)");
+  const MetalPipe::State *GetMetalPipelineState() const
+  {
+    return IsCaptureMetal() ? m_Metal : NULL;
   }
 
   // add a bunch of generic properties that people can check to save having to see which pipeline
@@ -496,6 +533,7 @@ private:
   const D3D12Pipe::State *m_D3D12 = NULL;
   const GLPipe::State *m_GL = NULL;
   const VKPipe::State *m_Vulkan = NULL;
+  const MetalPipe::State *m_Metal = NULL;
   GraphicsAPI m_PipelineType = GraphicsAPI::D3D11;
 
   // helper functions

@@ -1988,6 +1988,7 @@ enum class GraphicsAPI : uint32_t
   D3D12,
   OpenGL,
   Vulkan,
+  Metal,
 };
 
 DECLARE_REFLECTION_ENUM(GraphicsAPI);
@@ -2051,6 +2052,10 @@ DOCUMENT(R"(Identifies a shader encoding used to pass shader code to an API.
 
   Slang in string format, used by the slang compiler for compilation to multiple backend formats.
 
+.. data:: MSL
+
+  Metal Shading Language in string format, used by Metal source libraries.
+
 )");
 enum class ShaderEncoding : uint32_t
 {
@@ -2065,6 +2070,7 @@ enum class ShaderEncoding : uint32_t
   OpenGLSPIRV,
   OpenGLSPIRVAsm,
   Slang,
+  MSL,
   Count,
 };
 
@@ -2260,7 +2266,7 @@ constexpr inline bool IsTextRepresentation(ShaderEncoding encoding)
 {
   return encoding == ShaderEncoding::HLSL || encoding == ShaderEncoding::GLSL ||
          encoding == ShaderEncoding::SPIRVAsm || encoding == ShaderEncoding::OpenGLSPIRVAsm ||
-         encoding == ShaderEncoding::Slang;
+         encoding == ShaderEncoding::Slang || encoding == ShaderEncoding::MSL;
 }
 
 DOCUMENT(R"(A primitive topology used for processing vertex data.

@@ -61,7 +61,7 @@ public:
   rdcarray<EventUsage> GetUsage(ResourceId id);
 
   void SetPipelineStates(D3D11Pipe::State *d3d11, D3D12Pipe::State *d3d12, GLPipe::State *gl,
-                         VKPipe::State *vk);
+                         VKPipe::State *vk, MetalPipe::State *metal);
   void SavePipelineState(uint32_t eventId);
   rdcarray<Descriptor> GetDescriptors(ResourceId descriptorStore,
                                       const rdcarray<DescriptorRange> &ranges);

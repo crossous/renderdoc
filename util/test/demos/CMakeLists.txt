@@ -232,6 +232,14 @@ set(SRC main.cpp
         test_common.h
         texture_zoo.cpp)
 
+set(METAL_SRC
+        metal/metal_test.cpp
+        metal/metal_test.h
+        metal/metal_empty_frame.cpp
+        metal/metal_indexed_cube.cpp
+        metal/metal_simple_triangle.cpp
+        metal/metal_textured_quad.cpp)
+
 project(demos)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -251,8 +259,8 @@ if(APPLE)
         apple/apple_platform.h
         apple/apple_window.cpp
         apple/apple_window.h)
-    add_executable(demos ${SRC} ${VULKAN_SRC})
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-deprecated-declarations")
+    add_executable(demos ${SRC} ${VULKAN_SRC} ${METAL_SRC})
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-deprecated-declarations -Wno-protocol -Wno-objc-protocol-property-synthesis")
 elseif(BUILD_ANDROID)
     string(REPLACE "\\" "/" GLUE_SOURCE "${ANDROID_NDK_ROOT_PATH}/sources/android/native_app_glue/android_native_app_glue.c")
     include_directories(${ANDROID_NDK_ROOT_PATH}/sources/android/native_app_glue)

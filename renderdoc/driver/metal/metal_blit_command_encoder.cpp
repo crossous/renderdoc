@@ -31,7 +31,7 @@ WrappedMTLBlitCommandEncoder::WrappedMTLBlitCommandEncoder(
     : WrappedMTLObject(realMTLBlitCommandEncoder, objId, wrappedMTLDevice,
                        wrappedMTLDevice->GetStateRef())
 {
-  if(realMTLBlitCommandEncoder && objId != ResourceId())
+  if(realMTLBlitCommandEncoder && objId != ResourceId() && IsCaptureMode(m_State))
     AllocateObjCBridge(this);
 }
 

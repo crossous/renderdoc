@@ -39,12 +39,14 @@ enum MetalResourceType
   eResCommandBuffer,
   eResCommandQueue,
   eResDevice,
+  eResDepthStencilState,
   eResLibrary,
   eResFunction,
   eResRenderPipelineState,
   eResTexture,
   eResRenderCommandEncoder,
   eResBlitCommandEncoder,
+  eResSamplerState,
   eResMax
 };
 
@@ -72,6 +74,8 @@ struct WrappedMTLObject
   void *m_ObjcBridge = NULL;
   void *m_Real;
   ResourceId m_ID;
+  MetalResourceType m_Type = eResUnknown;
+  bool m_OwnsReal = false;
   MetalResourceRecord *m_Record = NULL;
   WrappedMTLDevice *m_Device;
   CaptureState &m_State;

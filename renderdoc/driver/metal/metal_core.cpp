@@ -31,7 +31,11 @@
 #include "metal_library.h"
 #include "metal_render_command_encoder.h"
 #include "metal_replay.h"
+#include "metal_sampler_state.h"
 #include "metal_texture.h"
+
+static Threading::CriticalSection s_DrawableTexturesLock;
+static rdcflatmap<MTL::Drawable *, WrappedMTLTexture *> s_DrawableTextures;
 
 WriteSerialiser &WrappedMTLDevice::GetThreadSerialiser()
 {
@@ -64,12 +68,14 @@ WriteSerialiser &WrappedMTLDevice::GetThreadSerialiser()
 
 void WrappedMTLDevice::AddAction(const ActionDescription &a)
 {
-  METAL_NOT_IMPLEMENTED();
+  if(m_Replay)
+    m_Replay->AddAction(a);
 }
 
 void WrappedMTLDevice::AddEvent()
 {
-  METAL_NOT_IMPLEMENTED();
+  if(m_Replay && m_StructuredFile)
+    m_Replay->AddEvent((uint32_t)m_StructuredFile->chunks.size() - 1, m_CurChunkOffset);
 }
 
 #define METAL_CHUNK_NOT_HANDLED()                               \
@@ -91,7 +97,11 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLDevice_newBufferWithBytes:
       return Serialise_newBufferWithBytes(ser, NULL, NULL, 0, MTL::ResourceOptionCPUCacheModeDefault);
     case MetalChunk::MTLDevice_newBufferWithBytesNoCopy: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLDevice_newDepthStencilStateWithDescriptor: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLDevice_newDepthStencilStateWithDescriptor:
+    {
+      RDMTL::DepthStencilDescriptor descriptor;
+      return Serialise_newDepthStencilStateWithDescriptor(ser, NULL, descriptor);
+    }
     case MetalChunk::MTLDevice_newTextureWithDescriptor:
     case MetalChunk::MTLDevice_newTextureWithDescriptor_iosurface:
     case MetalChunk::MTLDevice_newTextureWithDescriptor_nextDrawable:
@@ -101,7 +111,11 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     }
     case MetalChunk::MTLDevice_newSharedTextureWithDescriptor: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLDevice_newSharedTextureWithHandle: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLDevice_newSamplerStateWithDescriptor: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLDevice_newSamplerStateWithDescriptor:
+    {
+      RDMTL::SamplerDescriptor descriptor;
+      return Serialise_newSamplerStateWithDescriptor(ser, NULL, descriptor);
+    }
     case MetalChunk::MTLDevice_newDefaultLibrary: return Serialise_newDefaultLibrary(ser, NULL);
     case MetalChunk::MTLDevice_newDefaultLibraryWithBundle: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLDevice_newLibraryWithFile: METAL_CHUNK_NOT_HANDLED();
@@ -193,7 +207,11 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLTexture_makeAliasable: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_getBytes: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_getBytes_slice: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLTexture_replaceRegion: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLTexture_replaceRegion:
+    {
+      MTL::Region region = {};
+      return m_DummyReplayTexture->Serialise_replaceRegion(ser, region, 0, NULL, 0);
+    }
     case MetalChunk::MTLTexture_replaceRegion_slice: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_newTextureViewWithPixelFormat: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_newTextureViewWithPixelFormat_subset: METAL_CHUNK_NOT_HANDLED();
@@ -247,12 +265,19 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
       return m_DummyReplayRenderCommandEncoder->Serialise_setViewport(ser, viewport);
     }
     case MetalChunk::MTLRenderCommandEncoder_setViewports: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_setFrontFacingWinding: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setFrontFacingWinding:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setFrontFacingWinding(
+          ser, MTL::WindingClockwise);
     case MetalChunk::MTLRenderCommandEncoder_setVertexAmplificationCount: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_setCullMode: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setCullMode:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setCullMode(ser, MTL::CullModeNone);
     case MetalChunk::MTLRenderCommandEncoder_setDepthClipMode: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setDepthBias: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_setScissorRect: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setScissorRect:
+    {
+      MTL::ScissorRect rect = {};
+      return m_DummyReplayRenderCommandEncoder->Serialise_setScissorRect(ser, rect);
+    }
     case MetalChunk::MTLRenderCommandEncoder_setScissorRects: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setTriangleFillMode: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setFragmentBytes: METAL_CHUNK_NOT_HANDLED();
@@ -263,7 +288,8 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLRenderCommandEncoder_setFragmentTexture:
       return m_DummyReplayRenderCommandEncoder->Serialise_setFragmentTexture(ser, NULL, 0);
     case MetalChunk::MTLRenderCommandEncoder_setFragmentTextures: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_setFragmentSamplerState: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setFragmentSamplerState:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setFragmentSamplerState(ser, NULL, 0);
     case MetalChunk::MTLRenderCommandEncoder_setFragmentSamplerState_lodclamp:
       METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setFragmentSamplerStates: METAL_CHUNK_NOT_HANDLED();
@@ -280,7 +306,8 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLRenderCommandEncoder_setFragmentAccelerationStructure:
       METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setBlendColor: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_setDepthStencilState: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setDepthStencilState:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setDepthStencilState(ser, NULL);
     case MetalChunk::MTLRenderCommandEncoder_setStencilReferenceValue: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setStencilFrontReferenceValue:
       METAL_CHUNK_NOT_HANDLED();
@@ -298,7 +325,9 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
       return m_DummyReplayRenderCommandEncoder->Serialise_drawPrimitives(
           ser, MTL::PrimitiveTypePoint, 0, 0, 0, 0);
     case MetalChunk::MTLRenderCommandEncoder_drawPrimitives_indirect: METAL_CHUNK_NOT_HANDLED();
-    case MetalChunk::MTLRenderCommandEncoder_drawIndexedPrimitives: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_drawIndexedPrimitives:
+      return m_DummyReplayRenderCommandEncoder->Serialise_drawIndexedPrimitives(
+          ser, MTL::PrimitiveTypePoint, 0, MTL::IndexTypeUInt16, NULL, 0);
     case MetalChunk::MTLRenderCommandEncoder_drawIndexedPrimitives_instanced:
       METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_drawIndexedPrimitives_instanced_base:
@@ -435,6 +464,10 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     {
       return Serialise_CaptureScope(ser);
     }
+    else if(system == SystemChunk::CaptureBegin)
+    {
+      return Serialise_BeginCaptureFrame(ser);
+    }
     else if(system == SystemChunk::CaptureEnd)
     {
       SERIALISE_ELEMENT_LOCAL(PresentedImage, ResourceId()).TypedAs("MTLTexture"_lit);
@@ -442,7 +475,13 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
       SERIALISE_CHECK_READ_ERRORS();
 
       if(PresentedImage != ResourceId())
+      {
         m_LastPresentedImage = PresentedImage;
+        WrappedMTLTexture *texture = (WrappedMTLTexture *)GetResourceManager()->GetResource(
+            PresentedImage, true);
+        if(texture)
+          GetReplay()->AddTexture(PresentedImage, Unwrap(texture), true);
+      }
 
       if(IsLoading(m_State))
       {
@@ -471,6 +510,224 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
   }
 
   return true;
+}
+
+rdcstr WrappedMTLDevice::GetChunkName(uint32_t idx)
+{
+  if((SystemChunk)idx < SystemChunk::FirstDriverChunk)
+    return ToStr((SystemChunk)idx);
+
+  return ToStr((MetalChunk)idx);
+}
+
+RDResult WrappedMTLDevice::ReadLogInitialisation(RDCFile *rdc, bool storeStructuredBuffers)
+{
+  int sectionIdx = rdc->SectionIndex(SectionType::FrameCapture);
+  if(sectionIdx < 0)
+    RETURN_ERROR_RESULT(ResultCode::FileCorrupted, "File does not contain captured API data");
+
+  StreamReader *reader = rdc->ReadSection(sectionIdx);
+  if(reader->IsErrored())
+  {
+    RDResult result = reader->GetError();
+    delete reader;
+    return result;
+  }
+
+  ReadSerialiser ser(reader, Ownership::Stream);
+  ser.SetUserData(GetResourceManager());
+  ser.ConfigureStructuredExport(&GetChunkName, storeStructuredBuffers, 0, 1.0);
+  m_StructuredFile = &ser.GetStructuredFile();
+  m_StructuredFile->version = m_SectionVersion;
+  ser.SetVersion(m_SectionVersion);
+
+  uint64_t frameDataSize = 0;
+
+  while(!reader->AtEnd())
+  {
+    uint64_t offsetStart = reader->GetOffset();
+    MetalChunk chunk = ser.ReadChunk<MetalChunk>();
+    if(reader->IsErrored())
+      return RDResult(ResultCode::APIDataCorrupted, ser.GetError().message);
+
+    bool success = ProcessChunk(ser, chunk);
+    ser.EndChunk();
+
+    if(reader->IsErrored())
+      return RDResult(ResultCode::APIDataCorrupted, ser.GetError().message);
+    if(!success)
+      RETURN_ERROR_RESULT(ResultCode::APIReplayFailed, "Failed to process Metal chunk %s",
+                          GetChunkName((uint32_t)chunk).c_str());
+
+    if((SystemChunk)chunk == SystemChunk::CaptureScope)
+    {
+      GetReplay()->WriteFrameRecord().frameInfo.fileOffset = offsetStart;
+      frameDataSize = reader->GetSize() - reader->GetOffset();
+      m_FrameReader = new StreamReader(reader, frameDataSize);
+
+      RDResult status = ContextReplayLog(m_State, ~0U, eReplay_Full);
+      if(status != ResultCode::Succeeded)
+        return status;
+
+      break;
+    }
+  }
+
+  m_StructuredFile->Swap(*m_StoredStructuredData);
+  m_StructuredFile = m_StoredStructuredData;
+
+  GetReplay()->WriteFrameRecord().frameInfo.uncompressedFileSize =
+      rdc->GetSectionProperties(sectionIdx).uncompressedSize;
+  GetReplay()->WriteFrameRecord().frameInfo.compressedFileSize =
+      rdc->GetSectionProperties(sectionIdx).compressedSize;
+  GetReplay()->WriteFrameRecord().frameInfo.persistentSize = frameDataSize;
+
+  return ResultCode::Succeeded;
+}
+
+RDResult WrappedMTLDevice::ContextReplayLog(CaptureState readType, uint32_t endEventID,
+                                            ReplayLogType replayType)
+{
+  if(!m_FrameReader)
+    RETURN_ERROR_RESULT(ResultCode::InvalidParameter,
+                        "Can't replay Metal capture without frame reader");
+
+  m_State = readType;
+  m_FrameReader->SetOffset(0);
+
+  ReadSerialiser ser(m_FrameReader, Ownership::Nothing);
+  ser.SetUserData(GetResourceManager());
+  ser.SetVersion(m_SectionVersion);
+
+  SDFile *previousStructuredFile = m_StructuredFile;
+  if(IsLoading(m_State) || IsStructuredExporting(m_State))
+  {
+    ser.ConfigureStructuredExport(&GetChunkName, IsStructuredExporting(m_State), 0, 1.0);
+    ser.GetStructuredFile().Swap(*m_StructuredFile);
+    m_StructuredFile = &ser.GetStructuredFile();
+  }
+
+  MetalChunk header = ser.ReadChunk<MetalChunk>();
+  if((SystemChunk)header != SystemChunk::CaptureBegin)
+  {
+    if(m_StructuredFile != previousStructuredFile)
+    {
+      m_StructuredFile->Swap(*previousStructuredFile);
+      m_StructuredFile = previousStructuredFile;
+    }
+    RETURN_ERROR_RESULT(ResultCode::APIDataCorrupted,
+                        "Metal frame stream does not begin with CaptureBegin");
+  }
+
+  if(IsLoading(m_State) || IsStructuredExporting(m_State))
+    ProcessChunk(ser, header);
+  else
+    ser.SkipCurrentChunk();
+  ser.EndChunk();
+
+  uint64_t startOffset = ser.GetReader()->GetOffset();
+  uint64_t endOffset = ser.GetReader()->GetSize();
+
+  if(IsActiveReplaying(m_State))
+  {
+    const APIEvent *event = GetReplay()->GetEvent(endEventID);
+    if(!event)
+    {
+      if(m_StructuredFile != previousStructuredFile)
+      {
+        m_StructuredFile->Swap(*previousStructuredFile);
+        m_StructuredFile = previousStructuredFile;
+      }
+      return ResultCode::Succeeded;
+    }
+
+    if(replayType == eReplay_WithoutDraw)
+    {
+      endOffset = event->fileOffset;
+    }
+    else
+    {
+      endOffset = GetReplay()->GetNextEventOffset(event->eventId, ser.GetReader()->GetSize());
+      if(replayType == eReplay_OnlyDraw)
+      {
+        startOffset = event->fileOffset;
+        ser.GetReader()->SetOffset(startOffset);
+      }
+    }
+  }
+
+  while(!ser.GetReader()->AtEnd() && ser.GetReader()->GetOffset() < endOffset)
+  {
+    m_CurChunkOffset = ser.GetReader()->GetOffset();
+    MetalChunk chunk = ser.ReadChunk<MetalChunk>();
+    if(ser.IsErrored())
+      break;
+
+    bool success = ProcessChunk(ser, chunk);
+    ser.EndChunk();
+
+    if(ser.IsErrored())
+      break;
+    if(!success)
+    {
+      if(m_StructuredFile != previousStructuredFile)
+      {
+        m_StructuredFile->Swap(*previousStructuredFile);
+        m_StructuredFile = previousStructuredFile;
+      }
+      RETURN_ERROR_RESULT(ResultCode::APIReplayFailed, "Failed to replay Metal chunk %s",
+                          GetChunkName((uint32_t)chunk).c_str());
+    }
+
+    if((SystemChunk)chunk == SystemChunk::CaptureEnd)
+      break;
+
+    RenderDoc::Inst().SetProgress(
+        LoadProgress::FrameEventsRead,
+        float(m_CurChunkOffset - startOffset) /
+            float(RDCMAX(1ULL, endOffset - startOffset)));
+  }
+
+  RDResult result = ResultCode::Succeeded;
+  if(ser.IsErrored())
+    result = RDResult(ResultCode::APIDataCorrupted, ser.GetError().message);
+
+  if(m_StructuredFile != previousStructuredFile)
+  {
+    m_StructuredFile->Swap(*previousStructuredFile);
+    m_StructuredFile = previousStructuredFile;
+  }
+
+  return result;
+}
+
+void WrappedMTLDevice::FinishReplayCommands()
+{
+  if(m_ReplayRenderCommandEncoder)
+  {
+    Unwrap(m_ReplayRenderCommandEncoder)->endEncoding();
+    m_ReplayRenderCommandEncoder = NULL;
+  }
+
+  if(m_ReplayCommandBuffer)
+  {
+    if(!m_ReplayCommandBufferCommitted)
+      Unwrap(m_ReplayCommandBuffer)->commit();
+    Unwrap(m_ReplayCommandBuffer)->waitUntilCompleted();
+    m_ReplayCommandBuffer = NULL;
+    m_ReplayCommandBufferCommitted = false;
+  }
+}
+
+RDResult WrappedMTLDevice::ReplayLog(uint32_t endEventID, ReplayLogType replayType)
+{
+  if(replayType != eReplay_OnlyDraw)
+    FinishReplayCommands();
+
+  RDResult result = ContextReplayLog(CaptureState::ActiveReplaying, endEventID, replayType);
+  if(result != ResultCode::Succeeded || replayType != eReplay_WithoutDraw)
+    FinishReplayCommands();
+  return result;
 }
 
 void WrappedMTLDevice::AddResource(ResourceId id, ResourceType type, const char *defaultNamePrefix)
@@ -808,7 +1065,8 @@ bool WrappedMTLDevice::DiscardFrameCapture(DeviceOwnedWindow devWnd)
 template <typename SerialiserType>
 bool WrappedMTLDevice::Serialise_CaptureScope(SerialiserType &ser)
 {
-  SERIALISE_ELEMENT_LOCAL(frameNumber, m_CapturedFrames.back().frameNumber);
+  uint32_t frameNumber = ser.IsWriting() ? m_CapturedFrames.back().frameNumber : 0;
+  SERIALISE_ELEMENT(frameNumber);
 
   SERIALISE_CHECK_READ_ERRORS();
 
@@ -978,11 +1236,13 @@ void WrappedMTLDevice::Present(MetalResourceRecord *record)
   if(!activeWindow)
     return;
 
-  if(IsActiveCapturing(m_State) && !m_AppControlledCapture)
+  if(IsActiveCapturing(m_State))
   {
     RDCASSERT(m_CapturedBackbuffer == NULL);
     m_CapturedBackbuffer = backBuffer;
-    RenderDoc::Inst().EndFrameCapture(devWnd);
+
+    if(!m_AppControlledCapture)
+      RenderDoc::Inst().EndFrameCapture(devWnd);
   }
 
   if(RenderDoc::Inst().ShouldTriggerCapture(m_FrameCounter) && IsBackgroundCapturing(m_State))
@@ -1028,15 +1288,29 @@ void WrappedMTLDevice::UnregisterMetalLayer(CA::MetalLayer *mtlLayer)
   RenderDoc::Inst().RemoveFrameCapturer(devWnd);
 }
 
-void WrappedMTLDevice::RegisterDrawableInfo(CA::MetalDrawable *caMtlDrawable)
+void WrappedMTLDevice::RegisterDrawableInfo(CA::MetalDrawable *caMtlDrawable,
+                                            MTL::Texture *realTexture)
 {
   MetalDrawableInfo drawableInfo;
   drawableInfo.mtlLayer = caMtlDrawable->layer();
-  drawableInfo.texture = GetWrapped(caMtlDrawable->texture());
+  drawableInfo.texture = WrapDrawableTexture(realTexture);
   drawableInfo.drawableID = caMtlDrawable->drawableID();
-  SCOPED_LOCK(m_CaptureDrawablesLock);
-  RDCASSERTEQUAL(m_CaptureDrawableInfos.find(caMtlDrawable), m_CaptureDrawableInfos.end());
-  m_CaptureDrawableInfos[caMtlDrawable] = drawableInfo;
+  {
+    SCOPED_LOCK(m_CaptureDrawablesLock);
+    RDCASSERTEQUAL(m_CaptureDrawableInfos.find(caMtlDrawable), m_CaptureDrawableInfos.end());
+    m_CaptureDrawableInfos[caMtlDrawable] = drawableInfo;
+  }
+  {
+    SCOPED_LOCK(s_DrawableTexturesLock);
+    s_DrawableTextures[caMtlDrawable] = drawableInfo.texture;
+  }
+}
+
+WrappedMTLTexture *WrappedMTLDevice::GetDrawableTexture(MTL::Drawable *mtlDrawable)
+{
+  SCOPED_LOCK(s_DrawableTexturesLock);
+  auto it = s_DrawableTextures.find(mtlDrawable);
+  return it == s_DrawableTextures.end() ? NULL : it->second;
 }
 
 MetalDrawableInfo WrappedMTLDevice::UnregisterDrawableInfo(MTL::Drawable *mtlDrawable)
@@ -1049,6 +1323,10 @@ MetalDrawableInfo WrappedMTLDevice::UnregisterDrawableInfo(MTL::Drawable *mtlDra
     {
       drawableInfo = it->second;
       m_CaptureDrawableInfos.erase(it);
+      {
+        SCOPED_LOCK(s_DrawableTexturesLock);
+        s_DrawableTextures.erase(mtlDrawable);
+      }
       return drawableInfo;
     }
   }
@@ -1059,7 +1337,12 @@ MetalDrawableInfo WrappedMTLDevice::UnregisterDrawableInfo(MTL::Drawable *mtlDra
     drawableInfo = it->second;
     if(drawableInfo.drawableID == drawableID)
     {
+      MTL::Drawable *registeredDrawable = it->first;
       m_CaptureDrawableInfos.erase(it);
+      {
+        SCOPED_LOCK(s_DrawableTexturesLock);
+        s_DrawableTextures.erase(registeredDrawable);
+      }
       return drawableInfo;
     }
   }

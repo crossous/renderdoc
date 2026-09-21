@@ -724,6 +724,23 @@ rdcstr DoStringise(const MTL::Winding &el)
 }
 
 template <>
+rdcstr DoStringise(const MTL::CompareFunction &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::CompareFunction)
+  {
+    MTL_STRINGISE_ENUM(CompareFunctionNever);
+    MTL_STRINGISE_ENUM(CompareFunctionLess);
+    MTL_STRINGISE_ENUM(CompareFunctionEqual);
+    MTL_STRINGISE_ENUM(CompareFunctionLessEqual);
+    MTL_STRINGISE_ENUM(CompareFunctionGreater);
+    MTL_STRINGISE_ENUM(CompareFunctionNotEqual);
+    MTL_STRINGISE_ENUM(CompareFunctionGreaterEqual);
+    MTL_STRINGISE_ENUM(CompareFunctionAlways);
+  }
+  END_ENUM_STRINGISE()
+}
+
+template <>
 rdcstr DoStringise(const MTL::TessellationFactorFormat &el)
 {
   BEGIN_ENUM_STRINGISE(MTL::TessellationFactorFormat)
@@ -1230,9 +1247,59 @@ rdcstr DoStringise(const MTL::DispatchType &el)
 }
 
 template <>
+rdcstr DoStringise(const MTL::SamplerMinMagFilter &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::SamplerMinMagFilter)
+  {
+    MTL_STRINGISE_ENUM(SamplerMinMagFilterNearest);
+    MTL_STRINGISE_ENUM(SamplerMinMagFilterLinear);
+  }
+  END_ENUM_STRINGISE()
+}
+
+template <>
+rdcstr DoStringise(const MTL::SamplerMipFilter &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::SamplerMipFilter)
+  {
+    MTL_STRINGISE_ENUM(SamplerMipFilterNotMipmapped);
+    MTL_STRINGISE_ENUM(SamplerMipFilterNearest);
+    MTL_STRINGISE_ENUM(SamplerMipFilterLinear);
+  }
+  END_ENUM_STRINGISE()
+}
+
+template <>
+rdcstr DoStringise(const MTL::SamplerAddressMode &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::SamplerAddressMode)
+  {
+    MTL_STRINGISE_ENUM(SamplerAddressModeClampToEdge);
+    MTL_STRINGISE_ENUM(SamplerAddressModeMirrorClampToEdge);
+    MTL_STRINGISE_ENUM(SamplerAddressModeRepeat);
+    MTL_STRINGISE_ENUM(SamplerAddressModeMirrorRepeat);
+    MTL_STRINGISE_ENUM(SamplerAddressModeClampToZero);
+    MTL_STRINGISE_ENUM(SamplerAddressModeClampToBorderColor);
+  }
+  END_ENUM_STRINGISE()
+}
+
+template <>
+rdcstr DoStringise(const MTL::SamplerBorderColor &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::SamplerBorderColor)
+  {
+    MTL_STRINGISE_ENUM(SamplerBorderColorTransparentBlack);
+    MTL_STRINGISE_ENUM(SamplerBorderColorOpaqueBlack);
+    MTL_STRINGISE_ENUM(SamplerBorderColorOpaqueWhite);
+  }
+  END_ENUM_STRINGISE()
+}
+
+template <>
 rdcstr DoStringise(const MetalResourceType &el)
 {
-  RDCCOMPILE_ASSERT((uint32_t)MetalResourceType::eResMax == 11, "MetalResourceType changed");
+  RDCCOMPILE_ASSERT((uint32_t)MetalResourceType::eResMax == 13, "MetalResourceType changed");
   BEGIN_ENUM_STRINGISE(MetalResourceType);
   {
     STRINGISE_ENUM(eResUnknown);
@@ -1240,12 +1307,14 @@ rdcstr DoStringise(const MetalResourceType &el)
     STRINGISE_ENUM(eResCommandBuffer);
     STRINGISE_ENUM(eResCommandQueue);
     STRINGISE_ENUM(eResDevice);
+    STRINGISE_ENUM(eResDepthStencilState);
     STRINGISE_ENUM(eResLibrary);
     STRINGISE_ENUM(eResFunction);
     STRINGISE_ENUM(eResRenderPipelineState);
     STRINGISE_ENUM(eResTexture);
     STRINGISE_ENUM(eResRenderCommandEncoder);
     STRINGISE_ENUM(eResBlitCommandEncoder);
+    STRINGISE_ENUM(eResSamplerState);
   }
   END_ENUM_STRINGISE();
 }

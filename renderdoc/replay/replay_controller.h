@@ -282,6 +282,7 @@ private:
   D3D12Pipe::State m_D3D12PipelineState;
   GLPipe::State m_GLPipelineState;
   VKPipe::State m_VulkanPipelineState;
+  MetalPipe::State m_MetalPipelineState;
   PipeState m_PipeState;
 
   rdcarray<ReplayOutput *> m_Outputs;

@@ -1436,6 +1436,74 @@ void DoSerialise(SerialiserType &ser, D3D11Pipe::State &el)
 
 #pragma endregion D3D11 pipeline state
 
+#pragma region Metal pipeline state
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::Shader &el)
+{
+  SERIALISE_MEMBER(resourceId);
+  // Serialise the reflection pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(reflection);
+  SERIALISE_MEMBER(entryPoint);
+  SERIALISE_MEMBER(stage);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::VertexBuffer &el)
+{
+  SERIALISE_MEMBER(resourceId);
+  SERIALISE_MEMBER(byteOffset);
+  SERIALISE_MEMBER(byteSize);
+  SERIALISE_MEMBER(byteStride);
+  SERIALISE_MEMBER(perInstance);
+  SERIALISE_MEMBER(stepRate);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::VertexAttribute &el)
+{
+  SERIALISE_MEMBER(attributeIndex);
+  SERIALISE_MEMBER(bufferIndex);
+  SERIALISE_MEMBER(byteOffset);
+  SERIALISE_MEMBER(format);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::Rasterizer &el)
+{
+  SERIALISE_MEMBER(viewport);
+  SERIALISE_MEMBER(scissor);
+  SERIALISE_MEMBER(cullMode);
+  SERIALISE_MEMBER(frontCCW);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::DepthStencil &el)
+{
+  SERIALISE_MEMBER(resourceId);
+  SERIALISE_MEMBER(depthFunction);
+  SERIALISE_MEMBER(depthWrites);
+}
+
+template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::State &el)
+{
+  SERIALISE_MEMBER(pipelineResourceId);
+  SERIALISE_MEMBER(vertexShader);
+  SERIALISE_MEMBER(fragmentShader);
+  SERIALISE_MEMBER(topology);
+  SERIALISE_MEMBER(vertexBuffers);
+  SERIALISE_MEMBER(vertexAttributes);
+  SERIALISE_MEMBER(indexBuffer);
+  SERIALISE_MEMBER(rasterizer);
+  SERIALISE_MEMBER(depthStencil);
+  SERIALISE_MEMBER(colorTargets);
+  SERIALISE_MEMBER(depthTarget);
+}
+
+#pragma endregion Metal pipeline state
+
 #pragma region D3D12 pipeline state
 
 template <typename SerialiserType>
@@ -2425,6 +2493,12 @@ INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::Shader)
 INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::Rasterizer)
 INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::OutputMerger)
 INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::State)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::Shader)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::VertexBuffer)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::VertexAttribute)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::Rasterizer)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::DepthStencil)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::State)
 INSTANTIATE_SERIALISE_TYPE(D3D12Pipe::Layout)
 INSTANTIATE_SERIALISE_TYPE(D3D12Pipe::InputAssembly)
 INSTANTIATE_SERIALISE_TYPE(D3D12Pipe::Shader)

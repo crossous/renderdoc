@@ -69,7 +69,7 @@ class WrappedMTLDevice : public WrappedMTLObject
 {
 public:
   WrappedMTLDevice(MTL::Device *realMTLDevice, ResourceId objId);
-  ~WrappedMTLDevice() {}
+  ~WrappedMTLDevice();
   template <typename SerialiserType>
   bool Serialise_MTLCreateSystemDefaultDevice(SerialiserType &ser);
   static WrappedMTLDevice *MTLCreateSystemDefaultDevice(MTL::Device *realMTLDevice);
@@ -80,10 +80,16 @@ public:
   DECLARE_FUNCTION_WITH_RETURN_SERIALISED(WrappedMTLLibrary *, newLibraryWithSource,
                                           NS::String *source, MTL::CompileOptions *options,
                                           NS::Error **error);
+  DECLARE_FUNCTION_WITH_RETURN_SERIALISED(WrappedMTLDepthStencilState *,
+                                          newDepthStencilStateWithDescriptor,
+                                          RDMTL::DepthStencilDescriptor &descriptor);
   DECLARE_FUNCTION_WITH_RETURN_SERIALISED(WrappedMTLRenderPipelineState *,
                                           newRenderPipelineStateWithDescriptor,
                                           RDMTL::RenderPipelineDescriptor &descriptor,
                                           NS::Error **error);
+  DECLARE_FUNCTION_WITH_RETURN_SERIALISED(WrappedMTLSamplerState *,
+                                          newSamplerStateWithDescriptor,
+                                          RDMTL::SamplerDescriptor &descriptor);
   WrappedMTLTexture *newTextureWithDescriptor(RDMTL::TextureDescriptor &descriptor,
                                               IOSurfaceRef iosurface, NS::UInteger plane);
   DECLARE_FUNCTION_WITH_RETURN_SERIALISED(WrappedMTLTexture *, newTextureWithDescriptor,
@@ -127,6 +133,17 @@ public:
   MetalResourceManager *GetResourceManager() { return m_ResourceManager; };
   void WaitForGPU();
   WriteSerialiser &GetThreadSerialiser();
+  static rdcstr GetChunkName(uint32_t idx);
+  void SetStructuredExport(uint64_t sectionVersion)
+  {
+    m_SectionVersion = sectionVersion;
+    m_State = CaptureState::StructuredExport;
+    GetResourceManager()->SetState(m_State);
+  }
+  void SetReplayVersion(uint64_t sectionVersion) { m_SectionVersion = sectionVersion; }
+  SDFile *GetStructuredFile() { return m_StructuredFile; }
+  RDResult ReadLogInitialisation(RDCFile *rdc, bool storeStructuredBuffers);
+  RDResult ReplayLog(uint32_t endEventID, ReplayLogType replayType);
 
   // IFrameCapturer interface
   RDCDriver GetFrameCaptureDriver() { return RDCDriver::Metal; }
@@ -152,8 +169,9 @@ public:
   void RegisterMetalLayer(CA::MetalLayer *mtlLayer);
   void UnregisterMetalLayer(CA::MetalLayer *mtlLayer);
 
-  void RegisterDrawableInfo(CA::MetalDrawable *caMtlDrawable);
+  void RegisterDrawableInfo(CA::MetalDrawable *caMtlDrawable, MTL::Texture *realTexture);
   MetalDrawableInfo UnregisterDrawableInfo(MTL::Drawable *mtlDrawable);
+  static WrappedMTLTexture *GetDrawableTexture(MTL::Drawable *mtlDrawable);
 
   void AddEvent();
   void AddAction(const ActionDescription &a);
@@ -171,6 +189,19 @@ public:
   {
     m_LastPresentedImage = lastPresentedImage;
   }
+  ResourceId GetLastPresentedImage() const { return m_LastPresentedImage; }
+  void SetReplayRenderTarget(ResourceId target) { m_ReplayRenderTarget = target; }
+  ResourceId GetReplayRenderTarget() const { return m_ReplayRenderTarget; }
+  void SetReplayCommandBuffer(WrappedMTLCommandBuffer *commandBuffer)
+  {
+    m_ReplayCommandBuffer = commandBuffer;
+    m_ReplayCommandBufferCommitted = false;
+  }
+  void SetReplayRenderCommandEncoder(WrappedMTLRenderCommandEncoder *encoder)
+  {
+    m_ReplayRenderCommandEncoder = encoder;
+  }
+  void MarkReplayCommandBufferCommitted() { m_ReplayCommandBufferCommitted = true; }
 
   enum
   {
@@ -179,6 +210,7 @@ public:
 
   static uint64_t g_nextDrawableTLSSlot;
   static IMP g_real_CAMetalLayer_nextDrawable;
+  static IMP g_real_CAMetalDrawable_texture;
 
 private:
   static void MTLFixupForMetalDriverAssert();
@@ -199,17 +231,23 @@ private:
   void AddResourceCurChunk(ResourceDescription &descr);
 
   bool ProcessChunk(ReadSerialiser &ser, MetalChunk chunk);
+  RDResult ContextReplayLog(CaptureState readType, uint32_t endEventID,
+                            ReplayLogType replayType);
+  void FinishReplayCommands();
   WrappedMTLTexture *Common_NewTexture(RDMTL::TextureDescriptor &descriptor, MetalChunk chunkType,
                                        bool ioSurfaceTexture, IOSurfaceRef iosurface,
                                        NS::UInteger plane);
+  WrappedMTLTexture *WrapDrawableTexture(MTL::Texture *realTexture);
   WrappedMTLBuffer *Common_NewBuffer(bool withBytes, const void *pointer, NS::UInteger length,
                                      MTL::ResourceOptions options);
 
   MetalResourceManager *m_ResourceManager = NULL;
   ResourceId m_LastPresentedImage;
+  ResourceId m_ReplayRenderTarget;
 
   // Dummy objects used for serialisation replay
   WrappedMTLBuffer *m_DummyBuffer = NULL;
+  WrappedMTLTexture *m_DummyReplayTexture = NULL;
   WrappedMTLCommandBuffer *m_DummyReplayCommandBuffer = NULL;
   WrappedMTLCommandQueue *m_DummyReplayCommandQueue = NULL;
   WrappedMTLLibrary *m_DummyReplayLibrary = NULL;
@@ -228,8 +266,14 @@ private:
   rdcflatmap<MTL::Drawable *, MetalDrawableInfo> m_CaptureDrawableInfos;
 
   CaptureState m_State;
+  StreamReader *m_FrameReader = NULL;
+  uint64_t m_CurChunkOffset = 0;
+  WrappedMTLCommandBuffer *m_ReplayCommandBuffer = NULL;
+  WrappedMTLRenderCommandEncoder *m_ReplayRenderCommandEncoder = NULL;
+  bool m_ReplayCommandBufferCommitted = false;
   bool m_AppControlledCapture = false;
   SDFile *m_StructuredFile = NULL;
+  SDFile *m_StoredStructuredData = NULL;
 
   uint64_t threadSerialiserTLSSlot;
   Threading::CriticalSection m_ThreadSerialisersLock;

@@ -254,8 +254,9 @@
 - (nullable id<MTLDepthStencilState>)newDepthStencilStateWithDescriptor:
     (MTLDepthStencilDescriptor *)descriptor
 {
-  METAL_NOT_HOOKED();
-  return [self.real newDepthStencilStateWithDescriptor:descriptor];
+  RDMTL::DepthStencilDescriptor rdDescriptor((MTL::DepthStencilDescriptor *)descriptor);
+  return id<MTLDepthStencilState>(
+      GetWrapped(self)->newDepthStencilStateWithDescriptor(rdDescriptor));
 }
 
 - (nullable id<MTLTexture>)newTextureWithDescriptor:(MTLTextureDescriptor *)descriptor
@@ -289,8 +290,8 @@
 
 - (nullable id<MTLSamplerState>)newSamplerStateWithDescriptor:(MTLSamplerDescriptor *)descriptor
 {
-  METAL_NOT_HOOKED();
-  return [self.real newSamplerStateWithDescriptor:descriptor];
+  RDMTL::SamplerDescriptor rdDescriptor((MTL::SamplerDescriptor *)descriptor);
+  return id<MTLSamplerState>(GetWrapped(self)->newSamplerStateWithDescriptor(rdDescriptor));
 }
 
 - (nullable id<MTLLibrary>)newDefaultLibrary
@@ -935,7 +936,11 @@
 #endif
 
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_13_3
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000
+- (NSUInteger)maximumConcurrentCompilationTaskCount API_AVAILABLE(macos(13.3), ios(26.0))
+#else
 - (NSUInteger)maximumConcurrentCompilationTaskCount API_AVAILABLE(macos(13.3))API_UNAVAILABLE(ios)
+#endif
 {
   return GetWrapped(self)->maximumConcurrentCompilationTaskCount();
 }

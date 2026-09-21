@@ -32,6 +32,9 @@ public:
   WrappedMTLTexture(MTL::Texture *realMTLTexture, ResourceId objId,
                     WrappedMTLDevice *wrappedMTLDevice);
 
+  DECLARE_FUNCTION_SERIALISED(void, replaceRegion, MTL::Region &region, NS::UInteger level,
+                              const void *pixelBytes, NS::UInteger bytesPerRow);
+
   enum
   {
     TypeEnum = eResTexture

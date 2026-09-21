@@ -25,8 +25,11 @@
 #include "metal_render_command_encoder.h"
 #include "metal_buffer.h"
 #include "metal_command_buffer.h"
+#include "metal_depth_stencil_state.h"
 #include "metal_manager.h"
 #include "metal_render_pipeline_state.h"
+#include "metal_replay.h"
+#include "metal_sampler_state.h"
 #include "metal_texture.h"
 
 WrappedMTLRenderCommandEncoder::WrappedMTLRenderCommandEncoder(
@@ -35,7 +38,7 @@ WrappedMTLRenderCommandEncoder::WrappedMTLRenderCommandEncoder(
     : WrappedMTLObject(realMTLRenderCommandEncoder, objId, wrappedMTLDevice,
                        wrappedMTLDevice->GetStateRef())
 {
-  if(realMTLRenderCommandEncoder && objId != ResourceId())
+  if(realMTLRenderCommandEncoder && objId != ResourceId() && IsCaptureMode(m_State))
     AllocateObjCBridge(this);
 }
 
@@ -51,6 +54,8 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setRenderPipelineState(
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->setRenderPipelineState(Unwrap(pipelineState));
+    m_Device->GetReplay()->BindRenderPipeline(GetResID(pipelineState));
   }
   return true;
 }
@@ -94,6 +99,8 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setVertexBuffer(SerialiserType &s
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->setVertexBuffer(Unwrap(buffer), offset, index);
+    m_Device->GetReplay()->BindVertexBuffer((uint32_t)index, GetResID(buffer), (uint64_t)offset);
   }
   return true;
 }
@@ -138,6 +145,7 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setFragmentBuffer(SerialiserType 
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->setFragmentBuffer(Unwrap(buffer), offset, index);
   }
   return true;
 }
@@ -180,6 +188,8 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setFragmentTexture(SerialiserType
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->setFragmentTexture(Unwrap(texture), index);
+    m_Device->GetReplay()->BindFragmentTexture((uint32_t)index, GetResID(texture));
   }
   return true;
 }
@@ -208,6 +218,45 @@ void WrappedMTLRenderCommandEncoder::setFragmentTexture(WrappedMTLTexture *textu
 }
 
 template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setFragmentSamplerState(
+    SerialiserType &ser, WrappedMTLSamplerState *sampler, NS::UInteger index)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(sampler).Important();
+  SERIALISE_ELEMENT(index).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setFragmentSamplerState(Unwrap(sampler), index);
+    m_Device->GetReplay()->BindFragmentSampler((uint32_t)index, GetResID(sampler));
+  }
+
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setFragmentSamplerState(WrappedMTLSamplerState *sampler,
+                                                              NS::UInteger index)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setFragmentSamplerState(Unwrap(sampler), index));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setFragmentSamplerState);
+      Serialise_setFragmentSamplerState(ser, sampler, index);
+      chunk = scope.Get();
+    }
+    MetalResourceRecord *bufferRecord = GetRecord(m_CommandBuffer);
+    bufferRecord->AddChunk(chunk);
+    bufferRecord->MarkResourceFrameReferenced(GetResID(sampler), eFrameRef_Read);
+  }
+}
+
+template <typename SerialiserType>
 bool WrappedMTLRenderCommandEncoder::Serialise_setViewport(SerialiserType &ser,
                                                            MTL::Viewport &viewport)
 {
@@ -219,6 +268,8 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setViewport(SerialiserType &ser,
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->setViewport(viewport);
+    m_Device->GetReplay()->SetViewport(viewport);
   }
   return true;
 }
@@ -246,6 +297,145 @@ void WrappedMTLRenderCommandEncoder::setViewport(MTL::Viewport &viewport)
 }
 
 template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setScissorRect(SerialiserType &ser,
+                                                              MTL::ScissorRect &rect)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(rect).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setScissorRect(rect);
+    m_Device->GetReplay()->SetScissor(rect);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setScissorRect(MTL::ScissorRect &rect)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setScissorRect(rect));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setScissorRect);
+      Serialise_setScissorRect(ser, rect);
+      chunk = scope.Get();
+    }
+    GetRecord(m_CommandBuffer)->AddChunk(chunk);
+  }
+}
+
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setFrontFacingWinding(SerialiserType &ser,
+                                                                    MTL::Winding winding)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(winding).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setFrontFacingWinding(winding);
+    m_Device->GetReplay()->SetFrontFacingWinding(winding);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setFrontFacingWinding(MTL::Winding winding)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setFrontFacingWinding(winding));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setFrontFacingWinding);
+      Serialise_setFrontFacingWinding(ser, winding);
+      chunk = scope.Get();
+    }
+    GetRecord(m_CommandBuffer)->AddChunk(chunk);
+  }
+}
+
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setCullMode(SerialiserType &ser,
+                                                           MTL::CullMode cullMode)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(cullMode).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setCullMode(cullMode);
+    m_Device->GetReplay()->SetCullMode(cullMode);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setCullMode(MTL::CullMode cullMode)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setCullMode(cullMode));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setCullMode);
+      Serialise_setCullMode(ser, cullMode);
+      chunk = scope.Get();
+    }
+    GetRecord(m_CommandBuffer)->AddChunk(chunk);
+  }
+}
+
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setDepthStencilState(
+    SerialiserType &ser, WrappedMTLDepthStencilState *depthStencilState)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(depthStencilState).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setDepthStencilState(Unwrap(depthStencilState));
+    m_Device->GetReplay()->BindDepthStencilState(GetResID(depthStencilState));
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setDepthStencilState(
+    WrappedMTLDepthStencilState *depthStencilState)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setDepthStencilState(Unwrap(depthStencilState)));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setDepthStencilState);
+      Serialise_setDepthStencilState(ser, depthStencilState);
+      chunk = scope.Get();
+    }
+    MetalResourceRecord *bufferRecord = GetRecord(m_CommandBuffer);
+    bufferRecord->AddChunk(chunk);
+    bufferRecord->MarkResourceFrameReferenced(GetResID(depthStencilState), eFrameRef_Read);
+  }
+}
+
+template <typename SerialiserType>
 bool WrappedMTLRenderCommandEncoder::Serialise_drawPrimitives(
     SerialiserType &ser, MTL::PrimitiveType primitiveType, NS::UInteger vertexStart,
     NS::UInteger vertexCount, NS::UInteger instanceCount, NS::UInteger baseInstance)
@@ -262,6 +452,25 @@ bool WrappedMTLRenderCommandEncoder::Serialise_drawPrimitives(
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    m_Device->GetReplay()->SetPrimitiveTopology(primitiveType);
+    Unwrap(RenderCommandEncoder)
+        ->drawPrimitives(primitiveType, vertexStart, vertexCount, instanceCount, baseInstance);
+
+    if(IsLoading(m_State))
+    {
+      AddEvent();
+      ActionDescription action;
+      action.customName = StringFormat::Fmt("drawPrimitives(%llu)", (uint64_t)vertexCount);
+      action.flags = ActionFlags::Drawcall;
+      if(instanceCount > 1 || baseInstance > 0)
+        action.flags |= ActionFlags::Instanced;
+      action.numIndices = (uint32_t)vertexCount;
+      action.numInstances = (uint32_t)instanceCount;
+      action.vertexOffset = (uint32_t)vertexStart;
+      action.instanceOffset = (uint32_t)baseInstance;
+      action.outputs[0] = m_Device->GetReplayRenderTarget();
+      AddAction(action);
+    }
   }
   return true;
 }
@@ -294,6 +503,68 @@ void WrappedMTLRenderCommandEncoder::drawPrimitives(MTL::PrimitiveType primitive
   }
 }
 
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_drawIndexedPrimitives(
+    SerialiserType &ser, MTL::PrimitiveType primitiveType, NS::UInteger indexCount,
+    MTL::IndexType indexType, WrappedMTLBuffer *indexBuffer, NS::UInteger indexBufferOffset)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(primitiveType);
+  SERIALISE_ELEMENT(indexCount).Important();
+  SERIALISE_ELEMENT(indexType).Important();
+  SERIALISE_ELEMENT(indexBuffer).Important();
+  SERIALISE_ELEMENT(indexBufferOffset);
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    m_Device->GetReplay()->SetPrimitiveTopology(primitiveType);
+    m_Device->GetReplay()->BindIndexBuffer(GetResID(indexBuffer), indexBufferOffset, indexType);
+    Unwrap(RenderCommandEncoder)
+        ->drawIndexedPrimitives(primitiveType, indexCount, indexType, Unwrap(indexBuffer),
+                                indexBufferOffset);
+
+    if(IsLoading(m_State))
+    {
+      AddEvent();
+      ActionDescription action;
+      action.customName = StringFormat::Fmt("drawIndexedPrimitives(%llu)", (uint64_t)indexCount);
+      action.flags = ActionFlags::Drawcall | ActionFlags::Indexed;
+      action.numIndices = (uint32_t)indexCount;
+      action.numInstances = 1;
+      action.indexOffset = (uint32_t)(indexBufferOffset /
+                                      (indexType == MTL::IndexTypeUInt16 ? 2 : 4));
+      action.outputs[0] = m_Device->GetReplayRenderTarget();
+      AddAction(action);
+    }
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::drawIndexedPrimitives(
+    MTL::PrimitiveType primitiveType, NS::UInteger indexCount, MTL::IndexType indexType,
+    WrappedMTLBuffer *indexBuffer, NS::UInteger indexBufferOffset)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->drawIndexedPrimitives(
+      primitiveType, indexCount, indexType, Unwrap(indexBuffer), indexBufferOffset));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_drawIndexedPrimitives);
+      Serialise_drawIndexedPrimitives(ser, primitiveType, indexCount, indexType, indexBuffer,
+                                      indexBufferOffset);
+      chunk = scope.Get();
+    }
+    MetalResourceRecord *bufferRecord = GetRecord(m_CommandBuffer);
+    bufferRecord->AddChunk(chunk);
+    bufferRecord->MarkResourceFrameReferenced(GetResID(indexBuffer), eFrameRef_Read);
+  }
+}
+
 void WrappedMTLRenderCommandEncoder::drawPrimitives(MTL::PrimitiveType primitiveType,
                                                     NS::UInteger vertexStart,
                                                     NS::UInteger vertexCount)
@@ -319,6 +590,19 @@ bool WrappedMTLRenderCommandEncoder::Serialise_endEncoding(SerialiserType &ser)
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    Unwrap(RenderCommandEncoder)->endEncoding();
+    m_Device->SetReplayRenderCommandEncoder(NULL);
+    m_Device->GetReplay()->EndRenderPass();
+
+    if(IsLoading(m_State))
+    {
+      AddEvent();
+      ActionDescription action;
+      action.customName = "End Metal Render Pass";
+      action.flags = ActionFlags::PassBoundary | ActionFlags::EndPass;
+      action.outputs[0] = m_Device->GetReplayRenderTarget();
+      AddAction(action);
+    }
   }
   return true;
 }
@@ -354,9 +638,23 @@ INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmen
                                 WrappedMTLBuffer *buffer, NS::UInteger offset, NS::UInteger index);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentTexture,
                                 WrappedMTLTexture *texture, NS::UInteger index);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentSamplerState,
+                                WrappedMTLSamplerState *sampler, NS::UInteger index);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setViewport,
                                 MTL::Viewport &viewport);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setScissorRect,
+                                MTL::ScissorRect &rect);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFrontFacingWinding,
+                                MTL::Winding winding);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setCullMode,
+                                MTL::CullMode cullMode);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setDepthStencilState,
+                                WrappedMTLDepthStencilState *depthStencilState);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, drawPrimitives,
                                 MTL::PrimitiveType primitiveType, NS::UInteger vertexStart,
                                 NS::UInteger vertexCount, NS::UInteger instanceCount,
                                 NS::UInteger baseInstance);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, drawIndexedPrimitives,
+                                MTL::PrimitiveType primitiveType, NS::UInteger indexCount,
+                                MTL::IndexType indexType, WrappedMTLBuffer *indexBuffer,
+                                NS::UInteger indexBufferOffset);

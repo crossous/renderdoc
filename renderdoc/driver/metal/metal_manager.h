@@ -106,7 +106,8 @@ public:
 
   template <typename realtype>
   ResourceId WrapResource(ResourceId id, realtype obj,
-                          typename UnwrapHelper<realtype>::Outer *&wrapped)
+                          typename UnwrapHelper<realtype>::Outer *&wrapped,
+                          bool transferOwnership = false)
   {
     RDCASSERT(obj != NULL);
     RDCASSERT(m_Device != NULL);
@@ -122,12 +123,34 @@ public:
     using WrappedType = typename UnwrapHelper<realtype>::Outer;
     wrapped = new WrappedType(obj, id, m_Device);
     wrapped->m_Real = obj;
+    wrapped->m_Type = (MetalResourceType)WrappedType::TypeEnum;
+    if(IsReplayMode(m_State))
+    {
+      if(!transferOwnership)
+        ((NS::Object *)obj)->retain();
+      wrapped->m_OwnsReal = true;
+    }
     AddResource(id, wrapped);
 
     // TODO: implement RD MTL replay
     //    if(IsReplayMode(m_State))
     //     AddWrapper(wrapMetalResourceManager(obj));
     return id;
+  }
+
+  template <typename realtype>
+  void ReplaceRealResource(WrappedMTLObject *wrapped, realtype obj, bool transferOwnership = false)
+  {
+    RDCASSERT(wrapped != NULL);
+
+    if(IsReplayMode(m_State) && obj && !transferOwnership)
+      ((NS::Object *)obj)->retain();
+
+    if(wrapped->m_Real && wrapped->m_OwnsReal)
+      ((NS::Object *)wrapped->m_Real)->release();
+
+    wrapped->m_Real = obj;
+    wrapped->m_OwnsReal = IsReplayMode(m_State) && obj != NULL;
   }
 
   template <typename wrappedtype>

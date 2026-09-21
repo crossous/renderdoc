@@ -528,6 +528,7 @@ Usage: %s Test_Name [test_options]
         "Vulkan",
         "OpenGL",
         "D3D12",
+        "Metal",
     };
 
     char name_filter[256] = {};

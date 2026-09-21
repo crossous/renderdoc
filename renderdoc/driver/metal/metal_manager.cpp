@@ -23,12 +23,68 @@
  ******************************************************************************/
 
 #include "metal_manager.h"
+#include "metal_blit_command_encoder.h"
+#include "metal_buffer.h"
+#include "metal_command_buffer.h"
+#include "metal_command_queue.h"
 #include "metal_device.h"
+#include "metal_depth_stencil_state.h"
+#include "metal_function.h"
+#include "metal_library.h"
+#include "metal_render_command_encoder.h"
+#include "metal_render_pipeline_state.h"
+#include "metal_sampler_state.h"
+#include "metal_texture.h"
 
 bool MetalResourceManager::ResourceTypeRelease(WrappedResourceType res)
 {
-  METAL_NOT_IMPLEMENTED();
-  return false;
+  if(res == NULL)
+    return true;
+
+  void *real = res->m_Real;
+  const bool ownsReal = res->m_OwnsReal;
+
+  if(real && res->m_ObjcBridge)
+  {
+    // The real object owns the embedded bridge through this association. Removing it invokes the
+    // bridge's dealloc path, which unregisters and deletes the correctly typed C++ wrapper.
+    objc_setAssociatedObject((id)real, res->m_ObjcBridge, NULL, OBJC_ASSOCIATION_ASSIGN);
+  }
+  else
+  {
+    switch(res->m_Type)
+    {
+      case eResBuffer: ReleaseWrappedResource((WrappedMTLBuffer *)res); break;
+      case eResCommandBuffer: ReleaseWrappedResource((WrappedMTLCommandBuffer *)res); break;
+      case eResCommandQueue: ReleaseWrappedResource((WrappedMTLCommandQueue *)res); break;
+      case eResDepthStencilState:
+        ReleaseWrappedResource((WrappedMTLDepthStencilState *)res);
+        break;
+      case eResLibrary: ReleaseWrappedResource((WrappedMTLLibrary *)res); break;
+      case eResFunction: ReleaseWrappedResource((WrappedMTLFunction *)res); break;
+      case eResRenderPipelineState:
+        ReleaseWrappedResource((WrappedMTLRenderPipelineState *)res);
+        break;
+      case eResTexture: ReleaseWrappedResource((WrappedMTLTexture *)res); break;
+      case eResRenderCommandEncoder:
+        ReleaseWrappedResource((WrappedMTLRenderCommandEncoder *)res);
+        break;
+      case eResBlitCommandEncoder:
+        ReleaseWrappedResource((WrappedMTLBlitCommandEncoder *)res);
+        break;
+      case eResSamplerState: ReleaseWrappedResource((WrappedMTLSamplerState *)res); break;
+      case eResDevice:
+      case eResUnknown:
+      case eResMax:
+        RDCERR("Unexpected Metal resource type %u during replay shutdown", (uint32_t)res->m_Type);
+        return false;
+    }
+  }
+
+  if(real && ownsReal)
+    ((NS::Object *)real)->release();
+
+  return true;
 }
 
 bool MetalResourceManager::Prepare_InitialState(WrappedMTLObject *res)

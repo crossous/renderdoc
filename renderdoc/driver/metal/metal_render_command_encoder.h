@@ -43,7 +43,14 @@ public:
                               NS::UInteger offset, NS::UInteger index);
   DECLARE_FUNCTION_SERIALISED(void, setFragmentTexture, WrappedMTLTexture *texture,
                               NS::UInteger index);
+  DECLARE_FUNCTION_SERIALISED(void, setFragmentSamplerState, WrappedMTLSamplerState *sampler,
+                              NS::UInteger index);
   DECLARE_FUNCTION_SERIALISED(void, setViewport, MTL::Viewport &viewport);
+  DECLARE_FUNCTION_SERIALISED(void, setScissorRect, MTL::ScissorRect &rect);
+  DECLARE_FUNCTION_SERIALISED(void, setFrontFacingWinding, MTL::Winding winding);
+  DECLARE_FUNCTION_SERIALISED(void, setCullMode, MTL::CullMode cullMode);
+  DECLARE_FUNCTION_SERIALISED(void, setDepthStencilState,
+                              WrappedMTLDepthStencilState *depthStencilState);
   DECLARE_FUNCTION_SERIALISED(void, drawPrimitives, MTL::PrimitiveType primitiveType,
                               NS::UInteger vertexStart, NS::UInteger vertexCount,
                               NS::UInteger instanceCount, NS::UInteger baseInstance);
@@ -51,6 +58,9 @@ public:
                       NS::UInteger vertexCount);
   void drawPrimitives(MTL::PrimitiveType primitiveType, NS::UInteger vertexStart,
                       NS::UInteger vertexCount, NS::UInteger instanceCount);
+  DECLARE_FUNCTION_SERIALISED(void, drawIndexedPrimitives, MTL::PrimitiveType primitiveType,
+                              NS::UInteger indexCount, MTL::IndexType indexType,
+                              WrappedMTLBuffer *indexBuffer, NS::UInteger indexBufferOffset);
   DECLARE_FUNCTION_SERIALISED(void, endEncoding);
 
   enum

@@ -457,12 +457,13 @@ public:
   bool Tick(int type);
 
   void SetPipelineStates(D3D11Pipe::State *d3d11, D3D12Pipe::State *d3d12, GLPipe::State *gl,
-                         VKPipe::State *vk)
+                         VKPipe::State *vk, MetalPipe::State *metal)
   {
     m_D3D11PipelineState = d3d11;
     m_D3D12PipelineState = d3d12;
     m_GLPipelineState = gl;
     m_VulkanPipelineState = vk;
+    m_MetalPipelineState = metal;
   }
   SDFile *GetStructuredFile() { return m_StructuredFile; }
   IMPLEMENT_FUNCTION_PROXIED(void, FetchStructuredFile);
@@ -744,4 +745,5 @@ private:
   D3D12Pipe::State *m_D3D12PipelineState = NULL;
   GLPipe::State *m_GLPipelineState = NULL;
   VKPipe::State *m_VulkanPipelineState = NULL;
+  MetalPipe::State *m_MetalPipelineState = NULL;
 };

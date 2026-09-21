@@ -235,7 +235,7 @@ public:
   APIProperties GetAPIProperties() { return m_Props; }
   FrameRecord GetFrameRecord() { return m_FrameRecord; }
   void SetPipelineStates(D3D11Pipe::State *d3d11, D3D12Pipe::State *d3d12, GLPipe::State *gl,
-                         VKPipe::State *vk)
+                         VKPipe::State *vk, MetalPipe::State *metal)
   {
     d3d11->descriptorCount = 0;
     d3d11->descriptorByteSize = 0;

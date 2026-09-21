@@ -29,5 +29,64 @@ WrappedMTLTexture::WrappedMTLTexture(MTL::Texture *realMTLTexture, ResourceId ob
                                      WrappedMTLDevice *wrappedMTLDevice)
     : WrappedMTLObject(realMTLTexture, objId, wrappedMTLDevice, wrappedMTLDevice->GetStateRef())
 {
-  AllocateObjCBridge(this);
+  if(realMTLTexture && objId != ResourceId() && IsCaptureMode(m_State))
+    AllocateObjCBridge(this);
 }
+
+template <typename SerialiserType>
+bool WrappedMTLTexture::Serialise_replaceRegion(SerialiserType &ser, MTL::Region &region,
+                                                 NS::UInteger level, const void *pixelBytes,
+                                                 NS::UInteger bytesPerRow)
+{
+  SERIALISE_ELEMENT_LOCAL(Texture, this).Important();
+  SERIALISE_ELEMENT(region).Important();
+  SERIALISE_ELEMENT(level).Important();
+  SERIALISE_ELEMENT(bytesPerRow).Important();
+
+  bytebuf contents;
+  if(ser.IsWriting() && pixelBytes && bytesPerRow > 0 && region.size.height > 0)
+  {
+    const size_t dataSize = size_t(bytesPerRow) * size_t(region.size.height);
+    contents.assign((const byte *)pixelBytes, dataSize);
+  }
+  SERIALISE_ELEMENT(contents).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(Texture)->replaceRegion(region, level, contents.data(), bytesPerRow);
+  }
+
+  return true;
+}
+
+void WrappedMTLTexture::replaceRegion(MTL::Region &region, NS::UInteger level,
+                                      const void *pixelBytes, NS::UInteger bytesPerRow)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->replaceRegion(region, level, pixelBytes, bytesPerRow));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLTexture_replaceRegion);
+      Serialise_replaceRegion(ser, region, level, pixelBytes, bytesPerRow);
+      chunk = scope.Get();
+    }
+
+    if(IsActiveCapturing(m_State))
+    {
+      m_Device->AddFrameCaptureRecordChunk(chunk);
+      GetResourceManager()->MarkResourceFrameReferenced(m_ID, eFrameRef_PartialWrite);
+    }
+    else
+    {
+      GetRecord(this)->AddChunk(chunk);
+    }
+  }
+}
+
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLTexture, void, replaceRegion, MTL::Region &,
+                                NS::UInteger, const void *, NS::UInteger);

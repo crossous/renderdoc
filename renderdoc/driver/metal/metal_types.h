@@ -46,9 +46,11 @@ const uint32_t MAX_COMPUTE_PASS_SAMPLE_BUFFER_ATTACHMENTS = 4;
   FUNC(CommandBuffer);                   \
   FUNC(CommandQueue);                    \
   FUNC(Device);                          \
+  FUNC(DepthStencilState);               \
   FUNC(Function);                        \
   FUNC(Library);                         \
   FUNC(RenderPipelineState);             \
+  FUNC(SamplerState);                    \
   FUNC(Texture);                         \
   FUNC(RenderCommandEncoder);            \
   FUNC(BlitCommandEncoder);
@@ -146,12 +148,14 @@ MTL_DECLARE_REFLECTION_TYPE(TessellationFactorFormat);
 MTL_DECLARE_REFLECTION_TYPE(TessellationControlPointIndexType);
 MTL_DECLARE_REFLECTION_TYPE(TessellationFactorStepFunction);
 MTL_DECLARE_REFLECTION_TYPE(Winding);
+MTL_DECLARE_REFLECTION_TYPE(CompareFunction);
 MTL_DECLARE_REFLECTION_TYPE(PrimitiveType);
 MTL_DECLARE_REFLECTION_TYPE(StoreActionOptions);
 MTL_DECLARE_REFLECTION_TYPE(LoadAction);
 MTL_DECLARE_REFLECTION_TYPE(StoreAction);
 MTL_DECLARE_REFLECTION_TYPE(ClearColor);
 MTL_DECLARE_REFLECTION_TYPE(Viewport);
+MTL_DECLARE_REFLECTION_TYPE(ScissorRect);
 MTL_DECLARE_REFLECTION_TYPE(MultisampleDepthResolveFilter);
 MTL_DECLARE_REFLECTION_TYPE(MultisampleStencilResolveFilter);
 MTL_DECLARE_REFLECTION_TYPE(SamplePosition);
@@ -165,6 +169,10 @@ MTL_DECLARE_REFLECTION_TYPE(DepthClipMode);
 MTL_DECLARE_REFLECTION_TYPE(TriangleFillMode);
 MTL_DECLARE_REFLECTION_TYPE(CullMode);
 MTL_DECLARE_REFLECTION_TYPE(IndexType);
+MTL_DECLARE_REFLECTION_TYPE(SamplerMinMagFilter);
+MTL_DECLARE_REFLECTION_TYPE(SamplerMipFilter);
+MTL_DECLARE_REFLECTION_TYPE(SamplerAddressMode);
+MTL_DECLARE_REFLECTION_TYPE(SamplerBorderColor);
 MTL_DECLARE_REFLECTION_TYPE(StepFunction);
 MTL_DECLARE_REFLECTION_TYPE(AttributeFormat);
 MTL_DECLARE_REFLECTION_TYPE(DispatchType);
@@ -179,6 +187,30 @@ void DoSerialise(SerialiserType &ser, NS::Range &el);
 
 namespace RDMTL
 {
+// MTLSamplerDescriptor : based on the interface defined in
+// Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLSampler.h
+struct SamplerDescriptor
+{
+  SamplerDescriptor() = default;
+  SamplerDescriptor(MTL::SamplerDescriptor *objc);
+  explicit operator MTL::SamplerDescriptor *();
+  rdcstr label;
+  MTL::SamplerMinMagFilter minFilter = MTL::SamplerMinMagFilterNearest;
+  MTL::SamplerMinMagFilter magFilter = MTL::SamplerMinMagFilterNearest;
+  MTL::SamplerMipFilter mipFilter = MTL::SamplerMipFilterNotMipmapped;
+  NS::UInteger maxAnisotropy = 1;
+  MTL::SamplerAddressMode sAddressMode = MTL::SamplerAddressModeClampToEdge;
+  MTL::SamplerAddressMode tAddressMode = MTL::SamplerAddressModeClampToEdge;
+  MTL::SamplerAddressMode rAddressMode = MTL::SamplerAddressModeClampToEdge;
+  MTL::SamplerBorderColor borderColor = MTL::SamplerBorderColorTransparentBlack;
+  bool normalizedCoordinates = true;
+  float lodMinClamp = 0.0f;
+  float lodMaxClamp = 1000.0f;
+  bool lodAverage = false;
+  MTL::CompareFunction compareFunction = MTL::CompareFunctionNever;
+  bool supportArgumentBuffers = false;
+};
+
 // MTLTextureDescriptor : based on the interface defined in
 // Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.1.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLTexture.h
 struct TextureDescriptor
@@ -202,6 +234,18 @@ struct TextureDescriptor
   bool allowGPUOptimizedContents = true;
   MTL::TextureSwizzleChannels swizzle = {MTL::TextureSwizzleRed, MTL::TextureSwizzleGreen,
                                          MTL::TextureSwizzleBlue, MTL::TextureSwizzleAlpha};
+};
+
+// MTLDepthStencilDescriptor : the T02 slice currently records the depth fields. Stencil face
+// descriptors remain at Metal defaults until a stencil fixture is added.
+struct DepthStencilDescriptor
+{
+  DepthStencilDescriptor() = default;
+  DepthStencilDescriptor(MTL::DepthStencilDescriptor *objc);
+  explicit operator MTL::DepthStencilDescriptor *();
+  rdcstr label;
+  MTL::CompareFunction depthCompareFunction = MTL::CompareFunctionAlways;
+  bool depthWriteEnabled = false;
 };
 
 // MTLRenderPipelineColorAttachmentDescriptor : based on the interface defined in
@@ -544,7 +588,9 @@ void DoSerialise(SerialiserType &ser, NS::String *&el);
   template <class SerialiserType>                \
   void DoSerialise(SerialiserType &ser, RDMTL::TYPE &el);
 
+RDMTL_DECLARE_REFLECTION_STRUCT(SamplerDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(TextureDescriptor);
+RDMTL_DECLARE_REFLECTION_STRUCT(DepthStencilDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(RenderPipelineColorAttachmentDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(PipelineBufferDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(VertexAttributeDescriptor);

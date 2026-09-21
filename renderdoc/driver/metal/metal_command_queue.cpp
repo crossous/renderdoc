@@ -30,7 +30,7 @@ WrappedMTLCommandQueue::WrappedMTLCommandQueue(MTL::CommandQueue *realMTLCommand
                                                ResourceId objId, WrappedMTLDevice *wrappedMTLDevice)
     : WrappedMTLObject(realMTLCommandQueue, objId, wrappedMTLDevice, wrappedMTLDevice->GetStateRef())
 {
-  if(realMTLCommandQueue && objId != ResourceId())
+  if(realMTLCommandQueue && objId != ResourceId() && IsCaptureMode(m_State))
     AllocateObjCBridge(this);
 }
 
@@ -45,7 +45,24 @@ bool WrappedMTLCommandQueue::Serialise_commandBuffer(SerialiserType &ser,
 
   if(IsReplayingAndReading())
   {
-    // TODO: implement RD MTL replay
+    MTL::CommandBuffer *realMTLCommandBuffer = Unwrap(CommandQueue)->commandBuffer();
+    if(!realMTLCommandBuffer)
+      return false;
+
+    WrappedMTLCommandBuffer *wrappedMTLCommandBuffer =
+        (WrappedMTLCommandBuffer *)GetResourceManager()->GetResource(CommandBuffer, true);
+    if(wrappedMTLCommandBuffer)
+      GetResourceManager()->ReplaceRealResource(wrappedMTLCommandBuffer, realMTLCommandBuffer);
+    else
+      GetResourceManager()->WrapResource(CommandBuffer, realMTLCommandBuffer,
+                                         wrappedMTLCommandBuffer);
+    wrappedMTLCommandBuffer->SetCommandQueue(CommandQueue);
+    m_Device->SetReplayCommandBuffer(wrappedMTLCommandBuffer);
+    if(IsLoading(m_State))
+    {
+      m_Device->AddResource(CommandBuffer, ResourceType::CommandBuffer, "Command Buffer");
+      m_Device->DerivedResource(CommandQueue, CommandBuffer);
+    }
   }
   return true;
 }

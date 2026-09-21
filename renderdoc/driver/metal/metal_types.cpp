@@ -28,11 +28,13 @@
 #include "metal_command_buffer.h"
 #include "metal_command_queue.h"
 #include "metal_device.h"
+#include "metal_depth_stencil_state.h"
 #include "metal_function.h"
 #include "metal_library.h"
 #include "metal_manager.h"
 #include "metal_render_command_encoder.h"
 #include "metal_render_pipeline_state.h"
+#include "metal_sampler_state.h"
 #include "metal_resources.h"
 #include "metal_texture.h"
 
@@ -107,6 +109,24 @@ void TrackedCAMetalLayer::StopTracking()
 
 namespace RDMTL
 {
+DepthStencilDescriptor::DepthStencilDescriptor(MTL::DepthStencilDescriptor *objc)
+    : depthCompareFunction(objc->depthCompareFunction()),
+      depthWriteEnabled(objc->depthWriteEnabled())
+{
+  if(objc->label())
+    label.assign(objc->label()->utf8String());
+}
+
+DepthStencilDescriptor::operator MTL::DepthStencilDescriptor *()
+{
+  MTL::DepthStencilDescriptor *objc = MTL::DepthStencilDescriptor::alloc()->init();
+  if(!label.empty())
+    objc->setLabel(NS::String::string(label.data(), NS::UTF8StringEncoding));
+  objc->setDepthCompareFunction(depthCompareFunction);
+  objc->setDepthWriteEnabled(depthWriteEnabled);
+  return objc;
+}
+
 static bool ValidData(MTL::VertexAttributeDescriptor *attribute)
 {
   if(attribute->format() == MTL::VertexFormatInvalid)
@@ -229,6 +249,48 @@ static void CopyToObjcArray(MTLARRAY_TYPE *to, rdcarray<RDMTL_TYPE> &from)
 
 #define COPYTOOBJCARRAY(TYPE, NAME) \
   CopyToObjcArray<MTL::TYPE##Array, RDMTL::TYPE>(objc->NAME(), NAME)
+
+SamplerDescriptor::SamplerDescriptor(MTL::SamplerDescriptor *objc)
+    : minFilter(objc->minFilter()),
+      magFilter(objc->magFilter()),
+      mipFilter(objc->mipFilter()),
+      maxAnisotropy(objc->maxAnisotropy()),
+      sAddressMode(objc->sAddressMode()),
+      tAddressMode(objc->tAddressMode()),
+      rAddressMode(objc->rAddressMode()),
+      borderColor(objc->borderColor()),
+      normalizedCoordinates(objc->normalizedCoordinates()),
+      lodMinClamp(objc->lodMinClamp()),
+      lodMaxClamp(objc->lodMaxClamp()),
+      lodAverage(objc->lodAverage()),
+      compareFunction(objc->compareFunction()),
+      supportArgumentBuffers(objc->supportArgumentBuffers())
+{
+  if(objc->label())
+    label = objc->label()->utf8String();
+}
+
+SamplerDescriptor::operator MTL::SamplerDescriptor *()
+{
+  MTL::SamplerDescriptor *objc = MTL::SamplerDescriptor::alloc()->init();
+  if(!label.empty())
+    objc->setLabel(NS::String::string(label.c_str(), NS::UTF8StringEncoding));
+  objc->setMinFilter(minFilter);
+  objc->setMagFilter(magFilter);
+  objc->setMipFilter(mipFilter);
+  objc->setMaxAnisotropy(maxAnisotropy);
+  objc->setSAddressMode(sAddressMode);
+  objc->setTAddressMode(tAddressMode);
+  objc->setRAddressMode(rAddressMode);
+  objc->setBorderColor(borderColor);
+  objc->setNormalizedCoordinates(normalizedCoordinates);
+  objc->setLodMinClamp(lodMinClamp);
+  objc->setLodMaxClamp(lodMaxClamp);
+  objc->setLodAverage(lodAverage);
+  objc->setCompareFunction(compareFunction);
+  objc->setSupportArgumentBuffers(supportArgumentBuffers);
+  return objc;
+}
 
 TextureDescriptor::TextureDescriptor(MTL::TextureDescriptor *objc)
 {

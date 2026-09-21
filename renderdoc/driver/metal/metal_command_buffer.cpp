@@ -25,6 +25,7 @@
 #include "metal_command_buffer.h"
 #include "metal_blit_command_encoder.h"
 #include "metal_device.h"
+#include "metal_replay.h"
 #include "metal_render_command_encoder.h"
 #include "metal_resources.h"
 #include "metal_texture.h"
@@ -33,7 +34,7 @@ WrappedMTLCommandBuffer::WrappedMTLCommandBuffer(MTL::CommandBuffer *realMTLComm
                                                  ResourceId objId, WrappedMTLDevice *wrappedMTLDevice)
     : WrappedMTLObject(realMTLCommandBuffer, objId, wrappedMTLDevice, wrappedMTLDevice->GetStateRef())
 {
-  if(realMTLCommandBuffer && objId != ResourceId())
+  if(realMTLCommandBuffer && objId != ResourceId() && IsCaptureMode(m_State))
     AllocateObjCBridge(this);
 }
 
@@ -49,7 +50,7 @@ bool WrappedMTLCommandBuffer::Serialise_blitCommandEncoder(SerialiserType &ser,
 
   if(IsReplayingAndReading())
   {
-    // TODO: implement RD MTL replay
+    // Blit replay will be implemented with the first resource-copy feature.
   }
   return true;
 }
@@ -99,7 +100,49 @@ bool WrappedMTLCommandBuffer::Serialise_renderCommandEncoderWithDescriptor(
 
   if(IsReplayingAndReading())
   {
-    // TODO: implement RD MTL replay
+    MTL::RenderPassDescriptor *mtlDescriptor(descriptor);
+    MTL::RenderCommandEncoder *realEncoder =
+        Unwrap(CommandBuffer)->renderCommandEncoder(mtlDescriptor);
+    mtlDescriptor->release();
+    if(!realEncoder)
+      return false;
+
+    WrappedMTLRenderCommandEncoder *wrappedEncoder =
+        (WrappedMTLRenderCommandEncoder *)GetResourceManager()->GetResource(RenderCommandEncoder,
+                                                                            true);
+    if(wrappedEncoder)
+      GetResourceManager()->ReplaceRealResource(wrappedEncoder, realEncoder);
+    else
+      GetResourceManager()->WrapResource(RenderCommandEncoder, realEncoder, wrappedEncoder);
+    wrappedEncoder->SetCommandBuffer(CommandBuffer);
+    m_Device->SetReplayRenderCommandEncoder(wrappedEncoder);
+    m_Device->GetReplay()->BeginRenderPass(descriptor);
+    if(IsLoading(m_State))
+    {
+      m_Device->AddResource(RenderCommandEncoder, ResourceType::CommandBuffer, "Render Encoder");
+      m_Device->DerivedResource(CommandBuffer, RenderCommandEncoder);
+    }
+
+    ResourceId colorTarget;
+    if(!descriptor.colorAttachments.empty() && descriptor.colorAttachments[0].texture)
+      colorTarget = GetResID(descriptor.colorAttachments[0].texture);
+    m_Device->SetReplayRenderTarget(colorTarget);
+
+    if(IsLoading(m_State))
+    {
+      AddEvent();
+      ActionDescription action;
+      action.customName = "Begin Metal Render Pass";
+      action.flags = ActionFlags::PassBoundary | ActionFlags::BeginPass;
+      if(!descriptor.colorAttachments.empty() &&
+         descriptor.colorAttachments[0].loadAction == MTL::LoadActionClear)
+      {
+        action.customName = "Begin Metal Render Pass (Clear)";
+        action.flags |= ActionFlags::Clear | ActionFlags::ClearColor;
+      }
+      action.outputs[0] = colorTarget;
+      AddAction(action);
+    }
   }
   return true;
 }
@@ -131,14 +174,19 @@ WrappedMTLRenderCommandEncoder *WrappedMTLCommandBuffer::renderCommandEncoderWit
     MetalResourceRecord *encoderRecord =
         GetResourceManager()->AddResourceRecord(wrappedMTLRenderCommandEncoder);
 
+    auto referenceAttachment = [bufferRecord](const RDMTL::RenderPassAttachmentDescriptor &attachment) {
+      if(attachment.texture)
+        bufferRecord->MarkResourceFrameReferenced(GetResID(attachment.texture), eFrameRef_Read);
+      if(attachment.resolveTexture)
+        bufferRecord->MarkResourceFrameReferenced(GetResID(attachment.resolveTexture), eFrameRef_Read);
+    };
+
     for(int i = 0; i < descriptor.colorAttachments.count(); ++i)
     {
-      WrappedMTLTexture *texture = descriptor.colorAttachments[i].texture;
-      if(texture != NULL)
-      {
-        bufferRecord->MarkResourceFrameReferenced(GetResID(texture), eFrameRef_Read);
-      }
+      referenceAttachment(descriptor.colorAttachments[i]);
     }
+    referenceAttachment(descriptor.depthAttachment);
+    referenceAttachment(descriptor.stencilAttachment);
   }
   else
   {
@@ -220,6 +268,7 @@ bool WrappedMTLCommandBuffer::Serialise_commit(SerialiserType &ser)
   if(IsReplayingAndReading())
   {
     CommandBuffer->commit();
+    m_Device->MarkReplayCommandBufferCommitted();
   }
   return true;
 }
@@ -254,6 +303,7 @@ bool WrappedMTLCommandBuffer::Serialise_enqueue(SerialiserType &ser)
   // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
+    CommandBuffer->waitUntilCompleted();
   }
   return true;
 }

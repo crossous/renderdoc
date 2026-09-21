@@ -1078,6 +1078,7 @@ rdcstr DoStringise(const GraphicsAPI &el)
     STRINGISE_ENUM_CLASS(D3D12);
     STRINGISE_ENUM_CLASS(OpenGL);
     STRINGISE_ENUM_CLASS(Vulkan);
+    STRINGISE_ENUM_CLASS(Metal);
   }
   END_ENUM_STRINGISE();
 }
@@ -1097,6 +1098,7 @@ rdcstr DoStringise(const ShaderEncoding &el)
     STRINGISE_ENUM_CLASS_NAMED(OpenGLSPIRV, "SPIR-V (OpenGL)");
     STRINGISE_ENUM_CLASS_NAMED(OpenGLSPIRVAsm, "SPIR-V Asm (OpenGL)");
     STRINGISE_ENUM_CLASS(Slang);
+    STRINGISE_ENUM_CLASS(MSL);
   }
   END_ENUM_STRINGISE();
 }

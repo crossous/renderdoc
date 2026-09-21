@@ -237,6 +237,7 @@ enum class TestAPI
   Vulkan,
   OpenGL,
   D3D12,
+  Metal,
   Count,
 };
 
@@ -248,6 +249,7 @@ inline const char *APIName(TestAPI API)
     case TestAPI::Vulkan: return "Vulkan";
     case TestAPI::OpenGL: return "OpenGL";
     case TestAPI::D3D12: return "D3D12";
+    case TestAPI::Metal: return "Metal";
     case TestAPI::Count: break;
   }
 
