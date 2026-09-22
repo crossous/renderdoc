@@ -51,7 +51,6 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setRenderPipelineState(
 
   SERIALISE_CHECK_READ_ERRORS();
 
-  // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
     Unwrap(RenderCommandEncoder)->setRenderPipelineState(Unwrap(pipelineState));
@@ -142,12 +141,50 @@ bool WrappedMTLRenderCommandEncoder::Serialise_setFragmentBuffer(SerialiserType 
 
   SERIALISE_CHECK_READ_ERRORS();
 
-  // TODO: implement RD MTL replay
   if(IsReplayingAndReading())
   {
     Unwrap(RenderCommandEncoder)->setFragmentBuffer(Unwrap(buffer), offset, index);
+    m_Device->GetReplay()->BindFragmentBuffer((uint32_t)index, GetResID(buffer), (uint64_t)offset);
   }
   return true;
+}
+
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setFragmentBufferOffset(SerialiserType &ser,
+                                                                       NS::UInteger offset,
+                                                                       NS::UInteger index)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(offset);
+  SERIALISE_ELEMENT(index).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setFragmentBufferOffset(offset, index);
+    m_Device->GetReplay()->SetFragmentBufferOffset((uint32_t)index, (uint64_t)offset);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setFragmentBufferOffset(NS::UInteger offset,
+                                                              NS::UInteger index)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setFragmentBufferOffset(offset, index));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setFragmentBufferOffset);
+      Serialise_setFragmentBufferOffset(ser, offset, index);
+      chunk = scope.Get();
+    }
+    MetalResourceRecord *bufferRecord = GetRecord(m_CommandBuffer);
+    bufferRecord->AddChunk(chunk);
+  }
 }
 
 void WrappedMTLRenderCommandEncoder::setFragmentBuffer(WrappedMTLBuffer *buffer,
@@ -436,6 +473,78 @@ void WrappedMTLRenderCommandEncoder::setDepthStencilState(
 }
 
 template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setStencilReferenceValue(
+    SerialiserType &ser, uint32_t referenceValue)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(referenceValue).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)->setStencilReferenceValue(referenceValue);
+    m_Device->GetReplay()->SetStencilReferenceValue(referenceValue);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setStencilReferenceValue(uint32_t referenceValue)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setStencilReferenceValue(referenceValue));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setStencilReferenceValue);
+      Serialise_setStencilReferenceValue(ser, referenceValue);
+      chunk = scope.Get();
+    }
+    GetRecord(m_CommandBuffer)->AddChunk(chunk);
+  }
+}
+
+template <typename SerialiserType>
+bool WrappedMTLRenderCommandEncoder::Serialise_setStencilReferenceValues(
+    SerialiserType &ser, uint32_t frontReferenceValue, uint32_t backReferenceValue)
+{
+  SERIALISE_ELEMENT_LOCAL(RenderCommandEncoder, this);
+  SERIALISE_ELEMENT(frontReferenceValue).Important();
+  SERIALISE_ELEMENT(backReferenceValue).Important();
+
+  SERIALISE_CHECK_READ_ERRORS();
+
+  if(IsReplayingAndReading())
+  {
+    Unwrap(RenderCommandEncoder)
+        ->setStencilReferenceValues(frontReferenceValue, backReferenceValue);
+    m_Device->GetReplay()->SetStencilReferenceValues(frontReferenceValue, backReferenceValue);
+  }
+  return true;
+}
+
+void WrappedMTLRenderCommandEncoder::setStencilReferenceValues(uint32_t frontReferenceValue,
+                                                                uint32_t backReferenceValue)
+{
+  SERIALISE_TIME_CALL(Unwrap(this)->setStencilReferenceValues(frontReferenceValue,
+                                                               backReferenceValue));
+
+  if(IsCaptureMode(m_State))
+  {
+    Chunk *chunk = NULL;
+    {
+      CACHE_THREAD_SERIALISER();
+      SCOPED_SERIALISE_CHUNK(MetalChunk::MTLRenderCommandEncoder_setStencilFrontReferenceValue);
+      Serialise_setStencilReferenceValues(ser, frontReferenceValue, backReferenceValue);
+      chunk = scope.Get();
+    }
+    GetRecord(m_CommandBuffer)->AddChunk(chunk);
+  }
+}
+
+template <typename SerialiserType>
 bool WrappedMTLRenderCommandEncoder::Serialise_drawPrimitives(
     SerialiserType &ser, MTL::PrimitiveType primitiveType, NS::UInteger vertexStart,
     NS::UInteger vertexCount, NS::UInteger instanceCount, NS::UInteger baseInstance)
@@ -468,7 +577,7 @@ bool WrappedMTLRenderCommandEncoder::Serialise_drawPrimitives(
       action.numInstances = (uint32_t)instanceCount;
       action.vertexOffset = (uint32_t)vertexStart;
       action.instanceOffset = (uint32_t)baseInstance;
-      action.outputs[0] = m_Device->GetReplayRenderTarget();
+      m_Device->GetReplay()->SetActionOutputs(action);
       AddAction(action);
     }
   }
@@ -535,7 +644,7 @@ bool WrappedMTLRenderCommandEncoder::Serialise_drawIndexedPrimitives(
       action.numInstances = 1;
       action.indexOffset = (uint32_t)(indexBufferOffset /
                                       (indexType == MTL::IndexTypeUInt16 ? 2 : 4));
-      action.outputs[0] = m_Device->GetReplayRenderTarget();
+      m_Device->GetReplay()->SetActionOutputs(action);
       AddAction(action);
     }
   }
@@ -592,15 +701,20 @@ bool WrappedMTLRenderCommandEncoder::Serialise_endEncoding(SerialiserType &ser)
   {
     Unwrap(RenderCommandEncoder)->endEncoding();
     m_Device->SetReplayRenderCommandEncoder(NULL);
+
+    ActionDescription action;
+    if(IsLoading(m_State))
+    {
+      action.customName = "End Metal Render Pass";
+      action.flags = ActionFlags::PassBoundary | ActionFlags::EndPass;
+      m_Device->GetReplay()->SetActionOutputs(action);
+    }
+
     m_Device->GetReplay()->EndRenderPass();
 
     if(IsLoading(m_State))
     {
       AddEvent();
-      ActionDescription action;
-      action.customName = "End Metal Render Pass";
-      action.flags = ActionFlags::PassBoundary | ActionFlags::EndPass;
-      action.outputs[0] = m_Device->GetReplayRenderTarget();
       AddAction(action);
     }
   }
@@ -636,6 +750,8 @@ INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setVertexB
                                 WrappedMTLBuffer *buffer, NS::UInteger offset, NS::UInteger index);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentBuffer,
                                 WrappedMTLBuffer *buffer, NS::UInteger offset, NS::UInteger index);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentBufferOffset,
+                                NS::UInteger offset, NS::UInteger index);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentTexture,
                                 WrappedMTLTexture *texture, NS::UInteger index);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setFragmentSamplerState,
@@ -650,6 +766,10 @@ INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setCullMod
                                 MTL::CullMode cullMode);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setDepthStencilState,
                                 WrappedMTLDepthStencilState *depthStencilState);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setStencilReferenceValue,
+                                uint32_t referenceValue);
+INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, setStencilReferenceValues,
+                                uint32_t frontReferenceValue, uint32_t backReferenceValue);
 INSTANTIATE_FUNCTION_SERIALISED(WrappedMTLRenderCommandEncoder, void, drawPrimitives,
                                 MTL::PrimitiveType primitiveType, NS::UInteger vertexStart,
                                 NS::UInteger vertexCount, NS::UInteger instanceCount,

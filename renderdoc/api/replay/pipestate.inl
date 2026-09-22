@@ -1430,6 +1430,10 @@ rdcarray<ColorBlend> PipeState::GetColorBlends() const
     {
       return m_Vulkan->colorBlend.blends;
     }
+    else if(IsCaptureMetal())
+    {
+      return m_Metal->colorBlends;
+    }
   }
 
   return {};
@@ -1454,6 +1458,10 @@ bool PipeState::IsStencilTestEnabled() const
     else if(IsCaptureVK())
     {
       return m_Vulkan->depthStencil.stencilTestEnable;
+    }
+    else if(IsCaptureMetal())
+    {
+      return m_Metal->depthStencil.stencilEnabled;
     }
   }
 
@@ -1481,6 +1489,10 @@ rdcpair<StencilFace, StencilFace> PipeState::GetStencilFaces() const
     else if(IsCaptureVK())
     {
       return {m_Vulkan->depthStencil.frontFace, m_Vulkan->depthStencil.backFace};
+    }
+    else if(IsCaptureMetal())
+    {
+      return {m_Metal->depthStencil.frontFace, m_Metal->depthStencil.backFace};
     }
   }
 

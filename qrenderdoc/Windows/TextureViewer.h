@@ -235,6 +235,7 @@ private slots:
   void channelsWidget_toggled(bool checked) { UI_UpdateChannels(); }
   void channelsWidget_selected(int index) { UI_UpdateChannels(); }
 protected:
+  bool eventFilter(QObject *watched, QEvent *event) override;
   void enterEvent(QEvent *event) override;
   void showEvent(QShowEvent *event) override;
 

@@ -306,13 +306,8 @@
           bytesPerRow:(NSUInteger)bytesPerRow
         bytesPerImage:(NSUInteger)bytesPerImage
 {
-  METAL_NOT_HOOKED();
-  [self.real replaceRegion:region
-               mipmapLevel:level
-                     slice:slice
-                 withBytes:pixelBytes
-               bytesPerRow:bytesPerRow
-             bytesPerImage:bytesPerImage];
+  GetWrapped(self)->replaceRegion((MTL::Region &)region, level, slice, pixelBytes, bytesPerRow,
+                                  bytesPerImage);
 }
 
 - (void)getBytes:(void *)pixelBytes

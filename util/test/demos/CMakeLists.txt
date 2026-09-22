@@ -236,8 +236,14 @@ set(METAL_SRC
         metal/metal_test.cpp
         metal/metal_test.h
         metal/metal_empty_frame.cpp
+        metal/metal_dynamic_uniform.cpp
+        metal/metal_depth_stencil.cpp
         metal/metal_indexed_cube.cpp
+        metal/metal_instanced_mesh.cpp
+        metal/metal_mrt_blend.cpp
+        metal/metal_msaa_resolve.cpp
         metal/metal_simple_triangle.cpp
+        metal/metal_texture_subresources.cpp
         metal/metal_textured_quad.cpp)
 
 project(demos)

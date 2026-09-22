@@ -145,11 +145,25 @@ void DoSerialise(SerialiserType &ser, MTL::ScissorRect &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, RDMTL::StencilDescriptor &el)
+{
+  SERIALISE_MEMBER(enabled);
+  SERIALISE_MEMBER(stencilCompareFunction);
+  SERIALISE_MEMBER(stencilFailureOperation);
+  SERIALISE_MEMBER(depthFailureOperation);
+  SERIALISE_MEMBER(depthStencilPassOperation);
+  SERIALISE_MEMBER(readMask);
+  SERIALISE_MEMBER(writeMask);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, RDMTL::DepthStencilDescriptor &el)
 {
   SERIALISE_MEMBER(label);
   SERIALISE_MEMBER(depthCompareFunction);
   SERIALISE_MEMBER(depthWriteEnabled);
+  SERIALISE_MEMBER(frontFaceStencil);
+  SERIALISE_MEMBER(backFaceStencil);
 }
 
 template <typename SerialiserType>
@@ -466,6 +480,7 @@ INSTANTIATE_SERIALISE_TYPE(MTL::Region);
 INSTANTIATE_SERIALISE_TYPE(MTL::Size);
 INSTANTIATE_SERIALISE_TYPE(RDMTL::SamplerDescriptor);
 INSTANTIATE_SERIALISE_TYPE(RDMTL::TextureDescriptor);
+INSTANTIATE_SERIALISE_TYPE(RDMTL::StencilDescriptor);
 INSTANTIATE_SERIALISE_TYPE(RDMTL::DepthStencilDescriptor);
 INSTANTIATE_SERIALISE_TYPE(RDMTL::RenderPipelineColorAttachmentDescriptor);
 INSTANTIATE_SERIALISE_TYPE(RDMTL::PipelineBufferDescriptor);

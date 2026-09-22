@@ -125,22 +125,28 @@ void MetalReplay::AddBuffer(ResourceId id, uint64_t length)
   m_Buffers.push_back(desc);
 }
 
+static TextureType MakeShaderTextureType(MTL::TextureType type);
+
 void MetalReplay::AddTexture(ResourceId id, MTL::Texture *texture, bool swapBuffer)
 {
   TextureDescription desc;
   desc.resourceId = id;
   desc.dimension = texture->textureType() == MTL::TextureType3D ? 3 : 2;
-  desc.type = texture->textureType() == MTL::TextureType3D ? TextureType::Texture3D
-                                                           : TextureType::Texture2D;
+  desc.type = MakeShaderTextureType(texture->textureType());
   desc.width = (uint32_t)texture->width();
   desc.height = (uint32_t)texture->height();
   desc.depth = (uint32_t)texture->depth();
   desc.mips = (uint32_t)texture->mipmapLevelCount();
-  desc.arraysize = (uint32_t)texture->arrayLength();
+  desc.cubemap = texture->textureType() == MTL::TextureTypeCube ||
+                 texture->textureType() == MTL::TextureTypeCubeArray;
+  desc.arraysize = (uint32_t)texture->arrayLength() * (desc.cubemap ? 6U : 1U);
   desc.msSamp = (uint32_t)texture->sampleCount();
   desc.msQual = 0;
   desc.format = MakeResourceFormat(texture->pixelFormat());
-  desc.byteSize = GetByteSize(desc.width, desc.height, desc.depth, texture->pixelFormat(), 0);
+  desc.byteSize = 0;
+  for(uint32_t mip = 0; mip < desc.mips; mip++)
+    desc.byteSize += GetByteSize(desc.width, desc.height, desc.depth, texture->pixelFormat(), mip) *
+                     RDCMAX(1U, desc.msSamp) * RDCMAX(1U, desc.arraysize);
   desc.creationFlags = TextureCategory::NoFlags;
   if(texture->usage() & MTL::TextureUsageShaderRead)
     desc.creationFlags |= TextureCategory::ShaderRead;
@@ -269,6 +275,7 @@ void MetalReplay::AddShaderBindings(ResourceId shader, NS::Array *arguments)
     return;
 
   ShaderReflection &reflection = shaderIt->second;
+  reflection.constantBlocks.clear();
   reflection.samplers.clear();
   reflection.readOnlyResources.clear();
   reflection.readWriteResources.clear();
@@ -287,7 +294,18 @@ void MetalReplay::AddShaderBindings(ResourceId shader, NS::Array *arguments)
     const uint32_t bind = (uint32_t)argument->index();
     const uint32_t arraySize = RDCMAX(1U, (uint32_t)argument->arrayLength());
 
-    if(argument->type() == MTL::ArgumentTypeSampler)
+    if(argument->type() == MTL::ArgumentTypeBuffer)
+    {
+      ConstantBlock block;
+      block.name = name;
+      block.fixedBindNumber = bind;
+      block.bindArraySize = arraySize;
+      block.byteSize = (uint32_t)argument->bufferDataSize();
+      block.bufferBacked = true;
+      reflection.constantBlocks.push_back(block);
+      usage.constantBlocks.push_back(argument->active());
+    }
+    else if(argument->type() == MTL::ArgumentTypeSampler)
     {
       ShaderSampler sampler;
       sampler.name = name;
@@ -355,6 +373,10 @@ void MetalReplay::AddRenderPipeline(ResourceId id,
   pipeline.vertexFunction = GetResID(descriptor.vertexFunction);
   pipeline.fragmentFunction = GetResID(descriptor.fragmentFunction);
   pipeline.vertexDescriptor = descriptor.vertexDescriptor;
+  pipeline.sampleCount = (uint32_t)descriptor.rasterSampleCount;
+  pipeline.alphaToCoverageEnabled = descriptor.alphaToCoverageEnabled;
+  pipeline.alphaToOneEnabled = descriptor.alphaToOneEnabled;
+  pipeline.colorAttachments = descriptor.colorAttachments;
 
   if(reflection)
   {
@@ -424,6 +446,35 @@ static CompareFunction MakeCompareFunction(MTL::CompareFunction function)
   return CompareFunction::AlwaysTrue;
 }
 
+static StencilOperation MakeStencilOperation(MTL::StencilOperation operation)
+{
+  switch(operation)
+  {
+    case MTL::StencilOperationKeep: return StencilOperation::Keep;
+    case MTL::StencilOperationZero: return StencilOperation::Zero;
+    case MTL::StencilOperationReplace: return StencilOperation::Replace;
+    case MTL::StencilOperationIncrementClamp: return StencilOperation::IncSat;
+    case MTL::StencilOperationDecrementClamp: return StencilOperation::DecSat;
+    case MTL::StencilOperationIncrementWrap: return StencilOperation::IncWrap;
+    case MTL::StencilOperationDecrementWrap: return StencilOperation::DecWrap;
+    case MTL::StencilOperationInvert: return StencilOperation::Invert;
+  }
+
+  return StencilOperation::Keep;
+}
+
+static StencilFace MakeStencilFace(const RDMTL::StencilDescriptor &descriptor)
+{
+  StencilFace ret;
+  ret.function = MakeCompareFunction(descriptor.stencilCompareFunction);
+  ret.failOperation = MakeStencilOperation(descriptor.stencilFailureOperation);
+  ret.depthFailOperation = MakeStencilOperation(descriptor.depthFailureOperation);
+  ret.passOperation = MakeStencilOperation(descriptor.depthStencilPassOperation);
+  ret.compareMask = descriptor.readMask;
+  ret.writeMask = descriptor.writeMask;
+  return ret;
+}
+
 static Descriptor MakeRenderTargetDescriptor(MetalReplay *replay,
                                              const RDMTL::RenderPassAttachmentDescriptor &attachment)
 {
@@ -443,16 +494,43 @@ static Descriptor MakeRenderTargetDescriptor(MetalReplay *replay,
   return ret;
 }
 
+static Descriptor MakeResolveTargetDescriptor(MetalReplay *replay,
+                                              const RDMTL::RenderPassAttachmentDescriptor &attachment)
+{
+  Descriptor ret;
+  ret.type = DescriptorType::ReadWriteImage;
+  ret.resource = attachment.resolveTexture ? GetResID(attachment.resolveTexture) : ResourceId();
+  ret.firstMip = (uint8_t)attachment.resolveLevel;
+  ret.firstSlice = (uint16_t)attachment.resolveSlice;
+
+  TextureDescription texture = replay->GetTexture(ret.resource);
+  if(texture.resourceId != ResourceId())
+  {
+    ret.format = texture.format;
+    ret.textureType = texture.type;
+  }
+
+  return ret;
+}
+
 void MetalReplay::BeginRenderPass(const RDMTL::RenderPassDescriptor &descriptor)
 {
   m_CurrentPipelineState = MetalPipe::State();
 
   m_CurrentPipelineState.colorTargets.resize(descriptor.colorAttachments.size());
+  m_CurrentPipelineState.resolveTargets.resize(descriptor.colorAttachments.size());
   for(size_t i = 0; i < descriptor.colorAttachments.size(); i++)
+  {
     m_CurrentPipelineState.colorTargets[i] =
         MakeRenderTargetDescriptor(this, descriptor.colorAttachments[i]);
+    m_CurrentPipelineState.resolveTargets[i] =
+        MakeResolveTargetDescriptor(this, descriptor.colorAttachments[i]);
+  }
 
   m_CurrentPipelineState.depthTarget = MakeRenderTargetDescriptor(this, descriptor.depthAttachment);
+  if(m_CurrentPipelineState.depthTarget.resource == ResourceId())
+    m_CurrentPipelineState.depthTarget =
+        MakeRenderTargetDescriptor(this, descriptor.stencilAttachment);
 }
 
 void MetalReplay::EndRenderPass()
@@ -465,7 +543,11 @@ void MetalReplay::BindRenderPipeline(ResourceId id)
   m_CurrentPipelineState.pipelineResourceId = id;
   m_CurrentPipelineState.vertexShader = MetalPipe::Shader();
   m_CurrentPipelineState.fragmentShader = MetalPipe::Shader();
+  m_CurrentPipelineState.sampleCount = 1;
+  m_CurrentPipelineState.alphaToCoverageEnabled = false;
+  m_CurrentPipelineState.alphaToOneEnabled = false;
   m_CurrentPipelineState.vertexAttributes.clear();
+  m_CurrentPipelineState.colorBlends.clear();
   for(MetalPipe::VertexBuffer &binding : m_CurrentPipelineState.vertexBuffers)
   {
     binding.byteStride = 0;
@@ -496,6 +578,9 @@ void MetalReplay::BindRenderPipeline(ResourceId id)
       bindShader(pipeline->second.vertexFunction, ShaderStage::Vertex);
   m_CurrentPipelineState.fragmentShader =
       bindShader(pipeline->second.fragmentFunction, ShaderStage::Fragment);
+  m_CurrentPipelineState.sampleCount = pipeline->second.sampleCount;
+  m_CurrentPipelineState.alphaToCoverageEnabled = pipeline->second.alphaToCoverageEnabled;
+  m_CurrentPipelineState.alphaToOneEnabled = pipeline->second.alphaToOneEnabled;
 
   const RDMTL::VertexDescriptor &vertexDescriptor = pipeline->second.vertexDescriptor;
   for(size_t attributeIndex = 0; attributeIndex < vertexDescriptor.attributes.size();
@@ -525,12 +610,33 @@ void MetalReplay::BindRenderPipeline(ResourceId id)
     binding.perInstance = layout.stepFunction == MTL::VertexStepFunctionPerInstance;
     binding.stepRate = (uint32_t)layout.stepRate;
   }
+
+  for(const RDMTL::RenderPipelineColorAttachmentDescriptor &attachment :
+      pipeline->second.colorAttachments)
+  {
+    ColorBlend blend;
+    blend.enabled = attachment.blendingEnabled;
+    blend.colorBlend.source = MakeBlendMultiplier(attachment.sourceRGBBlendFactor);
+    blend.colorBlend.destination =
+        MakeBlendMultiplier(attachment.destinationRGBBlendFactor);
+    blend.colorBlend.operation = MakeBlendOp(attachment.rgbBlendOperation);
+    blend.alphaBlend.source = MakeBlendMultiplier(attachment.sourceAlphaBlendFactor);
+    blend.alphaBlend.destination =
+        MakeBlendMultiplier(attachment.destinationAlphaBlendFactor);
+    blend.alphaBlend.operation = MakeBlendOp(attachment.alphaBlendOperation);
+    blend.writeMask = MakeWriteMask(attachment.writeMask);
+    m_CurrentPipelineState.colorBlends.push_back(blend);
+  }
 }
 
 void MetalReplay::BindDepthStencilState(ResourceId id)
 {
+  const uint32_t frontReference = m_CurrentPipelineState.depthStencil.frontFace.reference;
+  const uint32_t backReference = m_CurrentPipelineState.depthStencil.backFace.reference;
   m_CurrentPipelineState.depthStencil = MetalPipe::DepthStencil();
   m_CurrentPipelineState.depthStencil.resourceId = id;
+  m_CurrentPipelineState.depthStencil.frontFace.reference = frontReference;
+  m_CurrentPipelineState.depthStencil.backFace.reference = backReference;
 
   auto state = m_DepthStencilStates.find(id);
   if(state != m_DepthStencilStates.end())
@@ -538,7 +644,25 @@ void MetalReplay::BindDepthStencilState(ResourceId id)
     m_CurrentPipelineState.depthStencil.depthFunction =
         MakeCompareFunction(state->second.depthCompareFunction);
     m_CurrentPipelineState.depthStencil.depthWrites = state->second.depthWriteEnabled;
+    m_CurrentPipelineState.depthStencil.stencilEnabled =
+        state->second.frontFaceStencil.enabled || state->second.backFaceStencil.enabled;
+    m_CurrentPipelineState.depthStencil.frontFace = MakeStencilFace(state->second.frontFaceStencil);
+    m_CurrentPipelineState.depthStencil.backFace = MakeStencilFace(state->second.backFaceStencil);
+    m_CurrentPipelineState.depthStencil.frontFace.reference = frontReference;
+    m_CurrentPipelineState.depthStencil.backFace.reference = backReference;
   }
+}
+
+void MetalReplay::SetStencilReferenceValue(uint32_t referenceValue)
+{
+  SetStencilReferenceValues(referenceValue, referenceValue);
+}
+
+void MetalReplay::SetStencilReferenceValues(uint32_t frontReferenceValue,
+                                            uint32_t backReferenceValue)
+{
+  m_CurrentPipelineState.depthStencil.frontFace.reference = frontReferenceValue;
+  m_CurrentPipelineState.depthStencil.backFace.reference = backReferenceValue;
 }
 
 void MetalReplay::BindVertexBuffer(uint32_t index, ResourceId id, uint64_t offset)
@@ -549,6 +673,31 @@ void MetalReplay::BindVertexBuffer(uint32_t index, ResourceId id, uint64_t offse
   binding.byteOffset = offset;
 
   BufferDescription buffer = GetBuffer(id);
+  binding.byteSize = buffer.resourceId != ResourceId() && offset < buffer.length
+                         ? buffer.length - offset
+                         : 0;
+}
+
+void MetalReplay::BindFragmentBuffer(uint32_t index, ResourceId id, uint64_t offset)
+{
+  m_CurrentPipelineState.fragmentBuffers.resize_for_index(index);
+  MetalPipe::BufferBinding &binding = m_CurrentPipelineState.fragmentBuffers[index];
+  binding.resourceId = id;
+  binding.byteOffset = offset;
+
+  BufferDescription buffer = GetBuffer(id);
+  binding.byteSize = buffer.resourceId != ResourceId() && offset < buffer.length
+                         ? buffer.length - offset
+                         : 0;
+}
+
+void MetalReplay::SetFragmentBufferOffset(uint32_t index, uint64_t offset)
+{
+  m_CurrentPipelineState.fragmentBuffers.resize_for_index(index);
+  MetalPipe::BufferBinding &binding = m_CurrentPipelineState.fragmentBuffers[index];
+  binding.byteOffset = offset;
+
+  BufferDescription buffer = GetBuffer(binding.resourceId);
   binding.byteSize = buffer.resourceId != ResourceId() && offset < buffer.length
                          ? buffer.length - offset
                          : 0;
@@ -641,10 +790,25 @@ void MetalReplay::SavePipelineState(uint32_t eventId)
   }
 }
 
+void MetalReplay::SetActionOutputs(ActionDescription &action) const
+{
+  const size_t count = RDCMIN(action.outputs.size(), m_CurrentPipelineState.colorTargets.size());
+  for(size_t i = 0; i < count; i++)
+  {
+    if(i < m_CurrentPipelineState.resolveTargets.size() &&
+       m_CurrentPipelineState.resolveTargets[i].resource != ResourceId())
+      action.outputs[i] = m_CurrentPipelineState.resolveTargets[i].resource;
+    else
+      action.outputs[i] = m_CurrentPipelineState.colorTargets[i].resource;
+  }
+  action.depthOut = m_CurrentPipelineState.depthTarget.resource;
+}
+
 rdcarray<Descriptor> MetalReplay::GetDescriptors(ResourceId descriptorStore,
                                                  const rdcarray<DescriptorRange> &ranges)
 {
   static const uint32_t SamplerOffset = 0x100;
+  static const uint32_t BufferOffset = 0x200;
   if(descriptorStore != GetResID(m_pDriver) || m_MetalPipelineState == NULL)
     return {};
 
@@ -660,20 +824,33 @@ rdcarray<Descriptor> MetalReplay::GetDescriptors(ResourceId descriptorStore,
     for(uint32_t i = 0; i < range.count; i++, dst++)
     {
       const uint32_t offset = range.offset + i * range.descriptorSize;
-      if(range.type != DescriptorType::Image || offset >= SamplerOffset ||
-         offset >= m_MetalPipelineState->fragmentTextures.size())
-        continue;
-
       Descriptor &descriptor = ret[dst];
-      descriptor.type = DescriptorType::Image;
-      descriptor.resource = m_MetalPipelineState->fragmentTextures[offset];
-      TextureDescription texture = GetTexture(descriptor.resource);
-      if(texture.resourceId != ResourceId())
+      if(range.type == DescriptorType::Image && offset < SamplerOffset &&
+         offset < m_MetalPipelineState->fragmentTextures.size())
       {
-        descriptor.format = texture.format;
-        descriptor.textureType = texture.type;
-        descriptor.numMips = (uint8_t)texture.mips;
-        descriptor.numSlices = (uint16_t)texture.arraysize;
+        descriptor.type = DescriptorType::Image;
+        descriptor.resource = m_MetalPipelineState->fragmentTextures[offset];
+        TextureDescription texture = GetTexture(descriptor.resource);
+        if(texture.resourceId != ResourceId())
+        {
+          descriptor.format = texture.format;
+          descriptor.textureType = texture.type;
+          descriptor.numMips = (uint8_t)texture.mips;
+          descriptor.numSlices = (uint16_t)texture.arraysize;
+        }
+      }
+      else if(range.type == DescriptorType::ConstantBuffer && offset >= BufferOffset)
+      {
+        const uint32_t slot = offset - BufferOffset;
+        if(slot < m_MetalPipelineState->fragmentBuffers.size())
+        {
+          const MetalPipe::BufferBinding &binding =
+              m_MetalPipelineState->fragmentBuffers[slot];
+          descriptor.type = DescriptorType::ConstantBuffer;
+          descriptor.resource = binding.resourceId;
+          descriptor.byteOffset = binding.byteOffset;
+          descriptor.byteSize = binding.byteSize;
+        }
       }
     }
   }
@@ -772,6 +949,7 @@ rdcarray<SamplerDescriptor> MetalReplay::GetSamplerDescriptors(ResourceId descri
 rdcarray<DescriptorAccess> MetalReplay::GetDescriptorAccess(uint32_t eventId)
 {
   static const uint32_t SamplerOffset = 0x100;
+  static const uint32_t BufferOffset = 0x200;
   const MetalPipe::State *state = m_MetalPipelineState;
   if(state == NULL)
     return {};
@@ -784,6 +962,39 @@ rdcarray<DescriptorAccess> MetalReplay::GetDescriptorAccess(uint32_t eventId)
   const bool hasReflection = reflectionIt != m_Shaders.end() &&
                              usageIt != m_ShaderBindingUsage.end() &&
                              usageIt->second.available;
+  for(size_t slot = 0; slot < state->fragmentBuffers.size(); slot++)
+  {
+    if(state->fragmentBuffers[slot].resourceId == ResourceId())
+      continue;
+    DescriptorAccess access;
+    access.stage = ShaderStage::Fragment;
+    access.type = DescriptorType::ConstantBuffer;
+    access.index = DescriptorAccess::NoShaderBinding;
+    if(hasReflection)
+    {
+      const rdcarray<ConstantBlock> &blocks = reflectionIt->second.constantBlocks;
+      for(size_t bind = 0; bind < blocks.size(); bind++)
+      {
+        if(blocks[bind].fixedBindNumber == slot)
+        {
+          access.index = (uint16_t)bind;
+          access.staticallyUnused = bind >= usageIt->second.constantBlocks.size() ||
+                                    !usageIt->second.constantBlocks[bind];
+          break;
+        }
+      }
+      if(access.index == DescriptorAccess::NoShaderBinding)
+        access.staticallyUnused = true;
+    }
+    else
+    {
+      access.index = (uint16_t)slot;
+    }
+    access.descriptorStore = store;
+    access.byteOffset = BufferOffset + (uint32_t)slot;
+    access.byteSize = 1;
+    ret.push_back(access);
+  }
   for(size_t slot = 0; slot < state->fragmentTextures.size(); slot++)
   {
     if(state->fragmentTextures[slot] == ResourceId())
@@ -1148,10 +1359,18 @@ bool MetalReplay::ReadTextureSubresource(MTL::Texture *texture, const Subresourc
     return false;
   }
 
-  if(texture->textureType() != MTL::TextureType2D || texture->sampleCount() != 1 ||
-     sub.sample != 0 || sub.slice != 0)
+  const MTL::TextureType textureType = texture->textureType();
+  const bool supportedType = textureType == MTL::TextureType2D ||
+                             textureType == MTL::TextureType2DArray ||
+                             textureType == MTL::TextureTypeCube ||
+                             textureType == MTL::TextureTypeCubeArray;
+  const uint32_t sliceCount =
+      (uint32_t)texture->arrayLength() *
+      ((textureType == MTL::TextureTypeCube || textureType == MTL::TextureTypeCubeArray) ? 6U : 1U);
+  if(!supportedType || texture->sampleCount() != 1 || sub.sample != 0 || sub.slice >= sliceCount)
   {
-    RDCERR("Metal texture readback currently supports only sample 0 of single-sample 2D textures");
+    RDCERR("Metal texture readback does not support type %s, sample %u, or slice %u/%u",
+           ToStr(textureType).c_str(), sub.sample, sub.slice, sliceCount);
     return false;
   }
 
@@ -1204,7 +1423,7 @@ bool MetalReplay::ReadTextureSubresource(MTL::Texture *texture, const Subresourc
     return false;
   }
 
-  blit->copyFromTexture(texture, 0, sub.mip, MTL::Origin::Make(0, 0, 0),
+  blit->copyFromTexture(texture, sub.slice, sub.mip, MTL::Origin::Make(0, 0, 0),
                         MTL::Size::Make((NS::UInteger)width, (NS::UInteger)height, 1), readback, 0,
                         (NS::UInteger)rowPitch, (NS::UInteger)bufferSize);
   blit->endEncoding();
@@ -1321,7 +1540,8 @@ struct DisplayParams
   uint rawOutput;
   float rangeMin;
   float inverseRange;
-  float padding;
+  uint slice;
+  uint textureType;
 };
 
 struct VSOut
@@ -1346,12 +1566,31 @@ vertex VSOut rdoc_display_vs(uint vertexID [[vertex_id]], constant DisplayParams
   return output;
 }
 
-fragment float4 rdoc_display_fs(VSOut input [[stage_in]], texture2d<float> source [[texture(0)]],
+fragment float4 rdoc_display_fs(VSOut input [[stage_in]], texture2d<float> source2d [[texture(0)]],
+                                texture2d_array<float> sourceArray [[texture(1)]],
+                                texturecube<float> sourceCube [[texture(2)]],
                                 constant DisplayParams &params [[buffer(0)]])
 {
   constexpr sampler nearestSampler(coord::normalized, address::clamp_to_edge, filter::nearest,
                                    mip_filter::nearest);
-  float4 value = source.sample(nearestSampler, input.uv, level(params.mip));
+  float4 value;
+  if(params.textureType == 1)
+  {
+    value = sourceArray.sample(nearestSampler, input.uv, params.slice, level(params.mip));
+  }
+  else if(params.textureType == 2)
+  {
+    const float3 directions[6] = {
+        float3(1.0, 0.0, 0.0), float3(-1.0, 0.0, 0.0),
+        float3(0.0, 1.0, 0.0), float3(0.0, -1.0, 0.0),
+        float3(0.0, 0.0, 1.0), float3(0.0, 0.0, -1.0),
+    };
+    value = sourceCube.sample(nearestSampler, directions[params.slice % 6], level(params.mip));
+  }
+  else
+  {
+    value = source2d.sample(nearestSampler, input.uv, level(params.mip));
+  }
   if(params.rawOutput == 0)
     value = saturate((value - params.rangeMin) * params.inverseRange);
 
@@ -1508,10 +1747,19 @@ bool MetalReplay::RenderTextureInternal(MTL::Texture *source, MTL::Texture *targ
   if(source == NULL || target == NULL || !InitialiseOutputResources())
     return false;
 
-  if(source->textureType() != MTL::TextureType2D || source->sampleCount() != 1 ||
-     cfg.subresource.slice != 0 || cfg.subresource.mip >= source->mipmapLevelCount())
+  const MTL::TextureType textureType = source->textureType();
+  const bool supportedType = textureType == MTL::TextureType2D ||
+                             textureType == MTL::TextureType2DArray ||
+                             textureType == MTL::TextureTypeCube;
+  const uint32_t sliceCount = textureType == MTL::TextureTypeCube
+                                  ? 6U
+                                  : (uint32_t)source->arrayLength();
+  if(!supportedType || source->sampleCount() != 1 ||
+     cfg.subresource.slice >= sliceCount ||
+     cfg.subresource.mip >= source->mipmapLevelCount())
   {
-    RDCERR("Metal texture display currently supports only single-sample 2D textures");
+    RDCERR("Metal texture display does not support type %s or subresource mip %u slice %u",
+           ToStr(textureType).c_str(), cfg.subresource.mip, cfg.subresource.slice);
     return false;
   }
 
@@ -1527,7 +1775,8 @@ bool MetalReplay::RenderTextureInternal(MTL::Texture *source, MTL::Texture *targ
     uint32_t rawOutput;
     float rangeMin;
     float inverseRange;
-    float padding;
+    uint32_t slice;
+    uint32_t textureType;
   } params = {};
 
   const uint32_t mip = cfg.subresource.mip;
@@ -1553,6 +1802,10 @@ bool MetalReplay::RenderTextureInternal(MTL::Texture *source, MTL::Texture *targ
   params.rawOutput = cfg.rawOutput ? 1U : 0U;
   params.rangeMin = cfg.rangeMin;
   params.inverseRange = cfg.rangeMax > cfg.rangeMin ? 1.0f / (cfg.rangeMax - cfg.rangeMin) : 1.0f;
+  params.slice = cfg.subresource.slice;
+  params.textureType = textureType == MTL::TextureType2DArray ? 1U
+                       : textureType == MTL::TextureTypeCube   ? 2U
+                                                              : 0U;
 
   MTL::CommandBuffer *commandBuffer = m_OutputQueue->commandBuffer();
   MTL::RenderPassDescriptor *pass = MTL::RenderPassDescriptor::renderPassDescriptor();
@@ -1566,7 +1819,7 @@ bool MetalReplay::RenderTextureInternal(MTL::Texture *source, MTL::Texture *targ
   encoder->setRenderPipelineState(m_OutputPipeline);
   encoder->setVertexBytes(&params, sizeof(params), 0);
   encoder->setFragmentBytes(&params, sizeof(params), 0);
-  encoder->setFragmentTexture(source, 0);
+  encoder->setFragmentTexture(source, params.textureType);
   encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(4));
   encoder->endEncoding();
   commandBuffer->commit();

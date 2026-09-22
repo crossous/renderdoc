@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include "PipelineFlowChart.h"
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include "Code/QRDUtils.h"
@@ -30,6 +31,9 @@
 PipelineFlowChart::PipelineFlowChart(QWidget *parent) : QFrame(parent)
 {
   setMouseTracking(true);
+  setFocusPolicy(Qt::StrongFocus);
+  setAccessibleName(tr("Pipeline stages"));
+  setAccessibleDescription(tr("Use Left and Right arrow keys to select a pipeline stage."));
 }
 
 PipelineFlowChart::~PipelineFlowChart()
@@ -350,6 +354,52 @@ void PipelineFlowChart::mousePressEvent(QMouseEvent *e)
       }
     }
   }
+}
+
+void PipelineFlowChart::keyPressEvent(QKeyEvent *e)
+{
+  if(m_StageNames.isEmpty())
+  {
+    QFrame::keyPressEvent(e);
+    return;
+  }
+
+  int next = m_SelectedStage;
+  int step = 0;
+
+  if(e->key() == Qt::Key_Left)
+  {
+    next--;
+    step = -1;
+  }
+  else if(e->key() == Qt::Key_Right)
+  {
+    next++;
+    step = 1;
+  }
+  else if(e->key() == Qt::Key_Home)
+  {
+    next = 0;
+    step = 1;
+  }
+  else if(e->key() == Qt::Key_End)
+  {
+    next = m_StageNames.count() - 1;
+    step = -1;
+  }
+  else
+  {
+    QFrame::keyPressEvent(e);
+    return;
+  }
+
+  while(next >= 0 && next < m_StageNames.count() && !stageEnabled(next))
+    next += step;
+
+  if(stageEnabled(next))
+    setSelectedStage(next);
+
+  e->accept();
 }
 
 void PipelineFlowChart::leaveEvent(QEvent *e)

@@ -233,8 +233,9 @@
 - 原因：T03 的 CPU upload 发生在 frame 前，保留 API 顺序可在最小范围内忠实恢复内容；若直接抽象成
   全量 initial state，会错误暗示 mip/slice/private/压缩路径已经支持。sampler 若只存进 pipeline 快照，
   Resource Inspector、资源身份和后续 argument buffer 扩展都会失去统一基础。
-- 当前边界：只覆盖单层、非压缩 RGBA8 2D 的非 slice `replaceRegion`，紧密源数据按真实
-  `bytesPerRow * height` 保存；slice/bytesPerImage、mip 链、其他格式/storage mode 继续 unsupported。
+- 首版边界：T03 只覆盖单层、非压缩 RGBA8 2D 的非 slice `replaceRegion`，紧密源数据按真实
+  `bytesPerRow * height` 保存。T09 已按 D031 扩展 slice/bytesPerImage 与 mip 链；其他格式和
+  storage mode 仍待后续 fixture。
 - 验证：T03 XML 保存 64-byte upload 与 sampler 参数；GPU replay 四象限像素、原始 texture data、
   `PickPixel()`、通用 fragment texture/sampler 查询和 qrenderdoc Texture/Resource 跳转全部一致。
 
@@ -245,11 +246,13 @@
 - 决策：Metal Pipeline 页面复用 qrenderdoc 的 `PipelineFlowChart` 和隐藏 stage tabs，固定映射为
   IA/VS/RS/FS/OM；数据继续来自通用 `PipeState`/`MetalPipe::State`。`Show Empty Items` 只显示状态
   模型能证明存在且未绑定的槽；`Show Unused Items` 在 shader resource binding reflection 可用前保持
-  禁用并向用户说明原因。
+  禁用并向用户说明原因。共享 `PipelineFlowChart` 接受焦点，并以 Left/Right/Home/End 切换同一组
+  stage，不为 Metal 建立私有导航逻辑。
 - 原因：阶段导航、信息层级和操作路径应与 D3D/Vulkan 一致，但“unused”是 shader 静态引用语义，
   不能从当前仅记录实际绑定的 descriptor access 反推。把按钮禁用比将所有绑定误标为 used 更准确。
 - 验证：T03 IA/FS/OM 和 T02 IA/RS/OM 在最终 qrenderdoc 中逐页核对，empty index/depth 槽、shader
-  直接跳转、texture/sampler/depth/raster 数据均正确，状态栏保持 `No problems detected`。
+  直接跳转、texture/sampler/depth/raster 数据均正确；T07 又实机用 Home/End 从 IA 往返 OM，状态栏
+  保持 `No problems detected`。
 
 ## D024：Metal 资源表复用 RDTree 公共操作，HTML export 按标准阶段输出
 
@@ -281,3 +284,129 @@
   同一资源额外绑定的 slot 1 被标记为 statically unused；自动回归验证 `onlyUsed=true` 只返回 slot 0。
   最终 qrenderdoc 默认仅显示 slot 0，勾选 `Show Unused Items` 后显示真实 slot 1，状态栏为
   `No problems detected`。完整 T00-T03 回归通过，resident growth 为 540,672 字节。
+
+## D026：直接 Metal buffer argument 映射为 constant block，动态 offset 保留事件语义
+
+- 日期：2026-09-22
+- 状态：已采用
+- 决策：当前 source-created MSL 中以 `constant T& [[buffer(n)]]` 声明的直接 buffer argument 映射到
+  `ShaderReflection::constantBlocks` 和 `DescriptorType::ConstantBuffer`，而不是伪装成 texture-style
+  read-only resource。Metal fragment buffer 使用独立 descriptor offset 空间，物理 slot 与 shader
+  reflection index 继续分离。`setFragmentBufferOffset` 作为独立 chunk replay，在保留已绑定 ResourceId
+  的同时更新当前 offset/available size，并由 draw-time snapshot 固化到各 event。
+- 原因：constant block 能被通用 `PipeState::GetConstantBlocks()`、标准 Pipeline UI 和后续常量查看路径
+  正确消费；动态 offset 若只修改真实 encoder 而不更新 snapshot，会让 EID 2/3 显示同一个范围。独立
+  descriptor 空间避免 buffer slot 0 与 texture/sampler slot 0 冲突。
+- 当前边界：只承诺 T04 使用的单个直接 fragment constant buffer 与单-slot offset 更新；storage
+  buffer、批量 binding、argument buffer、vertex-stage texture/sampler 和结构成员反射继续留待 fixture。
+- 验证：T04 XML 保存 512-byte 初始数据、slot 0、offset 0/256 和两条 draw；自动回归断言 buffer 字节、
+  `uniforms`/16-byte reflection、descriptor 和事件图像。最终 qrenderdoc 在 EID 2/3 分别显示
+  `Buffer 16 / 0 / 512` 与 `Buffer 16 / 256 / 256`，Buffer Viewer 精确打开第二个范围；完整 T00-T04
+  回归通过，五份 capture 各 10 次 resident growth 为 376,832 字节。
+
+## D027：实例化输入继续复用通用 VS Input，raw preview 不伪造 shader 输出
+
+- 日期：2026-09-22
+- 状态：已采用
+- 决策：Metal vertex descriptor 的 per-instance layout 直接映射到通用
+  `VertexInputAttribute::perInstance/instanceRate`，action 的 base instance 由标准 Buffer Viewer 数据窗口
+  应用；Pipeline IA 与 Mesh Viewer 不增加 Metal 专用实例解释。VS Input preview 只绘制被选作 position
+  的原始 attribute，不尝试猜测其他 instance attribute 如何参与 vertex shader 变换；变换后的实例
+  geometry 必须来自未来真实 post-VS 数据。
+- 原因：任意 MSL vertex shader 都可能以非平移方式使用 per-instance 数据，UI 无法仅凭 attr 名称或
+  buffer layout 推导输出位置。复用标准路径能正确展示实例记录、base instance 和 raw input，同时避免
+  把 T05 特定的 offset 语义硬编码进 replay backend。
+- 验证：T05 action 保存 `instanceCount=3/baseInstance=1`；自动回归逐字节检查 24/96-byte buffer、
+  per-vertex/per-instance 映射、raw mesh preview 与三色 GPU 输出。qrenderdoc Mesh Viewer instance 0/1
+  分别显示 record 1/2 的 offset/colour，Pipeline IA 和两个标准 Buffer Viewer 使用相同 ResourceId、
+  offset、size 与 stride，状态栏为 `No problems detected`。
+
+## D028：MRT action 与 OM 状态以完整 attachment 数组为准
+
+- 日期：2026-09-22
+- 状态：已采用
+- 决策：Metal render pass 的 clear/draw/end-pass action 从当前 pipeline snapshot 填充全部 color
+  outputs，不再把 slot 0 当作唯一 framebuffer。render pipeline descriptor 中每个有效 color
+  attachment 的 blend enable、RGB/alpha factor、operation 和 write mask 转成通用 `ColorBlend` 数组，
+  由 `PipeState::GetColorBlends()`、标准 OM RDTree 和 HTML export 共同消费。Texture Viewer 继续使用
+  action outputs 自动建立 FB0/FB1 列表，不建立 Metal 专用 MRT 查看器。
+- 原因：多附件是 RenderDoc action、Texture Viewer 和 Pipeline State 共用的数据关系；若各 UI 从
+  Metal 私有 descriptor 单独推导，会造成事件输出、缩略图与 OM 表不一致。通用 `ColorBlend` 也能让
+  字段顺序和命名自然收敛到 GL/Vulkan/D3D 页面。
+- 当前边界：只承诺 T06 覆盖的两个单采样 2D RGBA8/BGRA8 attachment、Add operation、
+  SourceAlpha/OneMinusSourceAlpha 和 disabled blend/RGB mask；logic op、更多 factor/operation、MSAA、
+  memoryless 与 programmable blending 仍需独立 fixture。
+- 验证：T06 action slot 0/1、两行 `ColorBlend`、240-byte vertex 数据和两张 attachment 的 clear/draw/
+  回退像素均由 smoke 自动断言。七份 capture 各 10 次 lifecycle 与三轮 CLI replay 通过；qrenderdoc
+  EID 3 的 Outputs 可切换两张图，OM 表与实际 HTML export 显示相同 blend/write-mask 状态，状态栏为
+  `No problems detected`。
+
+## D029：Depth/stencil action、通用状态与标准 OM 必须共享 draw-time snapshot
+
+- 日期：2026-09-22
+- 状态：已采用
+- 决策：combined depth/stencil attachment 继续使用同一真实 texture ResourceId；render-pass action 的
+  `depthOut`、Metal depth-stencil state、通用 `DepthTestState`/`StencilFace` 与 qrenderdoc OM 表都从
+  draw-time snapshot 读取。front/back compare、三类 stencil operation、read/write masks 与 dynamic
+  reference 保留为独立字段；绑定新的 depth-stencil state 不覆盖 encoder 上已有的 dynamic reference。
+  当前不支持的 depth/stencil texel readback 不从 color 结果反推，也不返回伪数据。
+- 原因：Metal 把 descriptor state 与 encoder dynamic reference 分开，且 combined attachment 同时承担
+  depth/stencil；若在 bind state 时重置 reference，或由 UI 重新解释 descriptor，会让 event seek、GPU
+  结果与 Pipeline State 相互矛盾。复用通用 OM 数据结构也能保持与 D3D/Vulkan 的字段顺序和操作路径
+  收敛。
+- 当前边界：只承诺 T07 的单采样 `Depth32Float_Stencil8`、单 render pass、front/back descriptor、
+  single/dual reference 与直接 draw；depth/stencil texture readback、MSAA、depth bounds 和 memoryless
+  attachment 留待后续 fixture。
+- 验证：T07 structured XML、五个 action/depth output、事件 state 与左绿右蓝 GPU 结果由 smoke 自动
+  断言；八份 capture 各 10 次 lifecycle 与三轮 CLI replay 通过。qrenderdoc EID 6 的 OM 表和 UI
+  导出的 `t07_pipeline_state_standard.html` 均显示 Texture 20、Less/Write Enabled、Front/Back
+  reference 5、`000000FF/00000000` masks、Equal 与 `Inc Sat/Dec Sat`，状态栏无错误。
+
+## D030：MSAA attachment 与 resolve output 必须保持为两个真实资源
+
+- 日期：2026-09-22
+- 状态：已采用
+- 决策：Metal pipeline snapshot 分别保存 multisample color attachment 与 resolve target，并保留各自
+  texture type/sample count。Pipeline OM 使用独立的 Multisample State、Color Targets 和 Resolve
+  Targets 标准资源表；clear/draw action 的可显示 output 在存在显式 resolve 时指向单采样 resolve
+  resource。Texture Viewer、像素拾取和保存继续读取该真实 resolve texture，不把 multisample attachment
+  降格成普通 2D texture，也不声称支持逐 sample readback。
+- 原因：Metal 的 render attachment 是实际写入对象，resolve texture 才是 pass store 后可采样/展示的
+  结果；若用一个 ResourceId 同时代表两者，会丢失 4x/1x 关系，并让 Pipeline State、action output 与
+  Texture Viewer 产生矛盾。分离模型也与 Vulkan/D3D 的 attachment/resolve 语义一致，便于 UI 最终
+  收敛到 RenderDoc 标准布局。
+- 当前边界：只承诺 T08 的单 render pass、4x BGRA8 2D multisample attachment、单采样 2D resolve、
+  `MultisampleResolve` store action 与 alpha-to-coverage。逐 sample 查看、MSAA array、custom sample
+  positions、memoryless 和 depth/stencil resolve 留待后续 fixture。
+- 验证：T08 structured XML、三条 draw/action output、sample/resolve snapshot 与 clear/draw/rewind 像素
+  由 smoke 自动断言；九份 capture 各 10 次 lifecycle resident growth 为 376,832 字节，三轮 CLI
+  replay 均通过。qrenderdoc EID 4 显示 Texture 17 为 4x Texture 2D MS、Texture 24 为 1x Texture 2D，
+  resolve 行可进入正确红绿蓝图像，HTML export 与页面一致，状态栏无错误。
+
+## D031：T09 子资源索引统一采用 mip 与线性 slice
+
+- 日期：2026-09-23
+- 状态：已采用
+- 决策：保留真实 Metal texture type 与 `mipmapLevelCount`；RenderDoc 对外的 array size 对
+  `Texture2DArray` 等于层数，对 cube 等于六面，对 cube array 等于六倍 cube 数。上传 chunk 明确记录
+  mip/slice/bytesPerRow/bytesPerImage；`GetTextureData()`、`PickPixel()`、标准 output renderer 和
+  DDS 保存使用相同的线性 slice 语义，越界及当前不支持的组合明确拒绝。
+- 原因：只保存 mip 而丢失 slice 会让 array/cube 的不同内容被错误合并；把 cube 误报为单层也会使
+  Texture Viewer face 选择、Pipeline 类型和导出结果互相矛盾。
+- 当前边界：T09 验证单采样 RGBA8 的 2D mip、2D array 与 cube；cube array descriptor 可枚举，
+  但 display/readback 与更多格式、3D、texture view 仍按后续 fixture 扩展。
+- 验证：structured XML 覆盖全部 12 个 `replaceRegion`；smoke 检查 12 份原始字节/display、cube
+  face pick、越界拒绝与 512-byte DDS；qrenderdoc EID 2 的 FS/Texture Viewer/保存路径一致。
+
+## D032：macOS 26 的 Qt 5 子资源组合框避开 Cocoa popup
+
+- 日期：2026-09-23
+- 状态：已采用
+- 决策：仅在 macOS 的 Texture Viewer mip 与 slice/face 两个 `QComboBox` 上拦截左键
+  press/double-click/release，按当前模型顺序循环选项；原有方向键、Home/End 和通用 index-change
+  更新保持不变。其他平台的组合框不变；控件 tooltip 说明点击和键盘用法。
+- 原因：本机 Qt 5.15.19/macOS 26.1 的 `QComboBox::showPopup()` 会在 `libqcocoa.dylib` 中访问
+  无效地址 0x28 并使 qrenderdoc 崩溃；仅改为非原生 `QListView` 仍会崩溃。问题在 UI popup 路径，
+  与 Metal replay 数据无关。限制修复范围比改动全局 Qt style 更稳妥。
+- 验证：最新 qrenderdoc 通过连续点击切换 mip0/1/2、array slice0/1/2、cube X+/X-，键盘 End
+  选到 Z-；各颜色正确，标准 DDS 保存和 `No problems detected` 均通过。

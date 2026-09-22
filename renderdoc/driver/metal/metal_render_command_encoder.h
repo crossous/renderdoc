@@ -41,6 +41,8 @@ public:
                               NS::UInteger index);
   DECLARE_FUNCTION_SERIALISED(void, setFragmentBuffer, WrappedMTLBuffer *buffer,
                               NS::UInteger offset, NS::UInteger index);
+  DECLARE_FUNCTION_SERIALISED(void, setFragmentBufferOffset, NS::UInteger offset,
+                              NS::UInteger index);
   DECLARE_FUNCTION_SERIALISED(void, setFragmentTexture, WrappedMTLTexture *texture,
                               NS::UInteger index);
   DECLARE_FUNCTION_SERIALISED(void, setFragmentSamplerState, WrappedMTLSamplerState *sampler,
@@ -51,6 +53,9 @@ public:
   DECLARE_FUNCTION_SERIALISED(void, setCullMode, MTL::CullMode cullMode);
   DECLARE_FUNCTION_SERIALISED(void, setDepthStencilState,
                               WrappedMTLDepthStencilState *depthStencilState);
+  DECLARE_FUNCTION_SERIALISED(void, setStencilReferenceValue, uint32_t referenceValue);
+  DECLARE_FUNCTION_SERIALISED(void, setStencilReferenceValues, uint32_t frontReferenceValue,
+                              uint32_t backReferenceValue);
   DECLARE_FUNCTION_SERIALISED(void, drawPrimitives, MTL::PrimitiveType primitiveType,
                               NS::UInteger vertexStart, NS::UInteger vertexCount,
                               NS::UInteger instanceCount, NS::UInteger baseInstance);

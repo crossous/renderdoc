@@ -62,7 +62,11 @@ public:
   void EndRenderPass();
   void BindRenderPipeline(ResourceId id);
   void BindDepthStencilState(ResourceId id);
+  void SetStencilReferenceValue(uint32_t referenceValue);
+  void SetStencilReferenceValues(uint32_t frontReferenceValue, uint32_t backReferenceValue);
   void BindVertexBuffer(uint32_t index, ResourceId id, uint64_t offset);
+  void BindFragmentBuffer(uint32_t index, ResourceId id, uint64_t offset);
+  void SetFragmentBufferOffset(uint32_t index, uint64_t offset);
   void BindFragmentTexture(uint32_t index, ResourceId id);
   void BindFragmentSampler(uint32_t index, ResourceId id);
   void BindIndexBuffer(ResourceId id, uint64_t offset, MTL::IndexType indexType);
@@ -93,6 +97,7 @@ public:
     m_MetalPipelineState = metal;
   }
   void SavePipelineState(uint32_t eventId);
+  void SetActionOutputs(ActionDescription &action) const;
   rdcarray<Descriptor> GetDescriptors(ResourceId descriptorStore,
                                       const rdcarray<DescriptorRange> &ranges);
   rdcarray<SamplerDescriptor> GetSamplerDescriptors(ResourceId descriptorStore,
@@ -274,6 +279,7 @@ private:
   struct ShaderBindingUsage
   {
     bool available = false;
+    rdcarray<bool> constantBlocks;
     rdcarray<bool> samplers;
     rdcarray<bool> readOnlyResources;
     rdcarray<bool> readWriteResources;
@@ -285,6 +291,10 @@ private:
     ResourceId vertexFunction;
     ResourceId fragmentFunction;
     RDMTL::VertexDescriptor vertexDescriptor;
+    uint32_t sampleCount = 1;
+    bool alphaToCoverageEnabled = false;
+    bool alphaToOneEnabled = false;
+    rdcarray<RDMTL::RenderPipelineColorAttachmentDescriptor> colorAttachments;
   };
   std::map<ResourceId, RenderPipelineInfo> m_RenderPipelines;
   std::map<ResourceId, RDMTL::DepthStencilDescriptor> m_DepthStencilStates;

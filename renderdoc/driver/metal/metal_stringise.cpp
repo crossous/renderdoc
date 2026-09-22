@@ -741,6 +741,23 @@ rdcstr DoStringise(const MTL::CompareFunction &el)
 }
 
 template <>
+rdcstr DoStringise(const MTL::StencilOperation &el)
+{
+  BEGIN_ENUM_STRINGISE(MTL::StencilOperation)
+  {
+    MTL_STRINGISE_ENUM(StencilOperationKeep);
+    MTL_STRINGISE_ENUM(StencilOperationZero);
+    MTL_STRINGISE_ENUM(StencilOperationReplace);
+    MTL_STRINGISE_ENUM(StencilOperationIncrementClamp);
+    MTL_STRINGISE_ENUM(StencilOperationDecrementClamp);
+    MTL_STRINGISE_ENUM(StencilOperationInvert);
+    MTL_STRINGISE_ENUM(StencilOperationIncrementWrap);
+    MTL_STRINGISE_ENUM(StencilOperationDecrementWrap);
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const MTL::TessellationFactorFormat &el)
 {
   BEGIN_ENUM_STRINGISE(MTL::TessellationFactorFormat)

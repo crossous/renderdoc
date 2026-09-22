@@ -1,16 +1,15 @@
 # Metal Replay 当前状态
 
-最后更新：2026-09-22（Asia/Shanghai）
+最后更新：2026-09-23（Asia/Shanghai）
 
 ## 当前阶段
 
-- 阶段：T03 纹理采样、资源绑定与 Pipeline UI 收敛已关闭，准备进入下一条 P1 纵向切片
-- 状态：T00-T03 既有纵向切片保持关闭；P4.1-P4.5 自动化与 qrenderdoc 实机验证均已完成
-- 当前任务：P4.4 第三切片已完成；下一任务为 `PHASE5.md` P5.1 的 T04 确定性 native fixture
-- 上一阶段：T03 Native/Capture/RDC inspect/Replay/Texture/Sampler/Binding/Pipeline/lifecycle 闭环
-  已完成
-- 下一验收点：T04 能以固定 buffer 内容、offset 和多 draw 参数完成 Native/Capture/RDC inspect 基线，
-  并为 fragment buffer binding 与 Pipeline 资源布局提供可验证输入
+- 阶段：T09 mip/cube/array 子资源已关闭；下一阶段为 `PHASE11.md` / T10 buffer/texture blit
+- 状态：T00-T09 纵向切片完成；P10.1-P10.4 的 L3 完整回归与 L4 实机验收已通过
+- 当前任务：无；建议新建任务，从 P11.1 的确定性 blit fixture 开始
+- 上一阶段：T09 Native/Capture/RDC inspect/Replay/readback/pick/display/Pipeline/Texture/save/
+  lifecycle 闭环已完成
+- 下一验收点：T10 buffer copy/fill、texture copy 与 mipmap generation 的 native fixture 基线
 
 ## 已完成
 
@@ -168,6 +167,81 @@
   reflection index 0 且为 used，slot 1 为 `NoShaderBinding + staticallyUnused`，`onlyUsed=true` 仅返回
   slot 0。最终 qrenderdoc 默认隐藏 slot 1；启用 `Show Unused Items` 后 texture/sampler 表均显示真实
   slot 1，状态栏为 `No problems detected`。最新完整 lifecycle resident growth 为 540,672 字节。
+- 已新增 `Metal_Dynamic_Uniform`（T04）：单个 512-byte shared buffer 在 offset 0/256 保存两组固定
+  float4 颜色，两条 fullscreen triangle draw 通过左右 viewport 输出红/绿半屏。
+- 已完整 capture/replay `setFragmentBuffer` 与 `setFragmentBufferOffset`；structured XML 保存
+  512-byte 初始内容、slot 0、offset 0/256 和两条 draw，事件回放验证 clear -> 左红 -> 左红右绿 ->
+  左红往返。
+- Metal pipeline state 新增 fragment buffer binding，并通过通用 constant-block descriptor/reflection
+  枚举 `uniforms`、slot 0、16 bytes 和 active 状态；FS 页复用标准 RDTree 与 Buffer Viewer 跳转。
+- 完整 T00-T04 一键回归通过；五份 capture 各 10 次 lifecycle resident growth 为 376,832 字节。
+  最终 qrenderdoc 的 T04 EID 2/3 分别显示左红/右背景和左红/右绿，Constant Buffers 分别显示
+  `Buffer 16 / 0 / 512` 与 `Buffer 16 / 256 / 256`。EID 3 双击进入 Buffer Viewer 的 offset 256、
+  length 256 子范围，状态栏为 `No problems detected`；当前进程保持运行在 EID 3 FS 页。
+- 已新增 `Metal_Instanced_Mesh`（T05）：24-byte Float2 position buffer 与 96-byte
+  Float2 offset/Float4 colour instance buffer 分居 slot 0/1；直接 draw 使用
+  `instanceCount=3/baseInstance=1` 输出红、绿、蓝三个固定实例。
+- T05 structured XML、action 和 draw-time snapshot 均保存两个 vertex slot、stride 8/24、
+  `PerVertex/PerInstance` step、instance count 3 与 base instance 1；自动回归逐字节验证两份 buffer，
+  检查 clear/draw 往返、三处 `PickPixel()` 和最终 PPM `ff2010/10df30/1840ff`。
+- 通用 `GetVertexInputs()` 与标准 Mesh Viewer 会应用 action 的 base instance：instance 0/1 分别显示
+  offset `-0.55/0.00`，instance 1 colour 为 `.0625/.875/.1875/1.0`；VS Input 预览显示原始 attr0
+  三角形，shader 变换后的 geometry 继续明确属于 post-VS unsupported。
+- 完整 T00-T05 一键回归通过；六份 capture 各 10 次 lifecycle resident growth 为 573,440 字节，
+  六份 capture 的 `renderdoccmd replay --loops 3` 与 `git diff --check` 均通过。最终 qrenderdoc 的
+  T05 EID 2 正确显示三色实例，Pipeline IA 显示 Buffer 16/17 的 Vertex/Instance step，两个标准
+  Buffer Viewer 与 Mesh Viewer 实例切换均正确，状态栏为 `No problems detected`；进程保持运行。
+- 已新增 `Metal_MRT_Blend`（T06）：BGRA8 drawable 与 shared RGBA8 第二附件使用两条 draw；slot 0
+  开启 `SourceAlpha/OneMinusSourceAlpha` RGB blending，slot 1 禁用 blending 并使用 RGB write mask。
+- 修复 render pipeline color attachment capture 将 source RGB factor 错取为 source alpha factor 的
+  字段错误；draw/clear/end-pass action 现保存全部 color outputs，Metal snapshot 与通用
+  `GetColorBlends()` 返回每个 attachment 的 blend equation/write mask。
+- Pipeline OM 页新增标准 RDTree Blend State 表，字段顺序对齐现有 GL/Vulkan 页面；Color Targets、
+  Texture Viewer Outputs、资源激活与 HTML export 均复用公共路径，不增加 Metal 专用查看器。
+- 完整 T00-T06 一键回归通过；七份 capture 各 10 次 lifecycle resident growth 为 1,015,808 字节，
+  七份 capture 的 `renderdoccmd replay --loops 3` 与 `git diff --check` 均通过。最终 qrenderdoc 在 T06
+  EID 3 显示 FB0 混合结果、FB1 RGB write-mask 结果以及两行正确 OM blend state；实际导出
+  `captures/metal-smoke/t06_pipeline_state_standard.html`，状态栏为 `No problems detected`；进程保持运行。
+- 已新增 `Metal_Depth_Stencil`（T07）：单一 `Depth32Float_Stencil8` attachment、两个 pipeline、两个
+  depth-stencil state 和五条 draw，分别建立左右 stencil mask、通过 depth/stencil 的绿/蓝结果及一次
+  可观察的 depth fail。
+- 已完整保存/重建 front/back stencil compare、fail/depth-fail/pass operations、read/write masks 与
+  single/dual dynamic reference；render-pass clear action 标记 `ClearDepthStencil`，draw action 保存真实
+  `depthOut`，Metal snapshot/proxy serialization 与通用 `StencilFace` 同步更新。
+- Pipeline OM 新增标准 `Stencil State` RDTree，并与 Depth Target/Depth State、Texture Viewer 和 HTML
+  export 复用公共状态；共享 `PipelineFlowChart` 新增焦点及 Left/Right/Home/End 导航，继续向其他图形
+  API 的标准交互收敛。
+- 完整 T00-T07 一键回归通过；八份 capture 各 10 次 lifecycle resident growth 为 524,288 字节，八份
+  capture 的 `renderdoccmd replay --loops 3` 均通过。最终 qrenderdoc 在 T07 EID 6 显示左绿右蓝输出、
+  Texture 20、Less/Write Enabled 与正确 Front/Back stencil 状态；实际导出
+  `captures/metal-smoke/t07_pipeline_state_standard.html`，状态栏为 `No problems detected`；进程保持运行。
+- 已新增 `Metal_MSAA_Resolve`（T08）：4x BGRA8 multisample color attachment 显式 resolve 到 drawable，
+  三条 draw 形成左红、右蓝与中央绿色叠加三角形；pipeline 同时覆盖 sample count 和
+  alpha-to-coverage。
+- replay texture description 现在区分 `Texture2DMS`；draw-time snapshot 保存 sample count、
+  alpha-to-coverage/one、MSAA color target 与单采样 resolve target，action output 指向可显示的真实
+  resolve 资源，不伪造 MSAA readback。
+- Pipeline OM 新增标准 `Multisample State` 与 `Resolve Targets` RDTree，Color Targets 增加 Samples；
+  Resolve Targets 复用标准 Texture Viewer 跳转，五阶段 HTML export 输出同一状态。
+- 完整 T00-T08 一键回归通过；九份 capture 各 10 次 lifecycle resident growth 为 376,832 字节，九份
+  capture 的 `renderdoccmd replay --loops 3` 均通过。最终 qrenderdoc 在 T08 EID 4 显示
+  `Texture 17 / Texture 2D MS / 4 samples`、`Texture 24 / Texture 2D / 1 sample` 和红绿蓝 resolve
+  图像，中心拾取为 `(0.06275, 0.87451, 0.18824, 1.00)`；实际导出
+  `captures/metal-smoke/t08_pipeline_state_standard.html`，状态栏为 `No problems detected`；进程保持运行。
+- 已新增 `Metal_Texture_Subresources`（T09）：3-mip RGBA8 2D、3-slice 2D array 和六面 cube；
+  12 个固定色子资源通过 12 条屏幕色带采样，native 输出与 capture structured XML 均通过。
+- 新增 slice-aware `replaceRegion` capture/replay chunk，纹理 descriptor 保留 cube/array 语义；
+  `GetTextureData()`、`PickPixel()` 和标准 output renderer 按 mip/slice/face 读取、显示并拒绝越界组合。
+  自动 smoke 逐一检查 12 个原始子资源、六面 cube pick、每个 display、12 条色带和 512-byte cube DDS。
+- T09 EID 2 的 Pipeline FS 显示 Texture 17/18/19（2D/2D Array/Cube）与 Sampler 20；标准 Texture
+  Viewer 实机显示 2D mip0/1/2 红/绿/蓝、array slice0/1/2 黄/品红/青与 cube face X+/X-/Z- 的
+  不同固定色。Qt 5/macOS 26 的 combo popup 会在 Cocoa 插件崩溃，两个子资源选择控件改为点击
+  循环、键盘方向键/Home/End 选择，实机切换与状态栏均通过。
+- 完整 T00-T09 一键回归通过；十份 capture 各 10 次 lifecycle resident growth 为 475,136 字节。
+  最新 qrenderdoc 从 T09 EID 2 的 cube Z- 保存全部 faces 到
+  `captures/metal-smoke/t09_cube_ui.dds`，与自动保存产物均为 512-byte DDS 且 `cmp` 完全一致；状态栏为
+  `No problems detected`。因 macOS `Documents` 目录下的 capture 直接打开偶发阻塞，L4 使用
+  同一最新 `.rdc` 的字节拷贝 `/tmp/t09-ui-capture.rdc`；qrenderdoc 保持运行。
 
 ## 已验证环境
 
@@ -201,36 +275,61 @@ Qt 5 会警告它只测试到 macOS SDK 14，当前 SDK 26 属于 Qt 未验证�
 
 ## 当前阻塞与风险
 
-1. Qt 5.15 对 SDK 26 给出未验证警告，后续 UI 回归需要持续关注。
+1. Qt 5.15 对 SDK 26 给出未验证警告；原生 combo popup 在 Cocoa 插件崩溃。T09 的 mip/slice/face
+   控件已用 macOS 点击循环和键盘选择避开 popup，其他 combo 仍需后续 UI 回归关注。
 2. SDK 26 新增的 Metal 协议方法目前由 Objective-C forwarding 转交真实对象，尚未被 capture。
 3. Metal replay 不是局部补丁：接口注册、事件模型、资源读取、状态快照和输出都需要实现。
-4. Texture Viewer 和 texture readback 当前只支持单采样 2D RGBA8/BGRA8 color texture；
-   array/cube/3D、MSAA、depth/stencil、整数、浮点和压缩格式尚未实现。
+4. Texture Viewer 和 texture readback 当前支持单采样 RGBA8/BGRA8 2D，以及 T09 的 RGBA8
+   mipmapped 2D、2D array 和 cube；T08 可显示单采样 resolve 结果。逐 sample/MSAA attachment、
+   cube array/3D、depth/stencil、整数、浮点和压缩格式 readback 仍明确不支持。
 5. 当前 drawable hook 只验证了本机 `CAMetalDrawable` 具体类；后续需要覆盖多屏/不同 GPU 可能出现
    的其他 drawable class。
-6. 当前 event-range replay 已覆盖 T00/T01 与 T02 的单 command buffer、单 render pass，并包含 T02
-   两次 indexed draw 前进/回退专项断言；多 command buffer、多 pass、嵌套 debug group 和
+6. 当前 event-range replay 已覆盖 T00-T09 的单 command buffer、单 render pass，并包含 T02 indexed、
+   T04 dynamic offset、T05 instanced draw、T06 双附件 blend、T07 depth/stencil 五 draw 与 T08 三次
+   MSAA resolve draw 的前进/回退
+   专项断言；多 command buffer、多 pass、嵌套 debug group 和
    load-action initial contents 仍需按后续样例扩展。
 7. `OnlyDraw` 遵循 RenderDoc 控制器约定，依赖紧邻的 `WithoutDraw` 建好同一 encoder 的前置状态；
    当前不承诺把 `OnlyDraw` 当作独立入口调用。
-8. T00/T01/T02/T03 的 replay wrapper/Metal object 释放已经完成并通过循环测试；后续 wrapper 必须继续
+8. T00-T09 的 replay wrapper/Metal object 释放已经完成并通过循环测试；后续 wrapper 必须继续
    遵守 D017 的 transferred/retained 所有权规则，避免重新引入双重释放或泄漏。
 9. 当前 Metal Pipeline State 承诺 T01 基础字段、T02 的 Float3/Float4 vertex descriptor、UInt16/32
-   index/depth/raster，以及 T03 fragment texture/sampler；其他 vertex format、blend、stencil、完整
-   attachment 参数、fragment buffer 和 vertex texture/sampler bindings 仍归 M4 后续范围。
-10. 当前只支持直接 indexed draw 重载；instanced/base vertex/base instance/indirect indexed draw 在
-    对应 fixture 加入前继续明确 unsupported。
+   index/depth/raster、T03 fragment texture/sampler、T04 fragment constant buffer/dynamic offset，
+   T05 多 vertex buffer/per-instance layout、T06 多 color target/逐 attachment blend state、T07
+   combined depth/stencil/front-back stencil state、T08 multisample/resolve/sample state 与 T09 的
+   fragment 2D/array/cube texture bindings；其他
+   vertex format、更多 blend/depth-stencil 组合、storage buffer 和 vertex texture/sampler bindings
+   仍归后续范围。
+10. 直接非索引 draw 已覆盖 instance count/base instance；当前 indexed draw 仍只支持基础直接重载，
+    indexed instancing、base vertex/base instance 和 indirect draw 在对应 fixture 加入前继续 unsupported。
 11. 当前 Metal mesh renderer 只承诺 VS Input 的 Float2/Float3/Float4 和 Metal 可直接绘制的常见
-    point/line/triangle topology；post-VS、选点、高亮、solid/secondary/bbox 等仍待后续实现。
-12. Metal Pipeline State 已接入标准 IA/VS/RS/FS/OM、empty-slot、RDTree 资源操作/预览、HTML export
-    和有反射证据的 used/unused 过滤；剩余差异是更细的紧凑布局/键盘核对、更多状态字段和
-    fragment buffer/vertex texture/sampler 等绑定类型。
+    point/line/triangle topology；T05 的 per-instance 表格读取已支持，但 raw VS Input preview 不推导
+    shader 中的 instance transform。post-VS、选点、高亮、solid/secondary/bbox 等仍待后续实现。
+12. Metal Pipeline State 已接入标准 IA/VS/RS/FS/OM、empty-slot、RDTree 资源操作/预览、HTML export、
+    有反射证据的 used/unused 过滤、fragment constant buffer、逐附件 blend 与 depth/stencil；共享阶段
+    导航已支持 Left/Right/Home/End。剩余差异是更细的紧凑布局、更多状态字段及 storage buffer/vertex
+    texture/sampler 等绑定类型。
 
 ## 下一步（按顺序）
 
-1. 执行 `PHASE5.md` P5.1，建立 T04 动态 uniform 确定性 fixture，固定 buffer 内容、offset 与多 draw 输出。
-2. 以 T04 扩展 fragment buffer capture/replay/reflection 与 Pipeline 展示，同时继续对照 D3D/Vulkan
-   核对紧凑布局和键盘操作。
+1. 新建 T10 任务，阅读 `PHASE11.md`，从 P11.1 确定性 blit fixture 开始。
+2. 开发中只跑 T10 与受影响的 T03/T09 定向验证；阶段末执行 T00-T10 全量回归与 qrenderdoc。
+
+## 恢复检查点
+
+- 当前阶段：`PHASE10.md` / T09 已完成；下一阶段 `PHASE11.md` / T10 P11.1 待开始。
+- 第一项未完成工作：T10 的 buffer copy/fill、texture copy、mipmap generation 确定性 native fixture。
+- 工作区：包含 T00-T09 累计未提交有效修改；不得清理、覆盖或回退。
+- 最后可信完整验证：2026-09-23 T00-T09 一键回归、十份 capture 各 10 次 lifecycle（475,136
+  字节增长）、最新 qrenderdoc 的 mip/slice/face、Pipeline binding、UI cube DDS 保存和无错误状态栏。
+- 下一条安全操作：新开任务，按 `PHASE11.md` P11.1 和 `HANDOFF.md` L0-L2 节奏实现 T10。
+- 尚未执行：T10 的 L3 完整回归和 L4 qrenderdoc；T09 的 L3/L4 均已完成。
+
+## Agent 工作节奏
+
+2026-09-23 起采用 `PLAN.md` / `HANDOFF.md` 的“省额度稳定模式”：一个 agent 默认连续负责完整 Txx
+阶段，开发期只做定向验证，阶段末执行一次完整回归和一次 qrenderdoc 实机验收。阶段完成后建议新建
+任务；阶段中途只有先写好上述恢复检查点后才建议 compact。agent 不应等待用户反复发送“继续”。
 
 ## 构建与启动
 
@@ -250,6 +349,15 @@ Qt 5 会警告它只测试到 macOS SDK 14，当前 SDK 26 属于 Qt 未验证�
 
 ## 最近验证
 
+2026-09-23 T09 收口：`./util/buildscripts/scripts/test_metal_capture_macos.sh` 最新运行通过，日志
+`/tmp/t09-final-regression-v3.log`；十份 capture 各 10 次 lifecycle resident growth 为 475,136 字节。
+T09 自动断言 12 子资源 readback/display、cube face pick、越界拒绝、12 条色带、fragment bindings 和
+cube DDS；T03 texture 路径与 T00-T08 均通过。`renderdoccmd replay --loops 1` 对 T00-T09 逐一通过，
+`git diff --check` 通过。最终 qrenderdoc 打开同一最新 T09 capture 的 `/tmp` 字节拷贝，EID 2 FS
+绑定为 Texture 17/18/19 + Sampler 20；Texture Viewer 的 mip1/2、array slice1/2、cube X-/Z-
+切换颜色正确，Z- 时“Save selected Texture”写出 512-byte
+`captures/metal-smoke/t09_cube_ui.dds`，状态栏为 `No problems detected`。
+
 ```sh
 cmake --build build-macos-debug --target renderdoc renderdoccmd build-qrenderdoc -j 12
 ./util/buildscripts/scripts/test_metal_capture_macos.sh
@@ -257,10 +365,20 @@ build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t00_cap
 build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t01_capture.rdc
 build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t02_capture.rdc
 build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t03_capture.rdc
+build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t04_capture.rdc
+build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t05_capture.rdc
+build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t06_capture.rdc
+build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t07_capture.rdc
+build-macos-debug/bin/renderdoccmd replay --loops 3 captures/metal-smoke/t08_capture.rdc
 git diff --check
 ```
 
-2026-09-21 均通过。另在 qrenderdoc 中手工验证 T01 Texture Viewer 和窗口最大化 resize，画面正确，
+2026-09-22 T08 收口的最新一轮均通过。T08 自动回归检查 216-byte vertex buffer、4x MSAA descriptor、
+显式 resolve/store action、三条 draw action、sample/resolve pipeline state、clear/draw/回退 resolve 图像，
+最终 PPM 为左红、中绿、右蓝；完整 lifecycle resident growth 为 376,832 字节。qrenderdoc EID 4 的
+OM 页显示 4x MSAA Color Target 与 1x Resolve Target；从 resolve 行进入 Texture Viewer 后中心拾取为
+`(0.06275, 0.87451, 0.18824, 1.00)`，实际 HTML export 已核对，状态栏无错误。
+较早的 T01 qrenderdoc 验证还覆盖 Texture Viewer 和窗口最大化 resize，画面正确，
 状态栏显示 `No problems detected`，未再出现 degraded support 弹窗。事件回放自动化与 qrenderdoc
 手工切换 EID 1 -> 2 -> 1 也通过，画面按 clear -> draw -> clear 正确变化。
 `test_metal_capture_macos.sh` 还自动验证 capture texture 的紧密 BGRA 字节、clear/draw 像素拾取和
@@ -341,7 +459,22 @@ T03 的 `colourTexture`/`colourSampler` 映射到通用 shader reflection。fixt
 未声明的 slot 1；自动测试验证 slot 0 为 used、slot 1 为 `NoShaderBinding + staticallyUnused`，且
 used-only 查询只返回 slot 0。完整 T00-T03 capture/replay 回归通过，四份 capture 各 10 次 lifecycle
 resident growth 为 540,672 字节。最终构建的 qrenderdoc 在 T03 EID 2 FS 页默认只显示 slot 0，勾选
-`Show Unused Items` 后 texture/sampler 表各显示 slot 1，状态栏为 `No problems detected`；进程保持运行。
+`Show Unused Items` 后 texture/sampler 表各显示 slot 1，状态栏为 `No problems detected`。
+
+2026-09-22 的 T04 P5.1-P5.4 中新增动态 uniform fixture，并补齐 `setFragmentBufferOffset` 的
+capture/replay、fragment constant-block state/reflection/descriptor 与 FS Constant Buffers 表。完整
+T00-T04 脚本通过，最终 PPM 左右像素为 `ff2010`/`10df30`，五份 capture 各 10 次 lifecycle resident
+growth 为 376,832 字节。最终构建的 qrenderdoc 实机切换 EID 2/3，图像由左红/右背景变为左红/右绿，
+binding 从 `Buffer 16 / 0 / 512` 变为 `Buffer 16 / 256 / 256`；双击进入标准 Buffer Viewer 的
+offset 256、length 256 子范围，四个 float 原始值正确，状态栏为 `No problems detected`。
+
+2026-09-22 的 T05 P6.1-P6.4 中新增两物理 vertex buffer 的 instanced fixture，并以
+`instanceCount=3/baseInstance=1` 验证直接 draw、action/state、通用 VS input 和事件回放。完整脚本
+通过，最终三处 PPM 像素为 `ff2010/10df30/1840ff`，六份 capture 各 10 次 lifecycle resident growth
+为 573,440 字节。最终 qrenderdoc 的 EID 2 Texture Viewer 显示三色实例；IA 显示
+`Buffer 16 / 24 / stride 8 / Vertex / 1` 与 `Buffer 17 / 96 / stride 24 / Instance / 1`；Mesh Viewer
+instance 0/1 正确显示 baseInstance 后的 offset/colour，两个 Buffer Viewer 展示完整原始数组，状态栏
+保持 `No problems detected`。
 
 ## 工作日志
 
@@ -386,3 +519,10 @@ resident growth 为 540,672 字节。最终构建的 qrenderdoc 在 T03 EID 2 FS
 | 2026-09-22 | P4.4 标准阶段布局 | Metal Pipeline 接入 Controls + PipelineFlowChart + IA/VS/RS/FS/OM，empty-slot 与 shader 直接跳转通过 T02/T03 实机验证；继续资源树/反射收敛 |
 | 2026-09-22 | P4.4 标准资源表/export | Metal 表迁移到 RDTree/RDHeader，接入通用资源操作/预览与五阶段 HTML export；T03 实际导出、完整回归和最终 qrenderdoc 验证通过；继续 shader reflection |
 | 2026-09-22 | P4.4 shader reflection/过滤 | Metal argument reflection、slot 0/1 used-unused 自动断言、完整回归及 qrenderdoc 过滤实机验证通过；T03 阶段关闭，下一项为 T04 动态 uniform |
+| 2026-09-22 | P5.1-P5.4 T04 动态 uniform | 512-byte uniform、fragment buffer offset、constant-block reflection/descriptor、事件回放、完整 T00-T04 回归与 qrenderdoc Buffer Viewer 实机验证通过；下一项为 T05 instancing |
+| 2026-09-22 | P6.1-P6.4 T05 instanced mesh | 两个 vertex buffer、base instance、per-instance VS input、三色输出、完整 T00-T05 回归与 qrenderdoc Pipeline/Mesh/Buffer 实机验证通过；下一项为 T06 MRT + blending |
+| 2026-09-22 | P7.1-P7.4 T06 MRT/blending | 双 color attachment、多输出 action、逐附件 blend/write mask、两张 texture 事件回放、标准 OM/Texture/export、完整 T00-T06 回归与 qrenderdoc 实机验证通过；下一项为 T07 depth/stencil |
+| 2026-09-22 | P8.1-P8.4 T07 depth/stencil | combined attachment、front/back stencil、dynamic reference、五 draw 事件回放、标准 OM/Texture/export、共享阶段键盘导航、完整 T00-T07 回归与 qrenderdoc 实机验证通过；下一项为 T08 MSAA resolve |
+| 2026-09-22 | P9.1-P9.4 T08 MSAA resolve | 4x MSAA attachment、显式 resolve、sample/resolve snapshot、三 draw 事件回放、标准 OM/Texture/export、完整 T00-T08 回归与 qrenderdoc 实机验证通过；下一项为 T09 mip/cube/array |
+| 2026-09-23 | Agent 节奏重编排 | 固化一个 agent 完成一个 Txx 阶段、L0-L4 分层验证、阶段末单次完整回归/qrenderdoc、compact 安全检查点和下一任务提示模板；T09 仍待开始 |
+| 2026-09-23 | P10.1-P10.4 T09 mip/cube/array | 12 子资源 fixture、slice-aware upload/readback/pick/display、通用绑定、标准 Texture Viewer 和 cube DDS 保存；完整 T00-T09 回归、CLI replay、lifecycle 与最终 qrenderdoc 验收通过；下一项 T10 blit |

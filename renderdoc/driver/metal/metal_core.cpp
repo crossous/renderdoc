@@ -212,7 +212,11 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
       MTL::Region region = {};
       return m_DummyReplayTexture->Serialise_replaceRegion(ser, region, 0, NULL, 0);
     }
-    case MetalChunk::MTLTexture_replaceRegion_slice: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLTexture_replaceRegion_slice:
+    {
+      MTL::Region region = {};
+      return m_DummyReplayTexture->Serialise_replaceRegion(ser, region, 0, 0, NULL, 0, 0);
+    }
     case MetalChunk::MTLTexture_newTextureViewWithPixelFormat: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_newTextureViewWithPixelFormat_subset: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLTexture_newTextureViewWithPixelFormat_subset_swizzle:
@@ -283,7 +287,8 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLRenderCommandEncoder_setFragmentBytes: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setFragmentBuffer:
       return m_DummyReplayRenderCommandEncoder->Serialise_setFragmentBuffer(ser, NULL, 0, 0);
-    case MetalChunk::MTLRenderCommandEncoder_setFragmentBufferOffset: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setFragmentBufferOffset:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setFragmentBufferOffset(ser, 0, 0);
     case MetalChunk::MTLRenderCommandEncoder_setFragmentBuffers: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setFragmentTexture:
       return m_DummyReplayRenderCommandEncoder->Serialise_setFragmentTexture(ser, NULL, 0);
@@ -308,9 +313,10 @@ bool WrappedMTLDevice::ProcessChunk(ReadSerialiser &ser, MetalChunk chunk)
     case MetalChunk::MTLRenderCommandEncoder_setBlendColor: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setDepthStencilState:
       return m_DummyReplayRenderCommandEncoder->Serialise_setDepthStencilState(ser, NULL);
-    case MetalChunk::MTLRenderCommandEncoder_setStencilReferenceValue: METAL_CHUNK_NOT_HANDLED();
+    case MetalChunk::MTLRenderCommandEncoder_setStencilReferenceValue:
+      return m_DummyReplayRenderCommandEncoder->Serialise_setStencilReferenceValue(ser, 0);
     case MetalChunk::MTLRenderCommandEncoder_setStencilFrontReferenceValue:
-      METAL_CHUNK_NOT_HANDLED();
+      return m_DummyReplayRenderCommandEncoder->Serialise_setStencilReferenceValues(ser, 0, 0);
     case MetalChunk::MTLRenderCommandEncoder_setVisibilityResultMode: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setColorStoreAction: METAL_CHUNK_NOT_HANDLED();
     case MetalChunk::MTLRenderCommandEncoder_setDepthStoreAction: METAL_CHUNK_NOT_HANDLED();

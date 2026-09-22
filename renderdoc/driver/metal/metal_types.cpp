@@ -109,9 +109,40 @@ void TrackedCAMetalLayer::StopTracking()
 
 namespace RDMTL
 {
+StencilDescriptor::StencilDescriptor(MTL::StencilDescriptor *objc)
+{
+  if(objc == NULL)
+    return;
+
+  enabled = true;
+  stencilCompareFunction = objc->stencilCompareFunction();
+  stencilFailureOperation = objc->stencilFailureOperation();
+  depthFailureOperation = objc->depthFailureOperation();
+  depthStencilPassOperation = objc->depthStencilPassOperation();
+  readMask = (uint32_t)objc->readMask();
+  writeMask = (uint32_t)objc->writeMask();
+}
+
+StencilDescriptor::operator MTL::StencilDescriptor *()
+{
+  if(!enabled)
+    return NULL;
+
+  MTL::StencilDescriptor *objc = MTL::StencilDescriptor::alloc()->init();
+  objc->setStencilCompareFunction(stencilCompareFunction);
+  objc->setStencilFailureOperation(stencilFailureOperation);
+  objc->setDepthFailureOperation(depthFailureOperation);
+  objc->setDepthStencilPassOperation(depthStencilPassOperation);
+  objc->setReadMask(readMask);
+  objc->setWriteMask(writeMask);
+  return objc;
+}
+
 DepthStencilDescriptor::DepthStencilDescriptor(MTL::DepthStencilDescriptor *objc)
     : depthCompareFunction(objc->depthCompareFunction()),
-      depthWriteEnabled(objc->depthWriteEnabled())
+      depthWriteEnabled(objc->depthWriteEnabled()),
+      frontFaceStencil(objc->frontFaceStencil()),
+      backFaceStencil(objc->backFaceStencil())
 {
   if(objc->label())
     label.assign(objc->label()->utf8String());
@@ -124,6 +155,14 @@ DepthStencilDescriptor::operator MTL::DepthStencilDescriptor *()
     objc->setLabel(NS::String::string(label.data(), NS::UTF8StringEncoding));
   objc->setDepthCompareFunction(depthCompareFunction);
   objc->setDepthWriteEnabled(depthWriteEnabled);
+  MTL::StencilDescriptor *front = (MTL::StencilDescriptor *)frontFaceStencil;
+  MTL::StencilDescriptor *back = (MTL::StencilDescriptor *)backFaceStencil;
+  objc->setFrontFaceStencil(front);
+  objc->setBackFaceStencil(back);
+  if(front)
+    front->release();
+  if(back)
+    back->release();
   return objc;
 }
 
@@ -336,7 +375,7 @@ RenderPipelineColorAttachmentDescriptor::RenderPipelineColorAttachmentDescriptor
     MTL::RenderPipelineColorAttachmentDescriptor *objc)
     : pixelFormat(objc->pixelFormat()),
       blendingEnabled(objc->blendingEnabled()),
-      sourceRGBBlendFactor(objc->sourceAlphaBlendFactor()),
+      sourceRGBBlendFactor(objc->sourceRGBBlendFactor()),
       destinationRGBBlendFactor(objc->destinationRGBBlendFactor()),
       rgbBlendOperation(objc->rgbBlendOperation()),
       sourceAlphaBlendFactor(objc->sourceAlphaBlendFactor()),

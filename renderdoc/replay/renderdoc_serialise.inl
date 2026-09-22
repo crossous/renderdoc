@@ -1461,6 +1461,14 @@ void DoSerialise(SerialiserType &ser, MetalPipe::VertexBuffer &el)
 }
 
 template <typename SerialiserType>
+void DoSerialise(SerialiserType &ser, MetalPipe::BufferBinding &el)
+{
+  SERIALISE_MEMBER(resourceId);
+  SERIALISE_MEMBER(byteOffset);
+  SERIALISE_MEMBER(byteSize);
+}
+
+template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, MetalPipe::VertexAttribute &el)
 {
   SERIALISE_MEMBER(attributeIndex);
@@ -1484,6 +1492,9 @@ void DoSerialise(SerialiserType &ser, MetalPipe::DepthStencil &el)
   SERIALISE_MEMBER(resourceId);
   SERIALISE_MEMBER(depthFunction);
   SERIALISE_MEMBER(depthWrites);
+  SERIALISE_MEMBER(stencilEnabled);
+  SERIALISE_MEMBER(frontFace);
+  SERIALISE_MEMBER(backFace);
 }
 
 template <typename SerialiserType>
@@ -1495,10 +1506,16 @@ void DoSerialise(SerialiserType &ser, MetalPipe::State &el)
   SERIALISE_MEMBER(topology);
   SERIALISE_MEMBER(vertexBuffers);
   SERIALISE_MEMBER(vertexAttributes);
+  SERIALISE_MEMBER(fragmentBuffers);
   SERIALISE_MEMBER(indexBuffer);
   SERIALISE_MEMBER(rasterizer);
   SERIALISE_MEMBER(depthStencil);
+  SERIALISE_MEMBER(sampleCount);
+  SERIALISE_MEMBER(alphaToCoverageEnabled);
+  SERIALISE_MEMBER(alphaToOneEnabled);
   SERIALISE_MEMBER(colorTargets);
+  SERIALISE_MEMBER(resolveTargets);
+  SERIALISE_MEMBER(colorBlends);
   SERIALISE_MEMBER(depthTarget);
 }
 
@@ -2495,6 +2512,7 @@ INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::OutputMerger)
 INSTANTIATE_SERIALISE_TYPE(D3D11Pipe::State)
 INSTANTIATE_SERIALISE_TYPE(MetalPipe::Shader)
 INSTANTIATE_SERIALISE_TYPE(MetalPipe::VertexBuffer)
+INSTANTIATE_SERIALISE_TYPE(MetalPipe::BufferBinding)
 INSTANTIATE_SERIALISE_TYPE(MetalPipe::VertexAttribute)
 INSTANTIATE_SERIALISE_TYPE(MetalPipe::Rasterizer)
 INSTANTIATE_SERIALISE_TYPE(MetalPipe::DepthStencil)

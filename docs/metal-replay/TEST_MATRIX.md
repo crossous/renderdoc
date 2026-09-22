@@ -36,12 +36,12 @@
 | T01 | 彩色三角形 | render pass、pipeline、MSL、非索引 draw | P0 | Native/Capture/RDC inspect/CLI Replay/Texture UI/resize/event seek/capture texture readback/像素拾取/DDS 保存/Shader UI/最小 Pipeline State UI/lifecycle/UI 重开验证通过 |
 | T02 | 索引立方体 | vertex/index buffer、depth、Mesh Viewer | P0 | Native/Capture/RDC inspect/CLI Replay/output 像素/index/vertex 数据/lifecycle/Event + Texture + Pipeline + Buffer + Mesh UI 全部通过 |
 | T03 | 纹理四边形 | texture upload、sampler、fragment binding | P0 | Native/Capture/RDC inspect/CLI Replay/output 像素/texture data+pick/generic binding/shader reflection/used-unused 过滤/lifecycle/Pipeline+Texture+Resource UI 验证通过 |
-| T04 | 动态 uniform | buffer offset/更新、多 draw | P1 | 未开始 |
-| T05 | 实例化网格 | instance layout、base instance | P1 | 未开始 |
-| T06 | MRT + blending | 多 attachment、blend state | P1 | 未开始 |
-| T07 | depth/stencil | depth/stencil state 和 attachment | P1 | 未开始 |
-| T08 | MSAA resolve | multisample texture、resolve | P1 | 未开始 |
-| T09 | mip/cube/array | 子资源枚举和查看 | P1 | 未开始 |
+| T04 | 动态 uniform | buffer offset/更新、多 draw | P1 | Native/Capture/RDC inspect/CLI Replay/event seek/buffer data/constant-block reflection+descriptor/Pipeline+Buffer UI/lifecycle 验证通过 |
+| T05 | 实例化网格 | instance layout、base instance | P1 | Native/Capture/RDC inspect/CLI Replay/action+buffer+VS input+mesh+pixel 自动断言/lifecycle/Pipeline+Mesh+Buffer UI 验证通过 |
+| T06 | MRT + blending | 多 attachment、blend state | P1 | Native/Capture/RDC inspect/CLI Replay/双 attachment readback+event seek/action outputs/blend state/lifecycle/Texture+Pipeline OM+export UI 验证通过 |
+| T07 | depth/stencil | depth/stencil state 和 attachment | P1 | Native/Capture/RDC inspect/CLI Replay/五 draw event seek/depth output/front-back stencil state/lifecycle/Texture+Pipeline OM+export UI 验证通过 |
+| T08 | MSAA resolve | multisample texture、resolve | P1 | Native/Capture/RDC inspect/CLI Replay/三 draw resolve event seek/sample+resolve state/lifecycle/Texture+Pipeline OM+export UI 验证通过 |
+| T09 | mip/cube/array | 子资源枚举和查看 | P1 | Native/Capture/RDC inspect/CLI Replay/12 子资源 readback+display/pick/DDS 保存/lifecycle/Pipeline+Texture UI 验证通过 |
 | T10 | buffer/texture blit | copy/fill/mipmap | P1 | 未开始 |
 | T11 | compute texture filter | compute pipeline、dispatch、读写纹理 | P1 | 未开始 |
 | T12 | argument buffer | 资源引用解析 | P2 | 未开始 |
@@ -151,10 +151,57 @@ active；fixture 同时把 Texture 17/Sampler 18 绑定到 shader 未声明的 s
 `onlyUsed=true` 只返回 slot 0。最终 qrenderdoc 在 T03 EID 2 的 FS 页默认仅显示 slot 0；勾选
 `Show Unused Items` 后 texture/sampler 表各增加真实物理 slot 1，状态栏保持 `No problems detected`。
 
-生命周期 smoke 会在同一进程中分别打开/关闭 T00、T01、T02 和 T03 各 10 次，检查 action、swapbuffer、draw、
+T04 使用一个 512-byte uniform buffer，在 offset 0/256 保存两组固定 float4 颜色；两条 draw 通过
+`setFragmentBufferOffset` 与左右 viewport 形成可独立验证的事件。XML 断言初始字节、slot、offset
+和两条 draw；output smoke 断言 buffer 原始数据、`uniforms`/slot 0/16-byte active constant-block
+reflection、通用 descriptor、EID 2/3 的 0/256 offset，以及 clear -> 左红 -> 左红右绿 -> 左红图像
+往返。最终 qrenderdoc 的 FS Constant Buffers 表分别显示 `Buffer 16 / 0 / 512` 与
+`Buffer 16 / 256 / 256`；双击 EID 3 行进入标准 Buffer Viewer 的 offset 256、length 256 子范围。
+
+T05 使用独立的 24-byte position buffer 和 96-byte instance offset/colour buffer，vertex descriptor
+分别设置 stride 8/per-vertex 与 stride 24/per-instance。第 0 个 instance 是不会被绘制的 sentinel，
+`drawPrimitives(..., instanceCount=3, baseInstance=1)` 应只输出红、绿、蓝三个实例。XML 与 replay
+smoke 断言两个 buffer 初始字节、slot/stride/step、`Drawcall|Instanced`、instance count/base instance、
+通用 `attr0/attr1/attr2` 映射、clear/draw 往返和三处精确像素。qrenderdoc EID 2 的 IA 显示
+`Vertex / 1` 与 `Instance / 1`；Mesh Viewer instance 0/1 分别读取 record 1/2，两个 Pipeline buffer
+行都能进入标准自动格式 Buffer Viewer。
+
+T06 使用 BGRA8 drawable 和 shared RGBA8 第二 color attachment。slot 0 开启
+`SourceAlpha/OneMinusSourceAlpha` RGB blending，alpha 使用 `One/Zero`；slot 1 禁用 blending 并只写
+RGB。两条 draw 分别覆盖全屏与中央三角形，240-byte vertex buffer 为 Float2 position、Float4 color0、
+Float4 color1。XML 断言两个 format、blend factors 和 `RGBA/RGB_` write mask；replay smoke 断言 clear/
+draw action 的两个 outputs、通用 blend state、buffer 字节，以及两张 texture 在 clear、draw 1、draw 2、
+回退 draw 1 的精确 RGBA 值。qrenderdoc EID 3 的 Texture Viewer Outputs 可切换 FB0/FB1，OM 页显示
+两张 Color Targets 与两行 Blend State；实际 HTML export 包含相同数据，状态栏无错误。
+
+T07 使用一个 `Depth32Float_Stencil8` combined attachment 和 BGRA8 color target。mask/test 两个
+depth-stencil state 覆盖 Always/Less、depth write、front/back Equal compare、read/write masks 与
+Keep/Replace/IncSat/DecSat operations；fixture 先发出一次双 reference，再以单 reference 建立左右 mask。
+五条 draw 依次形成 stencil mask、左绿、右蓝和一次 depth fail。XML 断言 format、operations/masks、
+single/dual reference 和 draw 数量；replay smoke 断言五个 action 的 depth output、各事件 state 与图像
+往返，最终左右像素为 `10df30/1840ff`。qrenderdoc EID 6 的 Texture Viewer 显示左绿右蓝；标准 OM
+Depth/Stencil 表与实际 HTML export 显示 Texture 20、Less/Write Enabled、Front/Back reference 5、
+`000000FF/00000000` masks、Equal 与 `Inc Sat/Dec Sat`，状态栏无错误。
+
+T08 使用 4x BGRA8 `Texture2DMultisample` color attachment，并通过
+`StoreActionMultisampleResolve` 显式 resolve 到单采样 drawable。三条 draw 形成左红、右蓝与中央绿色
+叠加三角形。XML 断言 texture/pipeline sample count、resolveTexture、storeAction 和 216-byte vertex
+buffer；replay smoke 断言 clear、三条 draw、rewind 的 resolve 像素、`Texture2DMS` color target、
+单采样 resolve target、sample/alpha-to-coverage state 与 action output。qrenderdoc EID 4 的标准 OM
+Multisample/Color/Resolve 分组显示 `4x -> 1x` 关系；从 resolve 行进入 Texture Viewer 后中心拾取为
+`(0.06275, 0.87451, 0.18824, 1.00)`，实际 HTML export 与页面一致，状态栏无错误。
+
+T09 使用 3-mip RGBA8 2D、3-slice 2D array 和六面 cube，每个子资源为不同固定色；12 条屏幕色带
+定位采样结果。XML 断言所有 `replaceRegion` 的 mip/slice、3 个 fragment texture binding 与 sampler；
+replay smoke 逐子资源检查原始字节、cube face pick、越界拒绝、标准输出显示和 cube DDS 导出。
+qrenderdoc EID 2 FS 页显示 Texture 17/18/19（2D/2D Array/Cube）和 Sampler 20；Texture Viewer
+可切换 mip、slice 与 face。macOS 26 上 Qt 5 combo 弹窗崩溃，子资源框以点击循环/方向键方式选择。
+
+生命周期 smoke 会在同一进程中分别打开/关闭 T00-T09 各 10 次，检查 action、swapbuffer、draw、
 texture readback，并首次调用 histogram、pixel history、post-VS、四种 shader debug 和 target/custom
 shader build 的 unsupported 路径。完成 P4.4 第三个 UI 切片后的 2026-09-22 完整回归在两轮 warm-up 后
-resident growth 为 540,672 字节；加入 T02 前的额外 50 轮压力检查增长 1,441,792 字节。qrenderdoc 还实机完成
+resident growth 为 540,672 字节；完成 T09 后最新十份 capture 回归增长为 475,136 字节。加入 T02
+前的额外 50 轮压力检查增长 1,441,792 字节。qrenderdoc 还实机完成
 `T01 -> Close -> T00 -> Close -> T01`，重开后 T01 的 EID 2 图像和 Pipeline State 正确；
 History/Debug 按钮明确显示不支持且保持禁用。
 
@@ -164,4 +211,4 @@ History/Debug 按钮明确显示不支持且保持禁用。
 Native reference -> Capture -> RDC/chunk inspection -> Replay -> UI/data comparison -> Regression
 ```
 
-先对 T00/T01 完成整条链路，再依次推进 texture、indexed mesh、MRT、MSAA、compute 等 feature。
+T00-T09 已完成整条链路；下一项为 T10 buffer/texture blit，之后继续 compute 等 feature。

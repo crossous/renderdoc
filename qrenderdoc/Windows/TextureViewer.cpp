@@ -487,6 +487,14 @@ TextureViewer::TextureViewer(ICaptureContext &ctx, QWidget *parent)
   ui->channels->setFont(Formatter::PreferredFont());
   ui->mipLevel->setFont(Formatter::PreferredFont());
   ui->sliceFace->setFont(Formatter::PreferredFont());
+#ifdef Q_OS_MAC
+  // Qt 5's combo popup crashes in the Cocoa plugin on macOS 26. Keep the standard
+  // combo model and keyboard selection, but cycle on a mouse click without opening it.
+  ui->mipLevel->installEventFilter(this);
+  ui->sliceFace->installEventFilter(this);
+  ui->mipLevel->setToolTip(tr("Click to select the next mip; use arrow keys to select directly."));
+  ui->sliceFace->setToolTip(tr("Click to select the next slice or face; use arrow keys to select directly."));
+#endif
   ui->zoomOption->setFont(Formatter::PreferredFont());
 
   Reset();
@@ -703,6 +711,30 @@ TextureViewer::~TextureViewer()
   m_Ctx.BuiltinWindowClosed(this);
   m_Ctx.RemoveCaptureViewer(this);
   delete ui;
+}
+
+bool TextureViewer::eventFilter(QObject *watched, QEvent *event)
+{
+#ifdef Q_OS_MAC
+  if((watched == ui->mipLevel || watched == ui->sliceFace) &&
+     (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick ||
+      event->type() == QEvent::MouseButtonRelease))
+  {
+    QMouseEvent *mouse = static_cast<QMouseEvent *>(event);
+    if(mouse->button() == Qt::LeftButton)
+    {
+      if(event->type() != QEvent::MouseButtonRelease)
+      {
+        QComboBox *combo = static_cast<QComboBox *>(watched);
+        if(combo->isEnabled() && combo->count() > 1)
+          combo->setCurrentIndex((combo->currentIndex() + 1) % combo->count());
+        combo->setFocus();
+      }
+      return true;
+    }
+  }
+#endif
+  return QFrame::eventFilter(watched, event);
 }
 
 void TextureViewer::enterEvent(QEvent *event)

@@ -356,8 +356,7 @@
 - (void)setFragmentBufferOffset:(NSUInteger)offset
                         atIndex:(NSUInteger)index API_AVAILABLE(macos(10.11), ios(8.3))
 {
-  METAL_NOT_HOOKED();
-  return [self.real setFragmentBufferOffset:offset atIndex:index];
+  GetWrapped(self)->setFragmentBufferOffset(offset, index);
 }
 
 - (void)setFragmentBuffers:(const id<MTLBuffer> __nullable[__nonnull])buffers
@@ -472,17 +471,14 @@
 
 - (void)setStencilReferenceValue:(uint32_t)referenceValue
 {
-  METAL_NOT_HOOKED();
-  return [self.real setStencilReferenceValue:referenceValue];
+  GetWrapped(self)->setStencilReferenceValue(referenceValue);
 }
 
 - (void)setStencilFrontReferenceValue:(uint32_t)frontReferenceValue
                    backReferenceValue:(uint32_t)backReferenceValue
     API_AVAILABLE(macos(10.11), ios(9.0))
 {
-  METAL_NOT_HOOKED();
-  return [self.real setStencilFrontReferenceValue:frontReferenceValue
-                               backReferenceValue:backReferenceValue];
+  GetWrapped(self)->setStencilReferenceValues(frontReferenceValue, backReferenceValue);
 }
 
 - (void)setVisibilityResultMode:(MTLVisibilityResultMode)mode offset:(NSUInteger)offset

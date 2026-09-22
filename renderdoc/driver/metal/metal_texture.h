@@ -34,6 +34,9 @@ public:
 
   DECLARE_FUNCTION_SERIALISED(void, replaceRegion, MTL::Region &region, NS::UInteger level,
                               const void *pixelBytes, NS::UInteger bytesPerRow);
+  DECLARE_FUNCTION_SERIALISED(void, replaceRegion, MTL::Region &region, NS::UInteger level,
+                              NS::UInteger slice, const void *pixelBytes,
+                              NS::UInteger bytesPerRow, NS::UInteger bytesPerImage);
 
   enum
   {

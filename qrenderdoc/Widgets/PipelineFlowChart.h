@@ -55,6 +55,7 @@ private:
   void paintEvent(QPaintEvent *e) override;
   void mouseMoveEvent(QMouseEvent *e) override;
   void mousePressEvent(QMouseEvent *e) override;
+  void keyPressEvent(QKeyEvent *e) override;
   void leaveEvent(QEvent *e) override;
   void focusOutEvent(QFocusEvent *event) override;
 

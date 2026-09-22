@@ -118,6 +118,38 @@ struct VertexBuffer
 };
 
 DOCUMENT(R"(
+MetalBufferBinding()
+MetalBufferBinding(other: MetalBufferBinding)
+
+Describes a Metal shader buffer binding.
+)");
+struct BufferBinding
+{
+  DOCUMENT("");
+  BufferBinding() = default;
+  BufferBinding(const BufferBinding &) = default;
+  BufferBinding &operator=(const BufferBinding &) = default;
+
+  DOCUMENT(R"(The :class:`ResourceId` of the bound buffer.
+
+:type: ResourceId
+)");
+  ResourceId resourceId;
+
+  DOCUMENT(R"(The byte offset from the start of the buffer.
+
+:type: int
+)");
+  uint64_t byteOffset = 0;
+
+  DOCUMENT(R"(The number of bytes available from :data:`byteOffset`.
+
+:type: int
+)");
+  uint64_t byteSize = 0;
+};
+
+DOCUMENT(R"(
 MetalVertexAttribute()
 MetalVertexAttribute(other: MetalVertexAttribute)
 
@@ -194,6 +226,9 @@ struct DepthStencil
   ResourceId resourceId;
   CompareFunction depthFunction = CompareFunction::AlwaysTrue;
   bool depthWrites = false;
+  bool stencilEnabled = false;
+  StencilFace frontFace;
+  StencilFace backFace;
 };
 
 DOCUMENT(R"(
@@ -242,6 +277,12 @@ struct State
 )");
   rdcarray<VertexAttribute> vertexAttributes;
 
+  DOCUMENT(R"(The fragment-stage buffer bindings, indexed by Metal buffer slot.
+
+:type: List[MetalBufferBinding]
+)");
+  rdcarray<BufferBinding> fragmentBuffers;
+
   DOCUMENT(R"(The fragment-stage texture bindings, indexed by Metal texture slot.
 
 :type: List[ResourceId]
@@ -272,11 +313,41 @@ struct State
 )");
   DepthStencil depthStencil;
 
+  DOCUMENT(R"(The raster sample count of the current render pipeline.
+
+:type: int
+)");
+  uint32_t sampleCount = 1;
+
+  DOCUMENT(R"(Whether alpha-to-coverage is enabled in the current render pipeline.
+
+:type: bool
+)");
+  bool alphaToCoverageEnabled = false;
+
+  DOCUMENT(R"(Whether alpha-to-one is enabled in the current render pipeline.
+
+:type: bool
+)");
+  bool alphaToOneEnabled = false;
+
   DOCUMENT(R"(The current color render targets.
 
 :type: List[Descriptor]
 )");
   rdcarray<Descriptor> colorTargets;
+
+  DOCUMENT(R"(The resolve targets paired with the current color render targets.
+
+:type: List[Descriptor]
+)");
+  rdcarray<Descriptor> resolveTargets;
+
+  DOCUMENT(R"(The blend configuration for each color attachment in the render pipeline.
+
+:type: List[ColorBlend]
+)");
+  rdcarray<ColorBlend> colorBlends;
 
   DOCUMENT(R"(The current depth render target.
 
@@ -288,6 +359,7 @@ struct State
 
 DECLARE_REFLECTION_STRUCT(MetalPipe::Shader);
 DECLARE_REFLECTION_STRUCT(MetalPipe::VertexBuffer);
+DECLARE_REFLECTION_STRUCT(MetalPipe::BufferBinding);
 DECLARE_REFLECTION_STRUCT(MetalPipe::VertexAttribute);
 DECLARE_REFLECTION_STRUCT(MetalPipe::Rasterizer);
 DECLARE_REFLECTION_STRUCT(MetalPipe::DepthStencil);

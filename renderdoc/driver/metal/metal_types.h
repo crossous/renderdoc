@@ -149,6 +149,7 @@ MTL_DECLARE_REFLECTION_TYPE(TessellationControlPointIndexType);
 MTL_DECLARE_REFLECTION_TYPE(TessellationFactorStepFunction);
 MTL_DECLARE_REFLECTION_TYPE(Winding);
 MTL_DECLARE_REFLECTION_TYPE(CompareFunction);
+MTL_DECLARE_REFLECTION_TYPE(StencilOperation);
 MTL_DECLARE_REFLECTION_TYPE(PrimitiveType);
 MTL_DECLARE_REFLECTION_TYPE(StoreActionOptions);
 MTL_DECLARE_REFLECTION_TYPE(LoadAction);
@@ -236,8 +237,22 @@ struct TextureDescriptor
                                          MTL::TextureSwizzleBlue, MTL::TextureSwizzleAlpha};
 };
 
-// MTLDepthStencilDescriptor : the T02 slice currently records the depth fields. Stencil face
-// descriptors remain at Metal defaults until a stencil fixture is added.
+// MTLStencilDescriptor
+struct StencilDescriptor
+{
+  StencilDescriptor() = default;
+  StencilDescriptor(MTL::StencilDescriptor *objc);
+  explicit operator MTL::StencilDescriptor *();
+  bool enabled = false;
+  MTL::CompareFunction stencilCompareFunction = MTL::CompareFunctionAlways;
+  MTL::StencilOperation stencilFailureOperation = MTL::StencilOperationKeep;
+  MTL::StencilOperation depthFailureOperation = MTL::StencilOperationKeep;
+  MTL::StencilOperation depthStencilPassOperation = MTL::StencilOperationKeep;
+  uint32_t readMask = 0xffffffffU;
+  uint32_t writeMask = 0xffffffffU;
+};
+
+// MTLDepthStencilDescriptor
 struct DepthStencilDescriptor
 {
   DepthStencilDescriptor() = default;
@@ -246,6 +261,8 @@ struct DepthStencilDescriptor
   rdcstr label;
   MTL::CompareFunction depthCompareFunction = MTL::CompareFunctionAlways;
   bool depthWriteEnabled = false;
+  StencilDescriptor frontFaceStencil;
+  StencilDescriptor backFaceStencil;
 };
 
 // MTLRenderPipelineColorAttachmentDescriptor : based on the interface defined in
@@ -590,6 +607,7 @@ void DoSerialise(SerialiserType &ser, NS::String *&el);
 
 RDMTL_DECLARE_REFLECTION_STRUCT(SamplerDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(TextureDescriptor);
+RDMTL_DECLARE_REFLECTION_STRUCT(StencilDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(DepthStencilDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(RenderPipelineColorAttachmentDescriptor);
 RDMTL_DECLARE_REFLECTION_STRUCT(PipelineBufferDescriptor);

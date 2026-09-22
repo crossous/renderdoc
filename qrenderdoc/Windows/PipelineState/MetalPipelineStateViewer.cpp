@@ -46,11 +46,15 @@ static const int MetalBufferOffsetRole = Qt::UserRole + 2;
 static const int MetalBufferSizeRole = Qt::UserRole + 3;
 static const int MetalBufferSlotRole = Qt::UserRole + 4;
 static const uint32_t MetalSamplerDescriptorOffset = 0x100;
+static const uint32_t MetalBufferDescriptorOffset = 0x200;
 
 static uint32_t MetalDescriptorSlot(const DescriptorAccess &access)
 {
   if(access.type == DescriptorType::Sampler && access.byteOffset >= MetalSamplerDescriptorOffset)
     return access.byteOffset - MetalSamplerDescriptorOffset;
+  if(access.type == DescriptorType::ConstantBuffer &&
+     access.byteOffset >= MetalBufferDescriptorOffset)
+    return access.byteOffset - MetalBufferDescriptorOffset;
   return access.byteOffset;
 }
 
@@ -171,6 +175,9 @@ MetalPipelineStateViewer::MetalPipelineStateViewer(ICaptureContext &ctx, QWidget
   QVBoxLayout *fs = MakeStagePage(tr("Fragment Shader"));
   m_FragmentShader =
       MakeTree(fs, tr("Fragment Shader"), {tr("Function"), tr("Entry Point")});
+  m_FragmentBuffers = MakeTree(fs, tr("Constant Buffers"),
+                               {tr("Slot"), tr("Buffer"), tr("Offset"), tr("Size"),
+                                tr("Bytes Needed")});
   m_FragmentTextures = MakeTree(
       fs, tr("Read-Only Resources"), {tr("Slot"), tr("Texture"), tr("Type"), tr("Format")});
   m_FragmentSamplers = MakeTree(
@@ -178,12 +185,29 @@ MetalPipelineStateViewer::MetalPipelineStateViewer(ICaptureContext &ctx, QWidget
   fs->addStretch();
 
   QVBoxLayout *om = MakeStagePage(tr("Output Merger"));
+  m_MultisampleState =
+      MakeTree(om, tr("Multisample State"),
+               {tr("Samples"), tr("Alpha to Coverage"), tr("Alpha to One")});
   m_ColorTargets = MakeTree(
-      om, tr("Color Targets"), {tr("Slot"), tr("Texture"), tr("Mip"), tr("Slice")});
+      om, tr("Color Targets"),
+      {tr("Slot"), tr("Texture"), tr("Type"), tr("Width"), tr("Height"), tr("Depth"),
+       tr("Array Size"), tr("Samples"), tr("Format"), tr("Mip"), tr("Slice")});
+  m_ResolveTargets = MakeTree(
+      om, tr("Resolve Targets"),
+      {tr("Slot"), tr("Texture"), tr("Type"), tr("Width"), tr("Height"), tr("Samples"),
+       tr("Format"), tr("Mip"), tr("Slice")});
+  m_ColorBlends =
+      MakeTree(om, tr("Blend State"),
+               {tr("Slot"), tr("Enabled"), tr("Col Src"), tr("Col Dst"), tr("Col Op"),
+                tr("Alpha Src"), tr("Alpha Dst"), tr("Alpha Op"), tr("Write Mask")});
   m_DepthTarget =
       MakeTree(om, tr("Depth Target"), {tr("Texture"), tr("Mip"), tr("Slice")});
   m_DepthState =
       MakeTree(om, tr("Depth State"), {tr("State"), tr("Compare"), tr("Write")});
+  m_StencilState = MakeTree(
+      om, tr("Stencil State"),
+      {tr("Face"), tr("Reference"), tr("Compare Mask"), tr("Write Mask"), tr("Function"),
+       tr("Pass Op"), tr("Fail Op"), tr("Depth Fail Op")});
   om->addStretch();
 
   m_Stages->setCurrentIndex(0);
@@ -268,7 +292,8 @@ RDTreeWidget *MetalPipelineStateViewer::MakeTree(QVBoxLayout *parentLayout, cons
                      if(id == ResourceId())
                        return;
 
-                     if(tree == m_VertexBuffers || tree == m_IndexBuffer)
+                     if(tree == m_VertexBuffers || tree == m_IndexBuffer ||
+                        tree == m_FragmentBuffers)
                      {
                        const uint64_t offset = item->data(0, MetalBufferOffsetRole).toULongLong();
                        const uint64_t size = item->data(0, MetalBufferSizeRole).toULongLong();
@@ -280,7 +305,7 @@ RDTreeWidget *MetalPipelineStateViewer::MakeTree(QVBoxLayout *parentLayout, cons
                              static_cast<PipelineStateViewer *>(parentWidget());
                          format = common->GetVBufferFormatString(slot);
                        }
-                       else
+                       else if(tree == m_IndexBuffer)
                        {
                          const uint32_t stride = item->data(0, MetalBufferSlotRole).toUInt();
                          format = stride == 2 ? lit("ushort index;") : lit("uint index;");
@@ -398,13 +423,18 @@ void MetalPipelineStateViewer::ExportHTML()
         break;
       case 3:
         ExportHTMLTree(xml, tr("Fragment Shader"), m_FragmentShader);
+        ExportHTMLTree(xml, tr("Constant Buffers"), m_FragmentBuffers);
         ExportHTMLTree(xml, tr("Read-Only Resources"), m_FragmentTextures);
         ExportHTMLTree(xml, tr("Samplers"), m_FragmentSamplers);
         break;
       case 4:
+        ExportHTMLTree(xml, tr("Multisample State"), m_MultisampleState);
         ExportHTMLTree(xml, tr("Color Targets"), m_ColorTargets);
+        ExportHTMLTree(xml, tr("Resolve Targets"), m_ResolveTargets);
+        ExportHTMLTree(xml, tr("Blend State"), m_ColorBlends);
         ExportHTMLTree(xml, tr("Depth Target"), m_DepthTarget);
         ExportHTMLTree(xml, tr("Depth State"), m_DepthState);
+        ExportHTMLTree(xml, tr("Stencil State"), m_StencilState);
         break;
       default: break;
     }
@@ -458,13 +488,18 @@ void MetalPipelineStateViewer::ClearState()
   m_FrontFace->setText(tr("Clockwise"));
   m_VertexShader->clear();
   m_FragmentShader->clear();
+  m_FragmentBuffers->clear();
   m_FragmentTextures->clear();
   m_FragmentSamplers->clear();
   m_VertexAttributes->clear();
   m_VertexBuffers->clear();
   m_IndexBuffer->clear();
   m_DepthState->clear();
+  m_StencilState->clear();
+  m_MultisampleState->clear();
   m_ColorTargets->clear();
+  m_ResolveTargets->clear();
+  m_ColorBlends->clear();
   m_DepthTarget->clear();
   m_PipeFlow->setStagesEnabled({true, false, true, false, true});
 }
@@ -488,7 +523,8 @@ void MetalPipelineStateViewer::SetState()
 
   const ShaderReflection *fragmentReflection = pipe.GetShaderReflection(ShaderStage::Fragment);
   const bool hasBindingReflection =
-      fragmentReflection != NULL && (!fragmentReflection->samplers.empty() ||
+      fragmentReflection != NULL && (!fragmentReflection->constantBlocks.empty() ||
+                                     !fragmentReflection->samplers.empty() ||
                                      !fragmentReflection->readOnlyResources.empty() ||
                                      !fragmentReflection->readWriteResources.empty());
   m_ShowUnused->setEnabled(hasBindingReflection);
@@ -545,6 +581,42 @@ void MetalPipelineStateViewer::SetState()
   }
   m_PipeFlow->setStagesEnabled(
       {true, vertexShader != ResourceId(), true, fragmentShader != ResourceId(), true});
+
+  for(const UsedDescriptor &binding :
+      pipe.GetConstantBlocks(ShaderStage::Fragment, !m_ShowUnused->isChecked()))
+  {
+    const Descriptor &descriptor = binding.descriptor;
+    if(descriptor.resource == ResourceId())
+      continue;
+
+    uint32_t bytesNeeded = 0;
+    if(fragmentReflection != NULL &&
+       binding.access.index < fragmentReflection->constantBlocks.size())
+      bytesNeeded = fragmentReflection->constantBlocks[binding.access.index].byteSize;
+
+    RDTreeWidgetItem *item = AddResourceRow(
+        m_FragmentBuffers,
+        {Formatter::Format(MetalDescriptorSlot(binding.access)),
+         m_Ctx.GetResourceName(descriptor.resource),
+         Formatter::HumanFormat(descriptor.byteOffset, Formatter::OffsetSize),
+         Formatter::HumanFormat(descriptor.byteSize, Formatter::OffsetSize),
+         Formatter::HumanFormat(bytesNeeded, Formatter::OffsetSize)},
+        descriptor.resource);
+    item->setData(0, MetalBufferOffsetRole, qulonglong(descriptor.byteOffset));
+    item->setData(0, MetalBufferSizeRole, qulonglong(descriptor.byteSize));
+  }
+  if(m_ShowEmpty->isChecked())
+  {
+    const size_t slotCount = qMax<size_t>(1, state->fragmentBuffers.size());
+    for(size_t slot = 0; slot < slotCount; slot++)
+    {
+      if(slot >= state->fragmentBuffers.size() ||
+         state->fragmentBuffers[slot].resourceId == ResourceId())
+        AddEmptyRow(m_FragmentBuffers,
+                    {Formatter::Format((uint32_t)slot), tr("Empty"), QString(), QString(),
+                     QString()});
+    }
+  }
 
   for(const UsedDescriptor &binding :
       pipe.GetReadOnlyResources(ShaderStage::Fragment, !m_ShowUnused->isChecked()))
@@ -672,6 +744,34 @@ void MetalPipelineStateViewer::SetState()
     AddEmptyRow(m_DepthState, {tr("Unbound"), QString(), QString()});
   }
 
+  if(pipe.IsStencilTestEnabled())
+  {
+    const rdcpair<StencilFace, StencilFace> faces = pipe.GetStencilFaces();
+    auto addStencilFace = [this](const QString &name, const StencilFace &face) {
+      AddResourceRow(
+          m_StencilState,
+          {name, Formatter::Format(face.reference, true),
+           Formatter::Format(face.compareMask, true), Formatter::Format(face.writeMask, true),
+           ToQStr(face.function), ToQStr(face.passOperation), ToQStr(face.failOperation),
+           ToQStr(face.depthFailOperation)},
+          ResourceId());
+    };
+    addStencilFace(tr("Front"), faces.first);
+    addStencilFace(tr("Back"), faces.second);
+  }
+  else if(m_ShowEmpty->isChecked())
+  {
+    AddEmptyRow(m_StencilState,
+                {tr("Disabled"), QString(), QString(), QString(), QString(), QString(), QString(),
+                 QString()});
+  }
+
+  AddResourceRow(m_MultisampleState,
+                 {Formatter::Format(state->sampleCount),
+                  state->alphaToCoverageEnabled ? tr("Enabled") : tr("Disabled"),
+                  state->alphaToOneEnabled ? tr("Enabled") : tr("Disabled")},
+                 ResourceId());
+
   rdcarray<Descriptor> colorTargets = pipe.GetOutputTargets();
   for(size_t i = 0; i < colorTargets.size(); i++)
   {
@@ -680,18 +780,80 @@ void MetalPipelineStateViewer::SetState()
     {
       if(m_ShowEmpty->isChecked())
         AddEmptyRow(m_ColorTargets,
-                    {Formatter::Format((uint32_t)i), tr("Empty"), QString(), QString()});
+                    {Formatter::Format((uint32_t)i), tr("Empty"), QString(), QString(),
+                     QString(), QString(), QString(), QString(), QString(), QString(), QString()});
       continue;
     }
 
+    TextureDescription *texture = m_Ctx.GetTexture(target.resource);
     AddResourceRow(m_ColorTargets,
-                    {Formatter::Format((uint32_t)i), m_Ctx.GetResourceName(target.resource),
-                    Formatter::Format((uint32_t)target.firstMip),
+                   {Formatter::Format((uint32_t)i), m_Ctx.GetResourceName(target.resource),
+                    texture ? ToQStr(texture->type) : ToQStr(target.textureType),
+                    texture ? Formatter::Format(texture->width) : QString(),
+                    texture ? Formatter::Format(texture->height) : QString(),
+                    texture ? Formatter::Format(texture->depth) : QString(),
+                    texture ? Formatter::Format(texture->arraysize) : QString(),
+                    texture ? Formatter::Format(texture->msSamp) : QString(),
+                    QString(target.format.Name()), Formatter::Format((uint32_t)target.firstMip),
                     Formatter::Format((uint32_t)target.firstSlice)},
                    target.resource);
   }
   if(m_ShowEmpty->isChecked() && colorTargets.empty())
-    AddEmptyRow(m_ColorTargets, {lit("0"), tr("Empty"), QString(), QString()});
+    AddEmptyRow(m_ColorTargets,
+                {lit("0"), tr("Empty"), QString(), QString(), QString(), QString(), QString(),
+                 QString(), QString(), QString(), QString()});
+
+  for(size_t i = 0; i < state->resolveTargets.size(); i++)
+  {
+    const Descriptor &target = state->resolveTargets[i];
+    if(target.resource == ResourceId())
+    {
+      if(m_ShowEmpty->isChecked())
+        AddEmptyRow(m_ResolveTargets,
+                    {Formatter::Format((uint32_t)i), tr("Empty"), QString(), QString(),
+                     QString(), QString(), QString(), QString(), QString()});
+      continue;
+    }
+
+    TextureDescription *texture = m_Ctx.GetTexture(target.resource);
+    AddResourceRow(m_ResolveTargets,
+                   {Formatter::Format((uint32_t)i), m_Ctx.GetResourceName(target.resource),
+                    texture ? ToQStr(texture->type) : ToQStr(target.textureType),
+                    texture ? Formatter::Format(texture->width) : QString(),
+                    texture ? Formatter::Format(texture->height) : QString(),
+                    texture ? Formatter::Format(texture->msSamp) : QString(),
+                    QString(target.format.Name()), Formatter::Format((uint32_t)target.firstMip),
+                    Formatter::Format((uint32_t)target.firstSlice)},
+                   target.resource);
+  }
+  if(m_ShowEmpty->isChecked() && state->resolveTargets.empty())
+    AddEmptyRow(m_ResolveTargets,
+                {lit("0"), tr("Empty"), QString(), QString(), QString(), QString(), QString(),
+                 QString(), QString()});
+
+  const rdcarray<ColorBlend> colorBlends = pipe.GetColorBlends();
+  for(size_t i = 0; i < colorBlends.size(); i++)
+  {
+    const ColorBlend &blend = colorBlends[i];
+    const QString writeMask =
+        QFormatStr("%1%2%3%4")
+            .arg((blend.writeMask & 0x1) == 0 ? lit("_") : lit("R"))
+            .arg((blend.writeMask & 0x2) == 0 ? lit("_") : lit("G"))
+            .arg((blend.writeMask & 0x4) == 0 ? lit("_") : lit("B"))
+            .arg((blend.writeMask & 0x8) == 0 ? lit("_") : lit("A"));
+
+    AddResourceRow(m_ColorBlends,
+                   {Formatter::Format((uint32_t)i), blend.enabled ? tr("True") : tr("False"),
+                    ToQStr(blend.colorBlend.source), ToQStr(blend.colorBlend.destination),
+                    ToQStr(blend.colorBlend.operation), ToQStr(blend.alphaBlend.source),
+                    ToQStr(blend.alphaBlend.destination), ToQStr(blend.alphaBlend.operation),
+                    writeMask},
+                   ResourceId());
+  }
+  if(m_ShowEmpty->isChecked() && colorBlends.empty())
+    AddEmptyRow(m_ColorBlends,
+                {lit("0"), tr("Empty"), QString(), QString(), QString(), QString(), QString(),
+                 QString(), QString()});
 
   const Descriptor depthTarget = pipe.GetDepthTarget();
   if(depthTarget.resource != ResourceId())

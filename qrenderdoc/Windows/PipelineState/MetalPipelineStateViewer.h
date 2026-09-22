@@ -75,12 +75,17 @@ private:
   QToolButton *m_Export = NULL;
   RDTreeWidget *m_VertexShader = NULL;
   RDTreeWidget *m_FragmentShader = NULL;
+  RDTreeWidget *m_FragmentBuffers = NULL;
   RDTreeWidget *m_FragmentTextures = NULL;
   RDTreeWidget *m_FragmentSamplers = NULL;
   RDTreeWidget *m_VertexAttributes = NULL;
   RDTreeWidget *m_VertexBuffers = NULL;
   RDTreeWidget *m_IndexBuffer = NULL;
   RDTreeWidget *m_DepthState = NULL;
+  RDTreeWidget *m_StencilState = NULL;
+  RDTreeWidget *m_MultisampleState = NULL;
   RDTreeWidget *m_ColorTargets = NULL;
+  RDTreeWidget *m_ResolveTargets = NULL;
+  RDTreeWidget *m_ColorBlends = NULL;
   RDTreeWidget *m_DepthTarget = NULL;
 };

@@ -34,19 +34,29 @@ MetalFX、任意第三方应用注入或完整 capture 产品化为目标。为�
 - [PHASE2.md](PHASE2.md)：已完成的 T00/T01 replay 后端纵向闭环。
 - [PHASE3.md](PHASE3.md)：已完成的 T02 索引立方体、depth 与 Mesh Viewer 纵向闭环。
 - [PHASE4.md](PHASE4.md)：已完成的 T03 纹理采样、资源绑定与 Pipeline UI 收敛计划。
-- [PHASE5.md](PHASE5.md)：下一条 T04 动态 uniform 与 fragment buffer binding 纵向切片。
+- [PHASE5.md](PHASE5.md)：已完成的 T04 动态 uniform 与 fragment buffer binding 纵向切片。
+- [PHASE6.md](PHASE6.md)：已完成的 T05 多 vertex buffer 与实例化网格纵向切片。
+- [PHASE7.md](PHASE7.md)：已完成的 T06 MRT 与 blending 纵向切片。
+- [PHASE8.md](PHASE8.md)：已完成的 T07 depth/stencil 纵向切片。
+- [PHASE9.md](PHASE9.md)：已完成的 T08 MSAA resolve 纵向切片。
+- [PHASE10.md](PHASE10.md)：已完成的 T09 mip/cube/array 子资源纵向切片。
+- [PHASE11.md](PHASE11.md)：下一条 T10 buffer/texture blit 纵向切片。
 - [STATUS.md](STATUS.md)：当前状态、最近验证结果、阻塞项和下一步。
 - [TEST_MATRIX.md](TEST_MATRIX.md)：Metal API/资源/UI 覆盖矩阵与测试样例来源。
-- [HANDOFF.md](HANDOFF.md)：新 agent 的接手规则和文档更新约定。
+- [HANDOFF.md](HANDOFF.md)：新 agent 的接手规则、省额度验证节奏、compact/新任务边界和可复制提示。
 - [DECISIONS.md](DECISIONS.md)：关键架构与范围决策。
 
 ## 当前状态
 
-T00 空帧、T01 彩色三角形、T02 索引立方体与 T03 纹理四边形已经完成各自的 Native/Capture/RDC
-inspect/seekable Replay/UI 纵向闭环。自动回归覆盖 texture readback、像素拾取、DDS 保存、事件往返、
-vertex/index 数据、VS Input mesh preview、texture/sampler shader reflection、Pipeline used/unused 过滤
-和 replay 生命周期；四份 capture 各 10 次同进程打开/关闭以及最新 qrenderdoc 实机核对均已通过。
-当前下一项是 `PHASE5.md` 的 T04 动态 uniform 与 fragment buffer binding。准确进度和已知限制以
+T00 空帧、T01 彩色三角形、T02 索引立方体、T03 纹理四边形、T04 动态 uniform、T05 实例化网格、
+T06 MRT/blending、T07 depth/stencil、T08 MSAA resolve 与 T09 mip/cube/array 已经完成各自的
+Native/Capture/RDC inspect/seekable Replay/UI 纵向闭环。自动回归覆盖 texture readback、像素拾取、
+DDS 保存、事件往返、vertex/index 数据、VS Input mesh preview、texture/sampler/constant-buffer shader
+reflection、动态 buffer offset、Pipeline used/unused 过滤、多 vertex buffer/base instance、多输出 action、
+逐附件 blend state、front/back stencil/dynamic reference、4x MSAA 与显式 resolve，以及 mip/array/cube
+子资源上传、读取和展示；十份 capture 各 10 次
+同进程打开/关闭以及最新 qrenderdoc 实机核对均已通过。
+当前下一项是 `PHASE11.md` 的 T10 buffer/texture blit。准确进度和已知限制以
 `STATUS.md`、`PLAN.md` 为准。
 
 ## 初始基线结论（2026-09-20）
