@@ -38,6 +38,13 @@
 RDOC_CONFIG(bool, NV_BlockNVAPI, false,
             "Completely block nvapi from activating, pretend no NV GPU is present");
 
+RDOC_CONFIG(bool, NV_AllowVendorExtension, true,
+            "Enable the NVAPI vendor extension inside the target process. With this disabled, "
+            "every NVAPI call that RenderDoc does not explicitly know about returns NULL, which "
+            "makes engines that read the NV driver version or enumerate GPUs through NVAPI "
+            "conclude the hardware is unsupported and refuse to start. This is the same effect as the "
+            "host-side AllowUnsupportedVendorExtensions capture option, applied by default.");
+
 namespace
 {
 #include "official/nvapi/nvapi_interface.h"
@@ -143,6 +150,16 @@ public:
   void RegisterHooks()
   {
     RDCLOG("Registering nvidia hooks");
+
+    // custom: the vendor extension is normally only enabled when the host asked for it via the
+    // AllowUnsupportedVendorExtensions capture option. Without it, unknown NVAPI queries return
+    // NULL and a game that checks the NV driver version before starting gives up - enable it by
+    // default so NVAPI behaves as it does natively, unless the user wants NVAPI blocked.
+    if(!NV_BlockNVAPI() && NV_AllowVendorExtension())
+    {
+      RenderDoc::Inst().EnableVendorExtensions(VendorExtensions::NvAPI);
+      RDCLOG("Enabling NvAPI vendor extension in this process");
+    }
 
     LibraryHooks::RegisterLibraryHook(BIT_SPECIFIC_DLL("nvapi.dll", "nvapi64.dll"), NULL);
     nvapi_QueryInterface.Register(BIT_SPECIFIC_DLL("nvapi.dll", "nvapi64.dll"),
