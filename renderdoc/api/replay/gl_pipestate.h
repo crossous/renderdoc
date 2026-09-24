@@ -29,7 +29,11 @@
 
 namespace GLPipe
 {
-DOCUMENT(R"(Describes the configuration for a single vertex attribute.
+DOCUMENT(R"(
+GLVertexAttribute()
+GLVertexAttribute(other: GLVertexAttribute)
+
+Describes the configuration for a single vertex attribute.
 
 .. note:: If old-style vertex attrib pointer setup was used for the vertex attributes then it will
   be decomposed into 1:1 attributes and buffers.
@@ -74,8 +78,8 @@ struct VertexAttribute
 
   DOCUMENT(R"(Only valid for integer formatted attributes, ``True`` if they are cast to float.
 
-This is because they were specified with an integer format but glVertexAttribFormat (not
-glVertexAttribIFormat) so they will be cast.
+This is because they were specified with an integer format but ``glVertexAttribFormat`` (not
+``glVertexAttribIFormat``) so they will be cast.
 
 :type: bool
 )");
@@ -115,7 +119,12 @@ If any value is set to ``-1`` then the attribute is unbound.
   uint32_t byteOffset = 0;
 };
 
-DOCUMENT("Describes a single OpenGL vertex buffer binding.")
+DOCUMENT(R"(
+GLVertexBuffer()
+GLVertexBuffer(other: GLVertexBuffer)
+
+Describes a single OpenGL vertex buffer binding.
+)")
 struct VertexBuffer
 {
   DOCUMENT("");
@@ -168,7 +177,12 @@ If it's ``1`` then one element is read for each instance, and for ``N`` greater 
   uint32_t instanceDivisor = 0;
 };
 
-DOCUMENT("Describes the setup for fixed-function vertex input fetch.");
+DOCUMENT(R"(
+GLVertexInput()
+GLVertexInput(other: GLVertexInput)
+
+Describes the setup for fixed-function vertex input fetch.
+)");
 struct VertexInput
 {
   DOCUMENT("");
@@ -238,7 +252,12 @@ non-indexed draws.
   bool provokingVertexLast = false;
 };
 
-DOCUMENT("Describes an OpenGL shader stage.");
+DOCUMENT(R"(
+GLShader()
+GLShader(other: GLShader)
+
+Describes an OpenGL shader stage.
+)");
 struct Shader
 {
   DOCUMENT("");
@@ -277,7 +296,12 @@ struct Shader
   rdcarray<uint32_t> subroutines;
 };
 
-DOCUMENT("Describes the setup for fixed vertex processing operations.");
+DOCUMENT(R"(
+GLFixedVertexProcessing()
+GLFixedVertexProcessing(other: GLFixedVertexProcessing)
+
+Describes the setup for fixed vertex processing operations.
+)");
 struct FixedVertexProcessing
 {
   DOCUMENT("");
@@ -322,7 +346,12 @@ struct FixedVertexProcessing
   bool clipNegativeOneToOne = false;
 };
 
-DOCUMENT("Describes the a texture completeness issue of a descriptor.");
+DOCUMENT(R"(
+GLTextureCompleteness()
+GLTextureCompleteness(other: GLTextureCompleteness)
+
+Describes the a texture completeness issue of a descriptor.
+)");
 struct TextureCompleteness
 {
   DOCUMENT("");
@@ -364,7 +393,12 @@ in conflict and their types.
   rdcstr typeConflict;
 };
 
-DOCUMENT("Describes the current feedback state.");
+DOCUMENT(R"(
+GLFeedback()
+GLFeedback(other: GLFeedback)
+
+Describes the current feedback state.
+)");
 struct Feedback
 {
   DOCUMENT("");
@@ -404,7 +438,12 @@ struct Feedback
   bool paused = false;
 };
 
-DOCUMENT("Describes the rasterizer state toggles.");
+DOCUMENT(R"(
+GLRasterizerState()
+GLRasterizerState(other: GLRasterizerState)
+
+Describes the rasterizer state toggles.
+)");
 struct RasterizerState
 {
   DOCUMENT("");
@@ -531,7 +570,12 @@ resolve the final output color.
   bool pointOriginUpperLeft = false;
 };
 
-DOCUMENT("Describes the rasterization state of the OpenGL pipeline.");
+DOCUMENT(R"(
+GLRasterizer()
+GLRasterizer(other: GLRasterizer)
+
+Describes the rasterization state of the OpenGL pipeline.
+)");
 struct Rasterizer
 {
   DOCUMENT("");
@@ -558,7 +602,12 @@ struct Rasterizer
   RasterizerState state;
 };
 
-DOCUMENT("Describes the depth state.");
+DOCUMENT(R"(
+GLDepthState()
+GLDepthState(other: GLDepthState)
+
+Describes the depth state.
+)");
 struct DepthState
 {
   DOCUMENT("");
@@ -598,7 +647,12 @@ struct DepthState
   double farBound = 0.0;
 };
 
-DOCUMENT("Describes the stencil state.");
+DOCUMENT(R"(
+GLStencilState()
+GLStencilState(other: GLStencilState)
+
+Describes the stencil state.
+)");
 struct StencilState
 {
   DOCUMENT("");
@@ -625,7 +679,12 @@ struct StencilState
   StencilFace backFace;
 };
 
-DOCUMENT("Describes the contents of a framebuffer object.");
+DOCUMENT(R"(
+GLFBO()
+GLFBO(other: GLFBO)
+
+Describes the contents of a framebuffer object.
+)");
 struct FBO
 {
   DOCUMENT("");
@@ -666,7 +725,12 @@ struct FBO
   int32_t readBuffer = 0;
 };
 
-DOCUMENT("Describes the blend pipeline state.");
+DOCUMENT(R"(
+GLBlendState()
+GLBlendState(other: GLBlendState)
+
+Describes the blend pipeline state.
+)");
 struct BlendState
 {
   DOCUMENT("");
@@ -687,7 +751,12 @@ struct BlendState
   rdcfixedarray<float, 4> blendFactor = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
-DOCUMENT("Describes the current state of the framebuffer stage of the pipeline.");
+DOCUMENT(R"(
+GLFrameBuffer()
+GLFrameBuffer(other: GLFrameBuffer)
+
+Describes the current state of the framebuffer stage of the pipeline.
+)");
 struct FrameBuffer
 {
   DOCUMENT("");
@@ -724,7 +793,12 @@ struct FrameBuffer
   BlendState blendState;
 };
 
-DOCUMENT("Describes the current state of GL hints and smoothing.");
+DOCUMENT(R"(
+GLHints()
+GLHints(other: GLHints)
+
+Describes the current state of GL hints and smoothing.
+)");
 struct Hints
 {
   DOCUMENT("");
@@ -764,7 +838,9 @@ struct Hints
   bool polySmoothingEnabled = false;
 };
 
-DOCUMENT("The full current OpenGL pipeline state.");
+DOCUMENT(R"(
+The full current OpenGL pipeline state.
+)");
 struct State
 {
 #if !defined(RENDERDOC_EXPORTS)

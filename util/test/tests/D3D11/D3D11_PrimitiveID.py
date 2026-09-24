@@ -56,19 +56,19 @@ class D3D11_PrimitiveID(rdtest.TestCase):
         test_marker: rd.ActionDescription = self.find_action("Test")
 
         # Draw 1: No GS, PS without prim
-        action = test_marker.next
+        action = test_marker.nextAction
         success &= self.test_action(action, 100, 80, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
         # Draw 2: No GS, PS with prim
-        action = action.next
+        action = action.nextAction
         success &= self.test_action(action, 300, 80, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
         # Draw 3: GS, PS without prim
-        action = action.next
+        action = action.nextAction
         success &= self.test_action(action, 125, 250, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
         # Draw 4: GS, PS with prim
-        action = action.next
+        action = action.nextAction
         success &= self.test_action(action, 325, 250, 2, [2], [0.5, 1, 0, 1])
         success &= self.test_action(action, 325, 250, 3, [3], [0.75, 1, 0, 1])
         # No expected output here, since it's nondeterministic which primitive gets selected

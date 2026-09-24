@@ -53,6 +53,14 @@ class undersized
 #define SIZE_CHECK(expected)
 #endif
 
+// Serialise the remote reflection pointer as an opaque lookup token. It must not be dereferenced
+// locally and is later replaced with a cached local reflection.
+#define SERIALISE_SHADER_REFLECTION(member)       \
+  uint64_t refl = (uint64_t)(uintptr_t)el.member; \
+  ser.Serialise(STRING_LITERAL(#member), refl);   \
+  if(ser.IsReading())                             \
+    el.member = (ShaderReflection *)(uintptr_t)refl;
+
 template <class SerialiserType>
 void DoSerialise(SerialiserType &ser, PathEntry &el)
 {
@@ -465,8 +473,10 @@ void DoSerialise(SerialiserType &ser, TextureDescription &el)
   SERIALISE_MEMBER(msQual);
   SERIALISE_MEMBER(msSamp);
   SERIALISE_MEMBER(byteSize);
+  SERIALISE_MEMBER(memory);
+  SERIALISE_MEMBER(memoryOffset);
 
-  SIZE_CHECK(72);
+  SIZE_CHECK(88);
 }
 
 template <typename SerialiserType>
@@ -476,8 +486,10 @@ void DoSerialise(SerialiserType &ser, BufferDescription &el)
   SERIALISE_MEMBER(creationFlags);
   SERIALISE_MEMBER(gpuAddress);
   SERIALISE_MEMBER(length);
+  SERIALISE_MEMBER(memory);
+  SERIALISE_MEMBER(memoryOffset);
 
-  SIZE_CHECK(32);
+  SIZE_CHECK(48);
 }
 
 template <typename SerialiserType>
@@ -576,7 +588,7 @@ void DoSerialise(SerialiserType &ser, ActionDescription &el)
   SERIALISE_MEMBER(copyDestinationSubresource);
 
   if(ser.IsReading())
-    el.parent = el.previous = el.next = NULL;
+    el.parent = el.previousAction = el.nextAction = NULL;
 
   SERIALISE_MEMBER(outputs);
   SERIALISE_MEMBER(depthOut);
@@ -1274,8 +1286,9 @@ void DoSerialise(SerialiserType &ser, D3D11Pipe::InputAssembly &el)
 {
   SERIALISE_MEMBER(layouts);
   SERIALISE_MEMBER(resourceId);
-  // don't serialise bytecode, just set it to NULL. See the definition of SERIALISE_MEMBER_DUMMY
-  SERIALISE_MEMBER_OPT_EMPTY(bytecode);
+  // Serialise the bytecode pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(bytecode);
   SERIALISE_MEMBER(vertexBuffers);
   SERIALISE_MEMBER(indexBuffer);
   SERIALISE_MEMBER(topology);
@@ -1287,8 +1300,9 @@ template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, D3D11Pipe::Shader &el)
 {
   SERIALISE_MEMBER(resourceId);
-  // don't serialise reflection, just set it to NULL. See the definition of SERIALISE_MEMBER_DUMMY
-  SERIALISE_MEMBER_OPT_EMPTY(reflection);
+  // Serialise the reflection pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(reflection);
   SERIALISE_MEMBER(stage);
   SERIALISE_MEMBER(classInstances);
 
@@ -1477,8 +1491,9 @@ template <typename SerialiserType>
 void DoSerialise(SerialiserType &ser, D3D12Pipe::Shader &el)
 {
   SERIALISE_MEMBER(resourceId);
-  // don't serialise reflection, just set it to NULL. See the definition of SERIALISE_MEMBER_DUMMY
-  SERIALISE_MEMBER_OPT_EMPTY(reflection);
+  // Serialise the reflection pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(reflection);
   SERIALISE_MEMBER(stage);
 
   SIZE_CHECK(24);
@@ -1733,8 +1748,9 @@ void DoSerialise(SerialiserType &ser, GLPipe::Shader &el)
   SERIALISE_MEMBER(shaderResourceId);
   SERIALISE_MEMBER(programResourceId);
 
-  // don't serialise reflection, just set it to NULL. See the definition of SERIALISE_MEMBER_DUMMY
-  SERIALISE_MEMBER_OPT_EMPTY(reflection);
+  // Serialise the reflection pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(reflection);
 
   SERIALISE_MEMBER(stage);
   SERIALISE_MEMBER(subroutines);
@@ -2051,8 +2067,9 @@ void DoSerialise(SerialiserType &ser, VKPipe::Shader &el)
   SERIALISE_MEMBER(resourceId);
   SERIALISE_MEMBER(entryPoint);
 
-  // don't serialise reflection, just set it to NULL. See the definition of SERIALISE_MEMBER_DUMMY
-  SERIALISE_MEMBER_OPT_EMPTY(reflection);
+  // Serialise the reflection pointer as an opaque remote lookup token. It is resolved to a valid
+  // local reflection after the pipeline state is deserialised.
+  SERIALISE_SHADER_REFLECTION(reflection);
 
   SERIALISE_MEMBER(stage);
   SERIALISE_MEMBER(pushConstantRangeByteOffset);
@@ -2134,6 +2151,9 @@ void DoSerialise(SerialiserType &ser, VKPipe::Rasterizer &el)
   SERIALISE_MEMBER(depthBias);
   SERIALISE_MEMBER(depthBiasClamp);
   SERIALISE_MEMBER(slopeScaledDepthBias);
+  SERIALISE_MEMBER(depthBiasExact);
+  SERIALISE_MEMBER(depthBiasRepresentation);
+
   SERIALISE_MEMBER(lineWidth);
 
   SERIALISE_MEMBER(lineRasterMode);
@@ -2143,7 +2163,7 @@ void DoSerialise(SerialiserType &ser, VKPipe::Rasterizer &el)
   SERIALISE_MEMBER(pipelineShadingRate);
   SERIALISE_MEMBER(shadingRateCombiners);
 
-  SIZE_CHECK(68);
+  SIZE_CHECK(76);
 }
 
 template <typename SerialiserType>
@@ -2329,7 +2349,7 @@ void DoSerialise(SerialiserType &ser, VKPipe::State &el)
 
   SERIALISE_MEMBER(conditionalRendering);
 
-  SIZE_CHECK(1928);
+  SIZE_CHECK(1936);
 }
 
 #pragma endregion Vulkan pipeline state

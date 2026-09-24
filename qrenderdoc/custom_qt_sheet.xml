@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProjectSchemaDefinitions xmlns="http://schemas.microsoft.com/build/2009/properties" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <Rule Name="qt_sheet"
+        DisplayName="Qt Configuration"
+        PageTemplate="generic"
+        Description="Configuring where Qt is obtained from"
+        xmlns="http://schemas.microsoft.com/build/2009/properties">
+    
+    <Rule.Categories>
+      <Category Name="Build" DisplayName="Build" />
+    </Rule.Categories>
+    
+    <Rule.DataSource>
+      <DataSource Persistence="UserFile" HasConfigurationCondition="true" />
+    </Rule.DataSource>
+
+		<StringProperty Name="QtOverridePath" DisplayName="Custom Qt Path" Description="Path to a Qt5 install with 'msvc2019' and 'msvc2019_64' subfolders." Category="Build" IncludeInCommandLine="false">
+			<StringProperty.ValueEditors>
+				<ValueEditor EditorType="DefaultStringPropertyEditor" DisplayName="&lt;Edit...&gt;"/>
+				<ValueEditor EditorType="DefaultFolderPropertyEditor" DisplayName="&lt;Browse...&gt;"/>
+			</StringProperty.ValueEditors>
+		</StringProperty>
+
+		<StringProperty Name="Qt32OverridePath" DisplayName="Individual 32-bit Qt Path" Description="Separate Path to a 32-bit Qt5 'msvc2019' folder." Category="Build" IncludeInCommandLine="false">
+			<StringProperty.ValueEditors>
+				<ValueEditor EditorType="DefaultStringPropertyEditor" DisplayName="&lt;Edit...&gt;"/>
+				<ValueEditor EditorType="DefaultFolderPropertyEditor" DisplayName="&lt;Browse...&gt;"/>
+			</StringProperty.ValueEditors>
+		</StringProperty>
+
+		<StringProperty Name="Qt64OverridePath" DisplayName="Individual 64-bit Qt Path" Description="Separate Path to a 64-bit Qt5 'msvc2019_64' folder." Category="Build" IncludeInCommandLine="false">
+			<StringProperty.ValueEditors>
+				<ValueEditor EditorType="DefaultStringPropertyEditor" DisplayName="&lt;Edit...&gt;"/>
+				<ValueEditor EditorType="DefaultFolderPropertyEditor" DisplayName="&lt;Browse...&gt;"/>
+			</StringProperty.ValueEditors>
+		</StringProperty>
+	</Rule>
+</ProjectSchemaDefinitions>
+

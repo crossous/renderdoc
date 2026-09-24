@@ -15,7 +15,7 @@ class D3D12_Shader_Linkage_Zoo(rdtest.TestCase):
 
         test_marker: rd.ActionDescription = self.find_action("draw")
         while test_marker is not None:
-            action = test_marker.next
+            action = test_marker.nextAction
             event_name = test_marker.customName
             test_marker: rd.ActionDescription = self.find_action("draw", action.eventId)
 

@@ -476,7 +476,7 @@ class Iter_Test(rdtest.TestCase):
                     rdtest.log.error(f"Fatal error detected: {fatal.Message()}")
                     break
 
-            action = action.next
+            action = action.nextAction
 
         self.texout.Shutdown()
 

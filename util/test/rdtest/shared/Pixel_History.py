@@ -69,7 +69,7 @@ class Pixel_History(rdtest.TestCase):
 
     def batch_test(self, base_eid: int):
         test_marker = self.find_action("Simple Test", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         pipe = self.controller.GetPipelineState()
 
@@ -433,7 +433,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing stencil/scissor checks")
         test_marker = self.find_action("Stencil Mask", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         x, y = self.relative_xy(106, 248)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -474,7 +474,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing depth test for per fragment reporting")
         test_marker = self.find_action("Depth Test", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         x, y = self.relative_xy(275, 258)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -581,7 +581,7 @@ class Pixel_History(rdtest.TestCase):
         # For pixel 60, 130 inside the light green triangle which is 300 draws of 1 instance of 1 triangle
         rdtest.log.print("Testing Lots of Drawcalls")
         test_marker = self.find_action("300 Instances", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
         x, y = self.relative_xy(60, 130)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
         modifs = self.controller.PixelHistory(tex, x, y, sub, comp)
@@ -612,7 +612,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing Sample colouring")
         test_marker = self.find_action("Sample Colouring", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
         x, y = self.relative_xy(330, 200)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
         modifs = self.controller.PixelHistory(tex, x, y, sub, comp)
@@ -689,7 +689,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing depth-equal testing")
         test_marker = self.find_action("Depth Equal Pass", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         x, y = self.relative_xy(200, 250)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -703,7 +703,7 @@ class Pixel_History(rdtest.TestCase):
                 'event_name': 'Depth Equal Setup',
                 'passed': True,
                 'shader_out_col': fmt_adjusted(0.1, 0.1, 0.1, alpha_value),
-                'shader_out_depth': 0.1,
+                'shader_out_depth': 0.5,
                 with_depth('post_mod_col'): fmt_clamped(0.1, 0.1, 0.1, alpha_value),
             },
             {
@@ -716,14 +716,14 @@ class Pixel_History(rdtest.TestCase):
                 with_depth('passed'): False,
                 'depth_test_failed': True,
                 'shader_out_col': fmt_adjusted(0, 0, 0, alpha_value),
-                'shader_out_depth': 0.1 + 5.0e-4,
+                'shader_out_depth': 0.5 + 5.0e-4,
                 with_depth('post_mod_col'): fmt_clamped(0.1, 0.1, 0.1, alpha_value),
             },
             {
                 'event_name': 'Depth Equal Pass',
                 'passed': True,
                 'shader_out_col': fmt_adjusted(1, 1, 1, alpha_value),
-                'shader_out_depth': 0.1 + 1e-8,
+                'shader_out_depth': 0.5 + 1e-8,
                 'post_mod_col': fmt_clamped(1, 1, 1, alpha_value),
             },
         ]
@@ -731,7 +731,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing colour masking")
         test_marker = self.find_action("Colour Masked", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         x, y = self.relative_xy(60, 80)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -756,7 +756,7 @@ class Pixel_History(rdtest.TestCase):
 
             # don't have compute writes in secondaries and some tests like D3D MSAA won't have compute writes
             if test_marker is not None and not self.is_secondary and base_eid in self.get_hierarchy(test_marker.eventId):
-                self.controller.SetFrameEvent(test_marker.next.eventId, True)
+                self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
                 x, y = self.relative_xy(225, 85)
                 rdtest.log.print("Testing pixel {}, {}".format(x, y))
                 modifs = self.controller.PixelHistory(tex, x, y, sub, comp)
@@ -783,7 +783,7 @@ class Pixel_History(rdtest.TestCase):
 
             rdtest.log.print("Testing overflowed writes")
             test_marker = self.find_action("Overflowing", base_eid)
-            self.controller.SetFrameEvent(test_marker.next.eventId, True)
+            self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
             x, y = self.relative_xy(105, 50)
             rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -830,7 +830,7 @@ class Pixel_History(rdtest.TestCase):
 
         rdtest.log.print("Testing per-fragment discards")
         test_marker = self.find_action("Per-Fragment discarding", base_eid)
-        self.controller.SetFrameEvent(test_marker.next.eventId, True)
+        self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
         x, y = self.relative_xy(60, 160)
         rdtest.log.print("Testing pixel {}, {}".format(x, y))
@@ -880,7 +880,7 @@ class Pixel_History(rdtest.TestCase):
             x, y = self.relative_xy(120, 110)
             rdtest.log.print("Testing D3D no-output shader {}, {}".format(x, y))
             test_marker = self.find_action("No Output Shader", base_eid)
-            self.controller.SetFrameEvent(test_marker.next.eventId, True)
+            self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
             modifs = self.controller.PixelHistory(tex, x, y, sub, comp)
             events = [

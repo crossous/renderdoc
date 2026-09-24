@@ -1802,6 +1802,17 @@ void WrappedVulkan::Create_InitialState(ResourceId id, WrappedVkRes *res, bool)
       tag = VkInitialContents::ClearDepthStencilImage;
     }
 
+    // if this image is pre-initialized we need to do some special handling, we will rely on memory
+    // initial contents being applied before images and duplicate the image contents on first load,
+    // so that we can re-apply on subsequent replays after an image may have left PREINITIALIZED and been modified
+    if(state->GetImageInfo().initialLayout == VK_IMAGE_LAYOUT_PREINITIALIZED)
+    {
+      tag = VkInitialContents::PreInit;
+    }
+
+    // zero-initialised images here will just go through the discard+clear path - which works out
+    // for their expected contents
+
     GetResourceManager()->SetInitialContents(id, VkInitialContents(type, tag));
   }
   else if(type == eResDeviceMemory)
@@ -1985,6 +1996,118 @@ void WrappedVulkan::Apply_InitialState(WrappedVkRes *res, VkInitialContents &ini
       }
     }
 
+    const VulkanCreationInfo::Image &c = m_CreationInfo.m_Image[id];
+
+    const VkFormat fmt = c.format;
+    const uint32_t planeCount = GetYUVPlaneCount(fmt);
+    uint32_t horizontalPlaneShift = 0;
+    uint32_t verticalPlaneShift = 0;
+
+    const VkImageAspectFlags aspectFlags = FormatImageAspects(fmt);
+
+    if(planeCount > 1)
+    {
+      switch(fmt)
+      {
+        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+          horizontalPlaneShift = verticalPlaneShift = 1;
+          break;
+        case VK_FORMAT_G8B8G8R8_422_UNORM:
+        case VK_FORMAT_B8G8R8G8_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+        case VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16:
+        case VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16:
+        case VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G16B16G16R16_422_UNORM:
+        case VK_FORMAT_B16G16R16G16_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM: horizontalPlaneShift = 1; break;
+        default: break;
+      }
+    }
+
+    // preinitialized images we
+    if(initial.tag == VkInitialContents::PreInit)
+    {
+      // ignore images with no memory bound
+      if(boundMemory == ResourceId())
+        return;
+
+      // pre-initialised images should not be MSAA
+      RDCASSERT(c.samples == VK_SAMPLE_COUNT_1_BIT);
+
+      // create a buffer with memory attached, which we will fill with the initial contents
+      VkBufferCreateInfo bufInfo = {
+          VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, NULL, 0, boundMemorySize,
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT};
+
+      VkDevice d = !IsStructuredExporting(m_State) ? GetDev() : VK_NULL_HANDLE;
+
+      VkResult vkr = vkCreateBuffer(d, &bufInfo, NULL, &initial.buf);
+      CHECK_VKR(this, vkr);
+
+      initial.mem =
+          AllocateMemoryForResource(initial.buf, MemoryScope::InitialContents, MemoryType::GPULocal);
+
+      if(initial.mem.mem == VK_NULL_HANDLE)
+      {
+        RDCERR("Couldn't create memory for preinitialised duplicate");
+        return;
+      }
+
+      vkr = vkBindBufferMemory(d, initial.buf, initial.mem.mem, initial.mem.offs);
+      CHECK_VKR(this, vkr);
+
+      VkCommandBuffer cmd = GetInitStateCmd();
+
+      VkMarkerRegion::Begin(
+          StringFormat::Fmt("First-time preinit contents save for %s", ToStr(orig).c_str()), cmd);
+
+      VkBuffer srcBuf = m_CreationInfo.m_Memory[boundMemory].wholeMemBuf;
+
+      if(srcBuf == VK_NULL_HANDLE)
+      {
+        RDCERR("Whole memory buffer not present for %s", ToStr(orig).c_str());
+      }
+      else
+      {
+        VkBufferCopy bufCopy;
+        bufCopy.srcOffset = boundMemoryOffset;
+        bufCopy.size = boundMemorySize;
+        bufCopy.dstOffset = 0;
+        ObjDisp(cmd)->CmdCopyBuffer(Unwrap(cmd), Unwrap(srcBuf), Unwrap(initial.buf), 1, &bufCopy);
+      }
+
+      VkMarkerRegion::End(cmd);
+
+      if(Vulkan_Debug_SingleSubmitFlushing())
+      {
+        CloseInitStateCmd();
+        SubmitAndFlushImageStateBarriers(m_setupImageBarriers);
+        SubmitCmds();
+        FlushQ();
+        SubmitAndFlushImageStateBarriers(m_cleanupImageBarriers);
+      }
+
+      initial.tag = VkInitialContents::BufferCopy;
+
+      // don't immediately re-apply, it's a no-op and would need extra barriers
+      return;
+    }
+
     // handle any 'created' initial states, without an actual image with contents
     if(initial.tag != VkInitialContents::BufferCopy)
     {
@@ -2072,16 +2195,12 @@ void WrappedVulkan::Apply_InitialState(WrappedVkRes *res, VkInitialContents &ini
       return;
     }
 
-    if(m_CreationInfo.m_Image[id].samples != VK_SAMPLE_COUNT_1_BIT)
+    if(c.samples != VK_SAMPLE_COUNT_1_BIT)
     {
       VkCommandBuffer cmd = GetInitStateCmd();
 
       if(cmd == VK_NULL_HANDLE)
         return;
-
-      VulkanCreationInfo::Image &c = m_CreationInfo.m_Image[id];
-
-      VkFormat fmt = c.format;
 
       ImageBarrierSequence setupBarriers;    // , cleanupBarriers;
       state->DiscardContents();
@@ -2111,47 +2230,6 @@ void WrappedVulkan::Apply_InitialState(WrappedVkRes *res, VkInitialContents &ini
     VkBuffer buf = initial.buf;
 
     VkExtent3D extent = m_CreationInfo.m_Image[id].extent;
-
-    VkFormat fmt = m_CreationInfo.m_Image[id].format;
-    uint32_t planeCount = GetYUVPlaneCount(fmt);
-    uint32_t horizontalPlaneShift = 0;
-    uint32_t verticalPlaneShift = 0;
-
-    VkImageAspectFlags aspectFlags = FormatImageAspects(fmt);
-
-    if(planeCount > 1)
-    {
-      switch(fmt)
-      {
-        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
-        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
-        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
-        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
-          horizontalPlaneShift = verticalPlaneShift = 1;
-          break;
-        case VK_FORMAT_G8B8G8R8_422_UNORM:
-        case VK_FORMAT_B8G8R8G8_422_UNORM:
-        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
-        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
-        case VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16:
-        case VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16:
-        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16:
-        case VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16:
-        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G16B16G16R16_422_UNORM:
-        case VK_FORMAT_B16G16R16G16_422_UNORM:
-        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
-        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM: horizontalPlaneShift = 1; break;
-        default: break;
-      }
-    }
 
     VkDeviceSize bufOffset = 0;
 

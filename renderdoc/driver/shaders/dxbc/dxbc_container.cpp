@@ -2897,9 +2897,6 @@ void DXBCContainer::ProcessSourceInfo(const byte *chunkContents, uint32_t chunkS
         size_t cmdlineIdx = flags.flags.size();
         for(size_t i = 0; i < flags.flags.size(); i++)
         {
-          if(flags.flags[i].name == "preferSourceDebug")
-            continue;
-
           if(flags.flags[i].name == "@cmdline")
           {
             cmdlineIdx = i;
@@ -3143,11 +3140,6 @@ ShaderCompileFlags EncodeFlags(const uint32_t flags, const rdcstr &profile)
     cmdline += " /T " + profile;
 
   ret.flags = {{"@cmdline", cmdline.trimmed()}};
-
-  // If D3DCOMPILE_SKIP_OPTIMIZATION is set, then prefer source-level debugging as it should be
-  // accurate enough to work with.
-  if(flags & D3DCOMPILE_SKIP_OPTIMIZATION)
-    ret.flags.push_back({"preferSourceDebug", "1"});
 
   return ret;
 }

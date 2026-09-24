@@ -215,7 +215,8 @@ void GetDefaultFiles(const rdcstr &logBaseName, rdcstr &capture_filename, rdcstr
   target = rdcstr(mod);
 
   time_t t = time(NULL);
-  tm now = *localtime(&t);
+  tm tmv_store;
+  tm now = *localtime_r(&t, &tmv_store);
 
   char temp_folder[2048] = {0};
 
@@ -603,7 +604,8 @@ namespace StringFormat
 {
 rdcstr sntimef(time_t utcTime, const char *format)
 {
-  tm *tmv = localtime(&utcTime);
+  tm tmv_store;
+  tm *tmv = localtime_r(&utcTime, &tmv_store);
 
   // conservatively assume that most formatters will replace like-for-like (e.g. %H with 12) and
   // a few will increase (%Y to 2019) but generally the string will stay the same size.

@@ -13,7 +13,7 @@ class D3D12_Shader_ISA(rdtest.TestCase):
 
         is_amd = 'AMD' in action.customName
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 

@@ -1,4 +1,23 @@
 <RCC>
+    <qresource prefix="/py">
+        <file alias="tutorial/first_steps.py">../../docs/python_api/first_steps.py</file>
+        <file alias="tutorial/ui_extensions.py">../../docs/python_api/ui_extensions.py</file>
+        <file alias="examples/show_buffer.py">../../docs/python_api/examples/show_buffer.py</file>
+        <file alias="examples/show_texture.py">../../docs/python_api/examples/show_texture.py</file>
+        <file alias="examples/iter_actions.py">../../docs/python_api/examples/iter_actions.py</file>
+        <file alias="examples/pipe_state.py">../../docs/python_api/examples/pipe_state.py</file>
+        <file alias="examples/shader_refl.py">../../docs/python_api/examples/shader_refl.py</file>
+        <file alias="examples/resource_usage.py">../../docs/python_api/examples/resource_usage.py</file>
+        <file alias="examples/mem_binds.py">../../docs/python_api/examples/mem_binds.py</file>
+        <file alias="examples/history_debug.py">../../docs/python_api/examples/history_debug.py</file>
+        <file alias="examples/mesh_output.py">../../docs/python_api/examples/mesh_output.py</file>
+        <file alias="examples/advanced_buffers.py">../../docs/python_api/examples/advanced_buffers.py</file>
+        <file alias="examples/miniqt_ui.py">../../docs/python_api/examples/miniqt_ui.py</file>
+        <file alias="examples/exe_launching.py">../../docs/python_api/examples/exe_launching.py</file>
+        <file alias="examples/event_filter.py">../../docs/python_api/examples/event_filter.py</file>
+        <file alias="stubgen.py">../../docs/stubgen.py</file>
+        <file alias="parse_reflection.py">../Code/pyrenderdoc/parse_reflection.py</file>
+    </qresource>
     <qresource prefix="/">
         <file>logo.svg</file>
         <file>topologies/topo_linelist.svg</file>

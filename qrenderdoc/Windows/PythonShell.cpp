@@ -23,1010 +23,1201 @@
  ******************************************************************************/
 
 #include "PythonShell.h"
+#include <QAbstractItemView>
+#include <QCompleter>
+#include <QDesktopServices>
+#include <QDialogButtonBox>
+#include <QFileSystemWatcher>
 #include <QFontDatabase>
 #include <QKeyEvent>
+#include <QListWidget>
 #include <QMenu>
 #include <QScrollBar>
+#include <QStringListModel>
+#include <QTimer>
 #include "Code/QRDUtils.h"
+#include "Code/Resources.h"
 #include "Code/ScintillaSyntax.h"
 #include "Code/pyrenderdoc/PythonContext.h"
+#include "Widgets/Extended/RDLabel.h"
+#include "Widgets/Extended/RDToolTip.h"
+#include "Widgets/FindReplace.h"
 #include "scintilla/include/SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "toolwindowmanager/ToolWindowManagerArea.h"
 #include "ui_PythonShell.h"
 
-// a forwarder that invokes onto the UI thread wherever necessary.
-// Note this does NOT make CaptureContext thread safe. We just invoke for any potentially UI
-// operations. All invokes are blocking, so there can't be any times when the UI thread waits
-// on the python thread.
-template <typename Obj>
-struct ObjectForwarder : Obj
+enum
 {
-  ObjectForwarder(PythonShell *sh, Obj &o) : m_Shell(sh), m_Obj(o) {}
-  PythonShell *m_Shell;
-  Obj &m_Obj;
+  AllOutputFilter,
+  ScriptOutputFilter,
+  FirstExtensionOutputFilter,
+};
 
-  template <typename F, typename... paramTypes>
-  void InvokeVoidFunction(F ptr, paramTypes... params)
+EditorWrapper::EditorWrapper(PythonShell *parent) : QFrame(parent), m_PyShell(parent)
+{
+  m_Scintilla = new ScintillaEdit(this);
+
+  m_Warning = new RDLabel(this);
+
+  m_Warning->setForegroundRole(QPalette::ToolTipText);
+  m_Warning->setBackgroundRole(QPalette::ToolTipBase);
+  m_Warning->setAutoFillBackground(true);
+  m_Warning->setMargin(6);
+  m_Warning->setFrameStyle(QFrame::Box);
+  m_Warning->setAlignment(Qt::AlignLeft);
+  m_Warning->setIndent(1);
+
+  m_Warning->hide();
+
+  setLayout(new QVBoxLayout(this));
+
+  layout()->addWidget(m_Warning);
+  layout()->addWidget(m_Scintilla);
+  layout()->setSpacing(0);
+  layout()->setMargin(0);
+  layout()->setContentsMargins(0, 0, 0, 0);
+
+  setTitle(QString());
+}
+
+EditorWrapper::~EditorWrapper()
+{
+  m_PyShell->removeEditor(this);
+}
+
+void EditorWrapper::setFilename(QString filename)
+{
+  m_Filename = filename;
+  if(!m_Filename.isEmpty())
+    m_Title.clear();
+  updateTitle();
+}
+
+void EditorWrapper::setTitle(QString title)
+{
+  if(!m_Filename.isEmpty())
+    return;
+  if(title.isEmpty())
+    m_Title = tr("Untitled Script");
+  else
+    m_Title = title;
+  updateTitle();
+}
+
+void EditorWrapper::setWarning(QString text)
+{
+  m_Warning->setText(text);
+  m_Warning->setVisible(!text.isEmpty());
+}
+
+void EditorWrapper::markModified(bool modified)
+{
+  m_Modified = modified;
+  updateTitle();
+}
+
+void EditorWrapper::updateTitle()
+{
+  QString title;
+  if(m_Filename.isEmpty())
   {
-    if(!GUIInvoke::onUIThread())
+    if(isModified())
+      setWindowTitle(m_Title + lit(" *"));
+    else
+      setWindowTitle(m_Title);
+  }
+  else
+  {
+    if(isModified())
+      setWindowTitle(QFileInfo(m_Filename).fileName() + lit(" *"));
+    else
+      setWindowTitle(QFileInfo(m_Filename).fileName());
+
+    ToolWindowManager *manager = ToolWindowManager::managerOf(this);
+
+    if(manager)
     {
-      PythonContext *scriptContext = m_Shell->GetScriptContext();
-      if(scriptContext)
-        scriptContext->PausePythonThreading();
-      GUIInvoke::blockcall(m_Shell, [this, ptr, params...]() { (m_Obj.*ptr)(params...); });
-      if(scriptContext)
-        scriptContext->ResumePythonThreading();
-      return;
+      ToolWindowManagerArea *editorTabs = manager->areaOf(this);
+
+      if(editorTabs)
+      {
+        int idx = editorTabs->indexOf(this);
+        if(idx >= 0)
+          editorTabs->setTabToolTip(idx, m_Filename);
+      }
     }
-
-    (m_Obj.*ptr)(params...);
   }
+}
 
-  template <typename R, typename F, typename... paramTypes>
-  R InvokeRetFunction(F ptr, paramTypes... params)
+bool EditorWrapper::checkAllowClose()
+{
+  if(isModified())
   {
-    if(!GUIInvoke::onUIThread())
+    QString filename = m_Filename;
+    bool untitled = false;
+    if(filename.isEmpty())
     {
-      R ret;
-      PythonContext *scriptContext = m_Shell->GetScriptContext();
-      if(scriptContext)
-        scriptContext->PausePythonThreading();
-      GUIInvoke::blockcall(m_Shell,
-                           [this, &ret, ptr, params...]() { ret = (m_Obj.*ptr)(params...); });
-      if(scriptContext)
-        scriptContext->ResumePythonThreading();
-      return ret;
+      untitled = true;
+      filename = m_Title;
     }
+    QMessageBox::StandardButton res = RDDialog::question(this, tr("Python script is modified"),
+                                                         tr("You have unsaved changes to '%1'.\n"
+                                                            "Do you want to save them?")
+                                                             .arg(QFileInfo(filename).fileName()),
+                                                         RDDialog::YesNoCancel);
 
-    return (m_Obj.*ptr)(params...);
-  }
-};
+    if(res == QMessageBox::Cancel)
+      return false;
 
-struct MiniQtInvoker : ObjectForwarder<IMiniQtHelper>
-{
-  MiniQtInvoker(PythonShell *shell, IMiniQtHelper &obj) : ObjectForwarder(shell, obj) {}
-  virtual ~MiniQtInvoker() {}
-  void InvokeOntoUIThread(std::function<void()> callback)
-  {
-    // this function is already thread safe since it's invoking, so just call it directly
-    m_Obj.InvokeOntoUIThread(callback);
-  }
+    if(res == QMessageBox::No)
+      return true;
 
-  ///////////////////////////////////////////////////////////////////////
-  // all functions invoke onto the UI thread since they deal with widgets!
-  ///////////////////////////////////////////////////////////////////////
-
-  QWidget *CreateToplevelWidget(const rdcstr &windowTitle, WidgetCallback closed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateToplevelWidget, windowTitle, closed);
-  }
-  void CloseToplevelWidget(QWidget *widget)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::CloseToplevelWidget, widget);
+    if(untitled)
+      return m_PyShell->saveEditorAs(this);
+    else
+      return m_PyShell->saveEditor(this, filename);
   }
 
-  // widget hierarchy
-
-  void SetWidgetName(QWidget *widget, const rdcstr &name)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetName, widget, name);
-  }
-  rdcstr GetWidgetName(QWidget *widget)
-  {
-    return InvokeRetFunction<rdcstr>(&IMiniQtHelper::GetWidgetName, widget);
-  }
-  rdcstr GetWidgetType(QWidget *widget)
-  {
-    return InvokeRetFunction<rdcstr>(&IMiniQtHelper::GetWidgetType, widget);
-  }
-  QWidget *FindChildByName(QWidget *parent, const rdcstr &name)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::FindChildByName, parent, name);
-  }
-  QWidget *GetParent(QWidget *widget)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::GetParent, widget);
-  }
-  int32_t GetNumChildren(QWidget *widget)
-  {
-    return InvokeRetFunction<int32_t>(&IMiniQtHelper::GetNumChildren, widget);
-  }
-  QWidget *GetChild(QWidget *parent, int32_t index)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::GetChild, parent, index);
-  }
-  void DestroyWidget(QWidget *widget) { InvokeVoidFunction(&IMiniQtHelper::DestroyWidget, widget); }
-  // dialogs
-
-  bool ShowWidgetAsDialog(QWidget *widget)
-  {
-    return InvokeRetFunction<bool>(&IMiniQtHelper::ShowWidgetAsDialog, widget);
-  }
-  void CloseCurrentDialog(bool success)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::CloseCurrentDialog, success);
-  }
-
-  // layout functions
-
-  QWidget *CreateHorizontalContainer()
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateHorizontalContainer);
-  }
-  QWidget *CreateVerticalContainer()
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateVerticalContainer);
-  }
-  QWidget *CreateGridContainer()
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateGridContainer);
-  }
-  QWidget *CreateSpacer(bool horizontal)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateSpacer, horizontal);
-  }
-  void ClearContainedWidgets(QWidget *parent)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::ClearContainedWidgets, parent);
-  }
-  void AddGridWidget(QWidget *parent, int32_t row, int32_t column, QWidget *child, int32_t rowSpan,
-                     int32_t columnSpan)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::AddGridWidget, parent, row, column, child, rowSpan,
-                       columnSpan);
-  }
-  void AddWidget(QWidget *parent, QWidget *child)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::AddWidget, parent, child);
-  }
-  void InsertWidget(QWidget *parent, int32_t index, QWidget *child)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::InsertWidget, parent, index, child);
-  }
-
-  // widget manipulation
-
-  void SetWidgetText(QWidget *widget, const rdcstr &text)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetText, widget, text);
-  }
-  rdcstr GetWidgetText(QWidget *widget)
-  {
-    return InvokeRetFunction<rdcstr>(&IMiniQtHelper::GetWidgetText, widget);
-  }
-
-  void SetWidgetFont(QWidget *widget, const rdcstr &font, int32_t fontSize, bool bold, bool italic)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetFont, widget, font, fontSize, bold, italic);
-  }
-
-  void SetWidgetEnabled(QWidget *widget, bool enabled)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetEnabled, widget, enabled);
-  }
-  bool IsWidgetEnabled(QWidget *widget)
-  {
-    return InvokeRetFunction<bool>(&IMiniQtHelper::IsWidgetEnabled, widget);
-  }
-  void SetWidgetVisible(QWidget *widget, bool visible)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetVisible, widget, visible);
-  }
-  bool IsWidgetVisible(QWidget *widget)
-  {
-    return InvokeRetFunction<bool>(&IMiniQtHelper::IsWidgetVisible, widget);
-  }
-
-  // specific widgets
-
-  QWidget *CreateGroupBox(bool collapsible)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateGroupBox, collapsible);
-  }
-
-  QWidget *CreateButton(WidgetCallback pressed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateButton, pressed);
-  }
-
-  QWidget *CreateLabel() { return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateLabel); }
-  void SetLabelImage(QWidget *widget, const bytebuf &data, int32_t width, int32_t height, bool alpha)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetLabelImage, widget, data, width, height, alpha);
-  }
-  QWidget *CreateOutputRenderingWidget()
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateOutputRenderingWidget);
-  }
-  WindowingData GetWidgetWindowingData(QWidget *widget)
-  {
-    return InvokeRetFunction<WindowingData>(&IMiniQtHelper::GetWidgetWindowingData, widget);
-  }
-
-  void SetWidgetReplayOutput(QWidget *widget, IReplayOutput *output)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetReplayOutput, widget, output);
-  }
-
-  void SetWidgetBackgroundColor(QWidget *widget, float red, float green, float blue)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetBackgroundColor, widget, red, green, blue);
-  }
-  QWidget *CreateCheckbox(WidgetCallback changed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateCheckbox, changed);
-  }
-  QWidget *CreateRadiobox(WidgetCallback changed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateRadiobox, changed);
-  }
-
-  void SetWidgetChecked(QWidget *checkableWidget, bool checked)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetWidgetChecked, checkableWidget, checked);
-  }
-  bool IsWidgetChecked(QWidget *checkableWidget)
-  {
-    return InvokeRetFunction<bool>(&IMiniQtHelper::IsWidgetChecked, checkableWidget);
-  }
-
-  QWidget *CreateSpinbox(int32_t decimalPlaces, double step)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateSpinbox, decimalPlaces, step);
-  }
-
-  void SetSpinboxBounds(QWidget *spinbox, double minVal, double maxVal)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetSpinboxBounds, spinbox, minVal, maxVal);
-  }
-  void SetSpinboxValue(QWidget *spinbox, double value)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetSpinboxValue, spinbox, value);
-  }
-  double GetSpinboxValue(QWidget *spinbox)
-  {
-    return InvokeRetFunction<double>(&IMiniQtHelper::GetSpinboxValue, spinbox);
-  }
-
-  QWidget *CreateTextBox(bool singleLine, WidgetCallback changed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateTextBox, singleLine, changed);
-  }
-
-  QWidget *CreateComboBox(bool editable, WidgetCallback changed)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateComboBox, editable, changed);
-  }
-
-  void SetComboOptions(QWidget *combo, const rdcarray<rdcstr> &options)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetComboOptions, combo, options);
-  }
-
-  size_t GetComboCount(QWidget *combo)
-  {
-    return InvokeRetFunction<size_t>(&IMiniQtHelper::GetComboCount, combo);
-  }
-
-  void SelectComboOption(QWidget *combo, const rdcstr &option)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SelectComboOption, combo, option);
-  }
-
-  QWidget *CreateProgressBar(bool horizontal)
-  {
-    return InvokeRetFunction<QWidget *>(&IMiniQtHelper::CreateProgressBar, horizontal);
-  }
-
-  void ResetProgressBar(QWidget *pbar)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::ResetProgressBar, pbar);
-  }
-
-  void SetProgressBarValue(QWidget *pbar, int32_t value)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetProgressBarValue, pbar, value);
-  }
-
-  void UpdateProgressBarValue(QWidget *pbar, int32_t delta)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::UpdateProgressBarValue, pbar, delta);
-  }
-
-  int32_t GetProgressBarValue(QWidget *pbar)
-  {
-    return InvokeRetFunction<int>(&IMiniQtHelper::GetProgressBarValue, pbar);
-  }
-
-  void SetProgressBarRange(QWidget *pbar, int32_t minimum, int32_t maximum)
-  {
-    InvokeVoidFunction(&IMiniQtHelper::SetProgressBarRange, pbar, minimum, maximum);
-  }
-
-  int32_t GetProgressBarMinimum(QWidget *pbar)
-  {
-    return InvokeRetFunction<int>(&IMiniQtHelper::GetProgressBarMinimum, pbar);
-  }
-
-  int32_t GetProgressBarMaximum(QWidget *pbar)
-  {
-    return InvokeRetFunction<int>(&IMiniQtHelper::GetProgressBarMaximum, pbar);
-  }
-};
-
-struct ExtensionInvoker : ObjectForwarder<IExtensionManager>
-{
-  MiniQtInvoker *m_MiniQt;
-  ExtensionInvoker(PythonShell *shell, IExtensionManager &obj) : ObjectForwarder(shell, obj)
-  {
-    m_MiniQt = new MiniQtInvoker(shell, obj.GetMiniQtHelper());
-  }
-  virtual ~ExtensionInvoker() { delete m_MiniQt; }
-  //
-  ///////////////////////////////////////////////////////////////////////
-  // pass-through functions that don't need the UI thread
-  ///////////////////////////////////////////////////////////////////////
-  //
-  rdcarray<ExtensionMetadata> GetInstalledExtensions() { return m_Obj.GetInstalledExtensions(); }
-  bool IsExtensionLoaded(rdcstr name) { return m_Obj.IsExtensionLoaded(name); }
-  rdcstr LoadExtension(rdcstr name) { return m_Obj.LoadExtension(name); }
-  IMiniQtHelper &GetMiniQtHelper() { return *m_MiniQt; }
-  //
-  ///////////////////////////////////////////////////////////////////////
-  // functions that invoke onto the UI thread
-  ///////////////////////////////////////////////////////////////////////
-  //
-  void RegisterWindowMenu(WindowMenu base, const rdcarray<rdcstr> &submenus,
-                          ExtensionCallback callback)
-  {
-    InvokeVoidFunction(&IExtensionManager::RegisterWindowMenu, base, submenus, callback);
-  }
-
-  void RegisterPanelMenu(PanelMenu base, const rdcarray<rdcstr> &submenus, ExtensionCallback callback)
-  {
-    InvokeVoidFunction(&IExtensionManager::RegisterPanelMenu, base, submenus, callback);
-  }
-
-  void RegisterContextMenu(ContextMenu base, const rdcarray<rdcstr> &submenus,
-                           ExtensionCallback callback)
-  {
-    InvokeVoidFunction(&IExtensionManager::RegisterContextMenu, base, submenus, callback);
-  }
-
-  void MessageDialog(const rdcstr &text, const rdcstr &title)
-  {
-    InvokeVoidFunction(&IExtensionManager::MessageDialog, text, title);
-  }
-
-  void ErrorDialog(const rdcstr &text, const rdcstr &title)
-  {
-    InvokeVoidFunction(&IExtensionManager::ErrorDialog, text, title);
-  }
-
-  DialogButton QuestionDialog(const rdcstr &text, const rdcarray<DialogButton> &options,
-                              const rdcstr &title)
-  {
-    return InvokeRetFunction<DialogButton>(&IExtensionManager::QuestionDialog, text, options, title);
-  }
-
-  rdcstr OpenFileName(const rdcstr &caption, const rdcstr &dir, const rdcstr &filter)
-  {
-    return InvokeRetFunction<rdcstr>(&IExtensionManager::OpenFileName, caption, dir, filter);
-  }
-
-  rdcstr OpenDirectoryName(const rdcstr &caption, const rdcstr &dir)
-  {
-    return InvokeRetFunction<rdcstr>(&IExtensionManager::OpenDirectoryName, caption, dir);
-  }
-
-  rdcstr SaveFileName(const rdcstr &caption, const rdcstr &dir, const rdcstr &filter)
-  {
-    return InvokeRetFunction<rdcstr>(&IExtensionManager::SaveFileName, caption, dir, filter);
-  }
-
-  void MenuDisplaying(ContextMenu contextMenu, QMenu *menu, const ExtensionCallbackData &data)
-  {
-    InvokeVoidFunction(
-        (void(IExtensionManager::*)(ContextMenu, QMenu *, const ExtensionCallbackData &)) &
-            IExtensionManager::MenuDisplaying,
-        contextMenu, menu, data);
-  }
-  void MenuDisplaying(PanelMenu panelMenu, QMenu *menu, QWidget *extensionButton,
-                      const ExtensionCallbackData &data)
-  {
-    InvokeVoidFunction(
-        (void(IExtensionManager::*)(PanelMenu, QMenu *, QWidget *, const ExtensionCallbackData &)) &
-            IExtensionManager::MenuDisplaying,
-        panelMenu, menu, extensionButton, data);
-  }
-};
-
-struct CaptureContextInvoker : ObjectForwarder<ICaptureContext>
-{
-  ExtensionInvoker *m_Ext;
-  CaptureContextInvoker(PythonShell *shell, ICaptureContext &obj) : ObjectForwarder(shell, obj)
-  {
-    m_Ext = new ExtensionInvoker(shell, obj.Extensions());
-  }
-  virtual ~CaptureContextInvoker() { delete m_Ext; }
-  //
-  ///////////////////////////////////////////////////////////////////////
-  // pass-through functions that don't need the UI thread
-  ///////////////////////////////////////////////////////////////////////
-  //
-  virtual rdcstr TempCaptureFilename(const rdcstr &appname) override
-  {
-    return m_Obj.TempCaptureFilename(appname);
-  }
-  virtual IExtensionManager &Extensions() override { return *m_Ext; }
-  virtual IReplayManager &Replay() override { return m_Obj.Replay(); }
-  virtual bool IsCaptureLoaded() override { return m_Obj.IsCaptureLoaded(); }
-  virtual bool IsCaptureLocal() override { return m_Obj.IsCaptureLocal(); }
-  virtual bool IsCaptureTemporary() override { return m_Obj.IsCaptureTemporary(); }
-  virtual bool IsCaptureLoading() override { return m_Obj.IsCaptureLoading(); }
-  virtual ResultDetails GetFatalError() override { return m_Obj.GetFatalError(); }
-  virtual rdcstr GetCaptureFilename() override { return m_Obj.GetCaptureFilename(); }
-  virtual CaptureModifications GetCaptureModifications() override
-  {
-    return m_Obj.GetCaptureModifications();
-  }
-  virtual const FrameDescription &FrameInfo() override { return m_Obj.FrameInfo(); }
-  virtual const APIProperties &APIProps() override { return m_Obj.APIProps(); }
-  virtual rdcarray<ShaderEncoding> TargetShaderEncodings() override
-  {
-    return m_Obj.TargetShaderEncodings();
-  }
-  virtual rdcarray<ShaderEncoding> CustomShaderEncodings() override
-  {
-    return m_Obj.CustomShaderEncodings();
-  }
-  virtual rdcarray<ShaderSourcePrefix> CustomShaderSourcePrefixes() override
-  {
-    return m_Obj.CustomShaderSourcePrefixes();
-  }
-  virtual uint32_t CurSelectedEvent() override { return m_Obj.CurSelectedEvent(); }
-  virtual uint32_t CurEvent() override { return m_Obj.CurEvent(); }
-  virtual const ActionDescription *CurSelectedAction() override
-  {
-    return m_Obj.CurSelectedAction();
-  }
-  virtual const ActionDescription *CurAction() override { return m_Obj.CurAction(); }
-  virtual const ActionDescription *GetFirstAction() override { return m_Obj.GetFirstAction(); }
-  virtual const ActionDescription *GetLastAction() override { return m_Obj.GetLastAction(); }
-  virtual const rdcarray<ActionDescription> &CurRootActions() override
-  {
-    return m_Obj.CurRootActions();
-  }
-  virtual const ResourceDescription *GetResource(ResourceId id) const override
-  {
-    return m_Obj.GetResource(id);
-  }
-  virtual const rdcarray<ResourceDescription> &GetResources() override
-  {
-    return m_Obj.GetResources();
-  }
-  virtual rdcstr GetResourceName(ResourceId id) const override { return m_Obj.GetResourceName(id); }
-  virtual rdcstr GetResourceNameUnsuffixed(ResourceId id) const override
-  {
-    return m_Obj.GetResourceNameUnsuffixed(id);
-  }
-  virtual bool IsAutogeneratedName(ResourceId id) override { return m_Obj.IsAutogeneratedName(id); }
-  virtual bool HasResourceCustomName(ResourceId id) override
-  {
-    return m_Obj.HasResourceCustomName(id);
-  }
-  virtual int32_t ResourceNameCacheID() const override { return m_Obj.ResourceNameCacheID(); }
-  virtual TextureDescription *GetTexture(ResourceId id) override { return m_Obj.GetTexture(id); }
-  virtual const rdcarray<TextureDescription> &GetTextures() override { return m_Obj.GetTextures(); }
-  virtual BufferDescription *GetBuffer(ResourceId id) override { return m_Obj.GetBuffer(id); }
-  virtual DescriptorStoreDescription *GetDescriptorStore(ResourceId id) override
-  {
-    return m_Obj.GetDescriptorStore(id);
-  }
-  virtual const rdcarray<BufferDescription> &GetBuffers() const override
-  {
-    return m_Obj.GetBuffers();
-  }
-  virtual const ActionDescription *GetAction(uint32_t eventId) override
-  {
-    return m_Obj.GetAction(eventId);
-  }
-  virtual void ClearReplayCache() override { return m_Obj.ClearReplayCache(); }
-  virtual bool OpenRGPProfile(const rdcstr &filename) override
-  {
-    return m_Obj.OpenRGPProfile(filename);
-  }
-  virtual IRGPInterop *GetRGPInterop() override { return m_Obj.GetRGPInterop(); }
-  virtual const SDFile &GetStructuredFile() override { return m_Obj.GetStructuredFile(); }
-  virtual WindowingSystem CurWindowingSystem() override { return m_Obj.CurWindowingSystem(); }
-  virtual const rdcarray<DebugMessage> &DebugMessages() override { return m_Obj.DebugMessages(); }
-  virtual int32_t UnreadMessageCount() override { return m_Obj.UnreadMessageCount(); }
-  virtual void MarkMessagesRead() override { return m_Obj.MarkMessagesRead(); }
-  virtual rdcstr GetNotes(const rdcstr &key) override { return m_Obj.GetNotes(key); }
-  virtual rdcarray<EventBookmark> GetBookmarks() override { return m_Obj.GetBookmarks(); }
-  virtual const D3D11Pipe::State *CurD3D11PipelineState() override
-  {
-    return m_Obj.CurD3D11PipelineState();
-  }
-  virtual const D3D12Pipe::State *CurD3D12PipelineState() override
-  {
-    return m_Obj.CurD3D12PipelineState();
-  }
-  virtual const GLPipe::State *CurGLPipelineState() override { return m_Obj.CurGLPipelineState(); }
-  virtual const VKPipe::State *CurVulkanPipelineState() override
-  {
-    return m_Obj.CurVulkanPipelineState();
-  }
-  virtual const PipeState &CurPipelineState() override { return m_Obj.CurPipelineState(); }
-  virtual PersistantConfig &Config() override { return m_Obj.Config(); }
-  //
-  ///////////////////////////////////////////////////////////////////////
-  // functions that invoke onto the UI thread
-  ///////////////////////////////////////////////////////////////////////
-  //
-  virtual void ConnectToRemoteServer(RemoteHost host) override
-  {
-    InvokeVoidFunction(&ICaptureContext::ConnectToRemoteServer, host);
-  }
-  virtual WindowingData CreateWindowingData(QWidget *window) override
-  {
-    return InvokeRetFunction<WindowingData>(&ICaptureContext::CreateWindowingData, window);
-  }
-  virtual void LoadCapture(const rdcstr &capture, const ReplayOptions &opts,
-                           const rdcstr &origFilename, bool temporary, bool local) override
-  {
-    InvokeVoidFunction(&ICaptureContext::LoadCapture, capture, opts, origFilename, temporary, local);
-  }
-  virtual bool SaveCaptureTo(const rdcstr &capture) override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::SaveCaptureTo, capture);
-  }
-  virtual void RecompressCapture() override
-  {
-    InvokeVoidFunction(&ICaptureContext::RecompressCapture);
-  }
-  virtual void CloseCapture() override { InvokeVoidFunction(&ICaptureContext::CloseCapture); }
-  virtual bool ImportCapture(const CaptureFileFormat &fmt, const rdcstr &importfile,
-                             const rdcstr &rdcfile) override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::ImportCapture, fmt, importfile, rdcfile);
-  }
-  virtual void ExportCapture(const CaptureFileFormat &fmt, const rdcstr &exportfile) override
-  {
-    InvokeVoidFunction(&ICaptureContext::ExportCapture, fmt, exportfile);
-  }
-  virtual void SetEventID(const rdcarray<ICaptureViewer *> &exclude, uint32_t selectedEventID,
-                          uint32_t eventId, bool force = false) override
-  {
-    InvokeVoidFunction(&ICaptureContext::SetEventID, exclude, selectedEventID, eventId, force);
-  }
-  virtual void RefreshStatus() override { InvokeVoidFunction(&ICaptureContext::RefreshStatus); }
-  virtual bool IsResourceReplaced(ResourceId id) override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::IsResourceReplaced, id);
-  }
-  virtual ResourceId GetResourceReplacement(ResourceId id) override
-  {
-    return InvokeRetFunction<ResourceId>(&ICaptureContext::GetResourceReplacement, id);
-  }
-  virtual void RegisterReplacement(ResourceId from, ResourceId to) override
-  {
-    InvokeVoidFunction(&ICaptureContext::RegisterReplacement, from, to);
-  }
-  virtual void UnregisterReplacement(ResourceId id) override
-  {
-    InvokeVoidFunction(&ICaptureContext::UnregisterReplacement, id);
-  }
-  virtual void AddCaptureViewer(ICaptureViewer *viewer) override
-  {
-    InvokeVoidFunction(&ICaptureContext::AddCaptureViewer, viewer);
-  }
-  virtual void RemoveCaptureViewer(ICaptureViewer *viewer) override
-  {
-    InvokeVoidFunction(&ICaptureContext::RemoveCaptureViewer, viewer);
-  }
-  virtual void AddMessages(const rdcarray<DebugMessage> &msgs) override
-  {
-    InvokeVoidFunction(&ICaptureContext::AddMessages, msgs);
-  }
-  virtual void ClearMessages() override { InvokeVoidFunction(&ICaptureContext::ClearMessages); }
-  virtual void SetResourceCustomName(ResourceId id, const rdcstr &name) override
-  {
-    InvokeVoidFunction(&ICaptureContext::SetResourceCustomName, id, name);
-  }
-  virtual void SetNotes(const rdcstr &key, const rdcstr &contents) override
-  {
-    InvokeVoidFunction(&ICaptureContext::SetNotes, key, contents);
-  }
-
-  virtual void SetBookmark(const EventBookmark &mark) override
-  {
-    InvokeVoidFunction(&ICaptureContext::SetBookmark, mark);
-  }
-  virtual void RemoveBookmark(uint32_t EID) override
-  {
-    InvokeVoidFunction(&ICaptureContext::RemoveBookmark, EID);
-  }
-  virtual void EmbedDependentFiles() override
-  {
-    InvokeVoidFunction(&ICaptureContext::EmbedDependentFiles);
-  }
-  virtual void RemoveDependentFiles() override
-  {
-    InvokeVoidFunction(&ICaptureContext::RemoveDependentFiles);
-  }
-  virtual void DelayedCallback(uint32_t milliseconds, std::function<void()> callback) override
-  {
-    InvokeVoidFunction(&ICaptureContext::DelayedCallback, milliseconds, callback);
-  }
-  virtual IMainWindow *GetMainWindow() override
-  {
-    return InvokeRetFunction<IMainWindow *>(&ICaptureContext::GetMainWindow);
-  }
-  virtual IEventBrowser *GetEventBrowser() override
-  {
-    return InvokeRetFunction<IEventBrowser *>(&ICaptureContext::GetEventBrowser);
-  }
-  virtual IAPIInspector *GetAPIInspector() override
-  {
-    return InvokeRetFunction<IAPIInspector *>(&ICaptureContext::GetAPIInspector);
-  }
-  virtual IAnnotationViewer *GetAnnotationViewer() override
-  {
-    return InvokeRetFunction<IAnnotationViewer *>(&ICaptureContext::GetAnnotationViewer);
-  }
-  virtual ITextureViewer *GetTextureViewer() override
-  {
-    return InvokeRetFunction<ITextureViewer *>(&ICaptureContext::GetTextureViewer);
-  }
-  virtual IBufferViewer *GetMeshPreview() override
-  {
-    return InvokeRetFunction<IBufferViewer *>(&ICaptureContext::GetMeshPreview);
-  }
-  virtual IPipelineStateViewer *GetPipelineViewer() override
-  {
-    return InvokeRetFunction<IPipelineStateViewer *>(&ICaptureContext::GetPipelineViewer);
-  }
-  virtual ICaptureDialog *GetCaptureDialog() override
-  {
-    return InvokeRetFunction<ICaptureDialog *>(&ICaptureContext::GetCaptureDialog);
-  }
-  virtual IDebugMessageView *GetDebugMessageView() override
-  {
-    return InvokeRetFunction<IDebugMessageView *>(&ICaptureContext::GetDebugMessageView);
-  }
-  virtual IDiagnosticLogView *GetDiagnosticLogView() override
-  {
-    return InvokeRetFunction<IDiagnosticLogView *>(&ICaptureContext::GetDiagnosticLogView);
-  }
-  virtual ICommentView *GetCommentView() override
-  {
-    return InvokeRetFunction<ICommentView *>(&ICaptureContext::GetCommentView);
-  }
-  virtual IPerformanceCounterViewer *GetPerformanceCounterViewer() override
-  {
-    return InvokeRetFunction<IPerformanceCounterViewer *>(
-        &ICaptureContext::GetPerformanceCounterViewer);
-  }
-  virtual IStatisticsViewer *GetStatisticsViewer() override
-  {
-    return InvokeRetFunction<IStatisticsViewer *>(&ICaptureContext::GetStatisticsViewer);
-  }
-  virtual ITimelineBar *GetTimelineBar() override
-  {
-    return InvokeRetFunction<ITimelineBar *>(&ICaptureContext::GetTimelineBar);
-  }
-  virtual IPythonShell *GetPythonShell() override
-  {
-    return InvokeRetFunction<IPythonShell *>(&ICaptureContext::GetPythonShell);
-  }
-  virtual IResourceInspector *GetResourceInspector() override
-  {
-    return InvokeRetFunction<IResourceInspector *>(&ICaptureContext::GetResourceInspector);
-  }
-  virtual bool HasEventBrowser() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasEventBrowser);
-  }
-  virtual bool HasAPIInspector() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasAPIInspector);
-  }
-  virtual bool HasAnnotationViewer() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasAnnotationViewer);
-  }
-  virtual bool HasTextureViewer() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasTextureViewer);
-  }
-  virtual bool HasPipelineViewer() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasPipelineViewer);
-  }
-  virtual bool HasMeshPreview() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasMeshPreview);
-  }
-  virtual bool HasCaptureDialog() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasCaptureDialog);
-  }
-  virtual bool HasDebugMessageView() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasDebugMessageView);
-  }
-  virtual bool HasDiagnosticLogView() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasDiagnosticLogView);
-  }
-  virtual bool HasCommentView() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasCommentView);
-  }
-  virtual bool HasPerformanceCounterViewer() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasPerformanceCounterViewer);
-  }
-  virtual bool HasStatisticsViewer() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasStatisticsViewer);
-  }
-  virtual bool HasTimelineBar() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasTimelineBar);
-  }
-  virtual bool HasPythonShell() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasPythonShell);
-  }
-  virtual bool HasResourceInspector() override
-  {
-    return InvokeRetFunction<bool>(&ICaptureContext::HasResourceInspector);
-  }
-
-  virtual void ShowEventBrowser() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowEventBrowser);
-  }
-  virtual void ShowAPIInspector() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowAPIInspector);
-  }
-  virtual void ShowAnnotationViewer() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowAnnotationViewer);
-  }
-  virtual void ShowTextureViewer() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowTextureViewer);
-  }
-  virtual void ShowMeshPreview() override { InvokeVoidFunction(&ICaptureContext::ShowMeshPreview); }
-  virtual void ShowPipelineViewer() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowPipelineViewer);
-  }
-  virtual void ShowCaptureDialog() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowCaptureDialog);
-  }
-  virtual void ShowDebugMessageView() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowDebugMessageView);
-  }
-  virtual void ShowDiagnosticLogView() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowDiagnosticLogView);
-  }
-  virtual void ShowCommentView() override { InvokeVoidFunction(&ICaptureContext::ShowCommentView); }
-  virtual void ShowPerformanceCounterViewer() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowPerformanceCounterViewer);
-  }
-  virtual void ShowStatisticsViewer() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowStatisticsViewer);
-  }
-  virtual void ShowTimelineBar() override { InvokeVoidFunction(&ICaptureContext::ShowTimelineBar); }
-  virtual void ShowPythonShell() override { InvokeVoidFunction(&ICaptureContext::ShowPythonShell); }
-  virtual void ShowResourceInspector() override
-  {
-    InvokeVoidFunction(&ICaptureContext::ShowResourceInspector);
-  }
-  virtual IShaderViewer *EditShader(ResourceId id, ShaderStage stage, const rdcstr &entryPoint,
-                                    const rdcstrpairs &files, KnownShaderTool knownTool,
-                                    ShaderEncoding shaderEncoding, ShaderCompileFlags flags,
-                                    IShaderViewer::SaveCallback saveCallback,
-                                    IShaderViewer::RevertCallback revertCallback) override
-  {
-    return InvokeRetFunction<IShaderViewer *>(&ICaptureContext::EditShader, id, stage, entryPoint,
-                                              files, knownTool, shaderEncoding, flags, saveCallback,
-                                              revertCallback);
-  }
-
-  virtual IShaderViewer *DebugShader(const ShaderReflection *shader, ResourceId pipeline,
-                                     ShaderDebugTrace *trace, const rdcstr &debugContext) override
-  {
-    return InvokeRetFunction<IShaderViewer *>(&ICaptureContext::DebugShader, shader, pipeline,
-                                              trace, debugContext);
-  }
-
-  virtual IShaderViewer *ViewShader(const ShaderReflection *shader, ResourceId pipeline) override
-  {
-    return InvokeRetFunction<IShaderViewer *>(&ICaptureContext::ViewShader, shader, pipeline);
-  }
-
-  virtual IShaderMessageViewer *ViewShaderMessages(ShaderStageMask stages) override
-  {
-    return InvokeRetFunction<IShaderMessageViewer *>(&ICaptureContext::ViewShaderMessages, stages);
-  }
-
-  virtual IDescriptorViewer *ViewDescriptorStore(ResourceId id) override
-  {
-    return InvokeRetFunction<IDescriptorViewer *>(&ICaptureContext::ViewDescriptorStore, id);
-  }
-  virtual IDescriptorViewer *ViewDescriptors(const rdcarray<Descriptor> &descriptors,
-                                             const rdcarray<SamplerDescriptor> &samplerDescriptors) override
-  {
-    return InvokeRetFunction<IDescriptorViewer *>(&ICaptureContext::ViewDescriptors, descriptors,
-                                                  samplerDescriptors);
-  }
-
-  virtual IBufferViewer *ViewBuffer(uint64_t byteOffset, uint64_t byteSize, ResourceId id,
-                                    const rdcstr &format = "") override
-  {
-    return InvokeRetFunction<IBufferViewer *>(&ICaptureContext::ViewBuffer, byteOffset, byteSize,
-                                              id, format);
-  }
-
-  virtual IBufferViewer *ViewTextureAsBuffer(ResourceId id, const Subresource &sub,
-                                             const rdcstr &format = "") override
-  {
-    return InvokeRetFunction<IBufferViewer *>(&ICaptureContext::ViewTextureAsBuffer, id, sub, format);
-  }
-
-  virtual IBufferViewer *ViewConstantBuffer(ShaderStage stage, uint32_t slot, uint32_t idx) override
-  {
-    return InvokeRetFunction<IBufferViewer *>(&ICaptureContext::ViewConstantBuffer, stage, slot, idx);
-  }
-
-  virtual IPixelHistoryView *ViewPixelHistory(ResourceId texID, uint32_t x, uint32_t y,
-                                              uint32_t view, const TextureDisplay &display) override
-  {
-    return InvokeRetFunction<IPixelHistoryView *>(&ICaptureContext::ViewPixelHistory, texID, x, y,
-                                                  view, display);
-  }
-
-  virtual QWidget *CreateBuiltinWindow(const rdcstr &objectName) override
-  {
-    return InvokeRetFunction<QWidget *>(&ICaptureContext::CreateBuiltinWindow, objectName);
-  }
-
-  virtual void BuiltinWindowClosed(QWidget *window) override
-  {
-    InvokeVoidFunction(&ICaptureContext::BuiltinWindowClosed, window);
-  }
-
-  virtual void RaiseDockWindow(QWidget *dockWindow) override
-  {
-    InvokeVoidFunction(&ICaptureContext::RaiseDockWindow, dockWindow);
-  }
-
-  virtual void AddDockWindow(QWidget *newWindow, DockReference ref, QWidget *refWindow,
-                             float percentage = 0.5f) override
-  {
-    InvokeVoidFunction(&ICaptureContext::AddDockWindow, newWindow, ref, refWindow, percentage);
-  }
-};
+  return true;
+}
 
 PythonShell::PythonShell(ICaptureContext &ctx, QWidget *parent)
     : QFrame(parent), ui(new Ui::PythonShell), m_Ctx(ctx)
 {
   ui->setupUi(this);
 
-  m_ThreadCtx = new CaptureContextInvoker(this, m_Ctx);
-
   QObject::connect(ui->lineInput, &RDLineEdit::keyPress, this, &PythonShell::interactive_keypress);
-  QObject::connect(ui->helpSearch, &RDLineEdit::keyPress, this, &PythonShell::helpSearch_keypress);
+  QObject::connect(ui->helpSearch, &RDLineEdit::keyPress, this, &PythonShell::interactive_keypress);
+
+  QObject::connect(ui->lineInput, &RDLineEdit::leave, [this]() { hideFunccompleteTooltip(); });
+  QObject::connect(ui->helpSearch, &RDLineEdit::leave, [this]() { hideFunccompleteTooltip(); });
+
+  // we create this up front so its state stays persistent as much as possible.
+  m_FindReplace = new FindReplace(m_Scintillas, this);
+  m_FindReplace->allowFindAll(false);
+  m_FindReplace->setDockManager(ui->docking);
+
+  {
+    m_FindResults = new ScintillaEdit(this);
+
+    m_FindResults->styleSetFont(STYLE_DEFAULT, Formatter::FixedFont().family().toUtf8().data());
+    m_FindResults->styleSetSize(STYLE_DEFAULT, Formatter::FixedFont().pointSize());
+    m_FindResults->styleSetFont(STYLE_ERROR, Formatter::FixedFont().family().toUtf8().data());
+    m_FindResults->styleSetSize(STYLE_ERROR, Formatter::FixedFont().pointSize());
+    m_FindResults->styleSetBack(STYLE_ERROR, IsDarkTheme() ? SCINTILLA_COLOUR(175, 70, 70)
+                                                           : SCINTILLA_COLOUR(255, 150, 150));
+
+    ConfigureSyntax(m_FindResults, SCLEX_NULL);
+    m_FindResults->usePopUp(SC_POPUP_NEVER);
+    m_FindResults->setWrapMode(SC_WRAP_WORD);
+    m_FindResults->setReadOnly(true);
+    m_FindResults->setWindowTitle(lit("Find Results"));
+  }
+
+  m_FindReplace->setFindIndicator(2);
+  m_FindReplace->setFindAllResultsDisplay(m_FindResults);
 
   ui->lineInput->setFont(Formatter::FixedFont());
+  ui->helpSearch->setFont(Formatter::FixedFont());
   ui->interactiveOutput->setFont(Formatter::FixedFont());
   ui->scriptOutput->setFont(Formatter::FixedFont());
   ui->helpText->setFont(Formatter::FixedFont());
 
+  ui->outputGroup->setWindowTitle(tr("Output"));
+  ui->helpGroup->setWindowTitle(tr("Help"));
+  ui->replGroup->setWindowTitle(tr("Interactive REPL"));
+
   ui->lineInput->setAcceptTabCharacters(true);
+  ui->helpSearch->setAcceptTabCharacters(true);
 
-  scriptEditor = new ScintillaEdit(this);
+  // don't repeatedly re-parse for errors. Have a reasonable timeout
+  m_SyntaxCheckTimer = new QTimer(this);
+  m_SyntaxCheckTimer->setSingleShot(true);
+  m_SyntaxCheckTimer->setInterval(1200);
 
-  scriptEditor->styleSetFont(STYLE_DEFAULT, Formatter::FixedFont().family().toUtf8().data());
+  m_CompletionTipTimer = new QTimer(this);
+  m_CompletionTipTimer->setSingleShot(false);
+  // this timer will only be active while auto completing so we can be aggressive with its timer
+  m_CompletionTipTimer->setInterval(10);
+  QObject::connect(m_CompletionTipTimer, &QTimer::timeout, [this]() {
+    EditorWrapper *editor = curEditor();
 
-  scriptEditor->setMarginLeft(4.0);
-  scriptEditor->setMarginWidthN(0, 32.0);
-  scriptEditor->setMarginWidthN(1, 0.0);
-  scriptEditor->setMarginWidthN(2, 16.0);
-  scriptEditor->setObjectName(lit("scriptEditor"));
-
-  scriptEditor->markerSetBack(CURRENT_MARKER, SCINTILLA_COLOUR(240, 128, 128));
-  scriptEditor->markerSetBack(CURRENT_MARKER + 1, SCINTILLA_COLOUR(240, 128, 128));
-  scriptEditor->markerDefine(CURRENT_MARKER, SC_MARK_SHORTARROW);
-  scriptEditor->markerDefine(CURRENT_MARKER + 1, SC_MARK_BACKGROUND);
-
-  scriptEditor->autoCSetMaxHeight(10);
-
-  scriptEditor->usePopUp(SC_POPUP_NEVER);
-
-  scriptEditor->setContextMenuPolicy(Qt::CustomContextMenu);
-  QObject::connect(scriptEditor, &ScintillaEdit::customContextMenuRequested, this,
-                   &PythonShell::editor_contextMenu);
-
-  ConfigureSyntax(scriptEditor, SCLEX_PYTHON);
-
-  scriptEditor->setTabWidth(4);
-
-  scriptEditor->setScrollWidth(1);
-  scriptEditor->setScrollWidthTracking(true);
-
-  scriptEditor->colourise(0, -1);
-
-  QObject::connect(scriptEditor, &ScintillaEdit::modified,
-                   [this](int type, int, int, int, const QByteArray &, int, int, int) {
-                     if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_BEFOREINSERT |
-                                SC_MOD_BEFOREDELETE))
-                     {
-                       scriptEditor->markerDeleteAll(CURRENT_MARKER);
-                       scriptEditor->markerDeleteAll(CURRENT_MARKER + 1);
-                     }
-                   });
-
-  QObject::connect(scriptEditor, &ScintillaEdit::charAdded, [this](int ch) {
-    if(ch == '.')
+    if(!editor || !editor->scintilla()->autoCActive())
     {
-      startAutocomplete();
+      m_CompletionTipTimer->stop();
+      m_CompletionTipList.clear();
+      m_CurrentCompletionTip = -1;
+
+      updateCompletionTip();
     }
-  });
-
-  QObject::connect(scriptEditor, &ScintillaEdit::keyPressed, [this](QKeyEvent *ev) {
-    if(ev->key() == Qt::Key_Space && (ev->modifiers() & Qt::ControlModifier))
+    else
     {
-      startAutocomplete();
-    }
-
-    if(ev->key() == Qt::Key_F1)
-    {
-      QString curWord = getDottedWordAtPoint(scriptEditor->currentPos());
-
-      if(!curWord.isEmpty())
+      if(editor->scintilla()->autoCCurrent() != m_CurrentCompletionTip)
       {
-        ui->helpSearch->setText(curWord);
-        refreshCurrentHelp();
+        m_CurrentCompletionTip = editor->scintilla()->autoCCurrent();
+
+        updateCompletionTip();
       }
     }
   });
 
-  ui->scriptSplitter->insertWidget(0, scriptEditor);
-  int w = ui->scriptSplitter->rect().width();
-  ui->scriptSplitter->setSizes({w * 2 / 3, w / 3});
+  // only update the current line intermittently. We don't need to update every single time and if
+  // there is a large number of traces this will rate limit it.
+  m_CurLineTimer = new QTimer(this);
+  m_CurLineTimer->setSingleShot(false);
+  m_CurLineTimer->setInterval(10);
 
-  ui->tabWidget->setCurrentIndex(0);
+  QObject::connect(m_CurLineTimer, &QTimer::timeout, [this]() {
+    if(m_CurLineDirty)
+    {
+      if(runningScriptEditor)
+      {
+        runningScriptEditor->markerDeleteAll(CURRENT_MARKER);
+        runningScriptEditor->markerDeleteAll(CURRENT_MARKER + 1);
 
-  interactiveContext = NULL;
+        runningScriptEditor->markerAdd(m_CurLine > 0 ? m_CurLine - 1 : 0, CURRENT_MARKER);
+        runningScriptEditor->markerAdd(m_CurLine > 0 ? m_CurLine - 1 : 0, CURRENT_MARKER + 1);
+      }
 
-  enableButtons(true);
+      m_CurLineDirty = false;
+    }
+  });
+
+  completionContext = new PythonContext();
+
+  QObject::connect(m_SyntaxCheckTimer, &QTimer::timeout, this, &PythonShell::doSyntaxCheck);
+
+  QObject::connect(ui->interactiveOutput, &RDTextEdit::keyPress, [this](QKeyEvent *e) {
+    // ignore keypresses that aren't typing, but for up/down redirect that to the line input to get history
+    if((e->text().isEmpty() || !e->text()[0].isPrint()) && e->key() != Qt::Key_Up &&
+       e->key() != Qt::Key_Down)
+      return;
+    ui->lineInput->setFocus(Qt::OtherFocusReason);
+    QApplication::postEvent(ui->lineInput, new QKeyEvent(*e));
+  });
+
+  m_ToolTip = new RDToolTip(this);
+
+  m_ToolTip->installEventFilter(this);
+
+  m_ToolTip->setFont(Formatter::FixedFont());
+
+  m_CompletionTip = new RDToolTip(this);
+  m_CompletionTip->setFont(Formatter::FixedFont());
+
+  m_InteractiveCompleter = new QCompleter(this);
+  m_InteractiveCompleter->popup()->setFont(Formatter::FixedFont());
+  m_InteractiveCompleter->popup()->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+  m_InteractiveCompleter->popup()->setTextElideMode(Qt::ElideNone);
+  m_InteractiveCompleter->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+  m_InteractiveCompleter->setWrapAround(false);
+  m_InteractiveCompletionModel = new QStringListModel(this);
+  m_InteractiveCompleter->setModel(m_InteractiveCompletionModel);
+  m_InteractiveCompleter->setCompletionRole(Qt::DisplayRole);
+
+  m_InteractiveCompleter->popup()->installEventFilter(this);
+
+  QObject::connect(m_InteractiveCompleter,
+                   OverloadedSlot<const QModelIndex &>::of(&QCompleter::highlighted),
+                   [this](const QModelIndex &idx) {
+                     if(idx.isValid() && idx.row() < m_CompletionTipList.count())
+                     {
+                       if(m_CurrentCompletionTip != idx.row())
+                       {
+                         m_CurrentCompletionTip = idx.row();
+                         updateCompletionTip();
+                       }
+                     }
+                   });
+
+  QObject::connect(m_InteractiveCompleter,
+                   OverloadedSlot<const QModelIndex &>::of(&QCompleter::activated),
+                   [this](const QModelIndex &idx) {
+                     RDLineEdit *edit = qobject_cast<RDLineEdit *>(m_InteractiveCompleter->widget());
+                     if(!edit)
+                       return;
+                     int i = idx.row();
+                     if(i >= 0 && i < m_InteractiveCompletionModel->rowCount())
+                     {
+                       QString curText = edit->text();
+                       curText.resize(curText.size() - m_InteractiveCompletionPrefix);
+                       curText += m_InteractiveCompletionModel->stringList()[i];
+                       edit->setText(curText);
+
+                       edit->setCursorPosition(curText.size());
+                     }
+                   });
 
   // reset output to default
   on_clear_clicked();
   on_newScript_clicked();
+
+  ui->saveScript->setEnabled(false);
+
+  setupTabs();
+
+  ui->docking->addToolWindow(m_FindReplace, ToolWindowManager::NoArea);
+  ui->docking->setToolWindowProperties(m_FindReplace, ToolWindowManager::HideOnClose);
+
+  ui->docking->addToolWindow(m_FindResults, ToolWindowManager::NoArea);
+  ui->docking->setToolWindowProperties(
+      m_FindResults, ToolWindowManager::HideOnClose | ToolWindowManager::DisallowFloatWindow);
+
+  ui->docking->addToolWindow(
+      ui->replGroup, ToolWindowManager::AreaReference(ToolWindowManager::BottomOf,
+                                                      ui->docking->areaOf(m_Editors[0]), 0.3f));
+  ui->docking->setToolWindowProperties(
+      ui->replGroup, ToolWindowManager::HideCloseButton | ToolWindowManager::DisallowFloatWindow);
+
+  ui->projectExplorer->setWindowTitle(tr("Project Explorer"));
+  ui->projectExplorer->setColumns({tr("Name")});
+  ui->projectExplorer->hideGridLines();
+
+  m_Watcher = new QFileSystemWatcher({}, this);
+
+  QObject::connect(m_Watcher, &QFileSystemWatcher::fileChanged, this, &PythonShell::openFileModified);
+  QObject::connect(m_Watcher, &QFileSystemWatcher::directoryChanged, this,
+                   &PythonShell::updateExtensionProjects);
+
+  QTimer *pyStatusTimer = new QTimer(this);
+  QObject::connect(pyStatusTimer, &QTimer::timeout, [this]() {
+    QList<QString> curModExts;
+
+    for(const ExtensionMetadata &m : m_Ctx.Extensions().GetInstalledExtensions())
+    {
+      if(m.hasChanges)
+      {
+        curModExts.push_back(m.package);
+      }
+    }
+
+    curModExts.sort();
+
+    if(curModExts != m_ModifiedExtensions)
+    {
+      updateExtensionProjects();
+      m_ModifiedExtensions = curModExts;
+    }
+
+    bool hasDebugger = PythonContext::IsDebuggerConnected();
+
+    if(m_DebuggerAttached != hasDebugger)
+    {
+      updateButtonStates();
+      updateNonDebugWarning();
+    }
+
+    m_DebuggerAttached = hasDebugger;
+  });
+
+  pyStatusTimer->setSingleShot(false);
+  pyStatusTimer->setInterval(500);
+  pyStatusTimer->start();
+
+  ui->projectExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
+  QObject::connect(ui->projectExplorer, &RDTreeWidget::customContextMenuRequested, this,
+                   &PythonShell::projectExplorer_contextMenu);
+
+  ui->projectExplorer->beginUpdate();
+
+  m_Examples = new RDTreeWidgetItem({lit("Examples")});
+  m_Examples->setData(0, Qt::UserRole + 1, m_Examples->text(0));
+  m_Examples->setSelectable(false);
+  m_Examples->setBold(true);
+  m_Examples->setIcon(0, Icons::help());
+
+  const QPair<QString, QString> examples[] = {
+      {tr("Tutorial: First Steps with Python"), lit(":/py/tutorial/first_steps.py")},
+      {tr("Tutorial: UI extensions"), lit(":/py/tutorial/ui_extensions.py")},
+      {tr("Show buffer with format"), lit(":/py/examples/show_buffer.py")},
+      {tr("Show and save a texture"), lit(":/py/examples/show_texture.py")},
+      {tr("Iterating over Actions"), lit(":/py/examples/iter_actions.py")},
+      {tr("Pipeline State"), lit(":/py/examples/pipe_state.py")},
+      {tr("Shader Reflection"), lit(":/py/examples/shader_refl.py")},
+      {tr("Resource Usage"), lit(":/py/examples/resource_usage.py")},
+      {tr("Memory bindings"), lit(":/py/examples/mem_binds.py")},
+      {tr("Pixel History & Shader Debug"), lit(":/py/examples/history_debug.py")},
+      {tr("Mesh Output"), lit(":/py/examples/mesh_output.py")},
+      {tr("Advanced Buffers"), lit(":/py/examples/advanced_buffers.py")},
+      {tr("Launching an application"), lit(":/py/examples/exe_launching.py")},
+      {tr("Custom event filter"), lit(":/py/examples/event_filter.py")},
+      {tr("Mini-Qt UI"), lit(":/py/examples/miniqt_ui.py")},
+  };
+
+  for(const QPair<QString, QString> &example : examples)
+  {
+    RDTreeWidgetItem *ex = new RDTreeWidgetItem({example.first});
+
+    QFile file(example.second);
+
+    file.open(QFile::ReadOnly);
+    ex->setData(0, Qt::UserRole, QString::fromUtf8(file.readAll()));
+    file.close();
+
+    m_Examples->addChild(ex);
+  }
+
+  m_UIExtensions = new RDTreeWidgetItem({lit("UI Extensions")});
+  m_UIExtensions->setData(0, Qt::UserRole + 1, m_UIExtensions->text(0));
+  m_UIExtensions->setSelectable(false);
+  m_UIExtensions->setBold(true);
+  m_UIExtensions->setIcon(0, Icons::plugin());
+
+  m_RecentFiles = new RDTreeWidgetItem({lit("Recent files")});
+  m_RecentFiles->setData(0, Qt::UserRole + 1, m_UIExtensions->text(0));
+  m_RecentFiles->setSelectable(false);
+  m_RecentFiles->setBold(true);
+  m_RecentFiles->setIcon(0, Icons::page_white_edit());
+
+  ui->projectExplorer->addTopLevelItem(m_Examples);
+  ui->projectExplorer->addTopLevelItem(m_UIExtensions);
+  ui->projectExplorer->addTopLevelItem(m_RecentFiles);
+
+  updateRecentFiles(false);
+  updateExtensionProjects();
+
+  // on first launch we could be creating the python shell before extensions are loaded while
+  // initialising the UI. Refresh the extension projects after a short delay to pick up any
+  // additional information on loading status.
+  QTimer::singleShot(200, [this]() { updateExtensionProjects(); });
+
+  ui->projectExplorer->endUpdate();
+
+  ui->projectExplorer->expandItem(m_RecentFiles);
+
+  ui->docking->addToolWindow(
+      ui->projectExplorer, ToolWindowManager::AreaReference(
+                               ToolWindowManager::LeftOf, ui->docking->areaOf(m_Editors[0]), 0.2f));
+  ui->docking->setToolWindowProperties(
+      ui->projectExplorer,
+      ToolWindowManager::HideCloseButton | ToolWindowManager::DisallowFloatWindow);
+
+  ui->docking->addToolWindow(ui->outputGroup,
+                             ToolWindowManager::AreaReference(ToolWindowManager::AddTo,
+                                                              ui->docking->areaOf(ui->replGroup)));
+  ui->docking->setToolWindowProperties(
+      ui->outputGroup, ToolWindowManager::HideCloseButton | ToolWindowManager::DisallowFloatWindow);
+
+  ui->docking->addToolWindow(ui->helpGroup,
+                             ToolWindowManager::AreaReference(ToolWindowManager::AddTo,
+                                                              ui->docking->areaOf(ui->replGroup)));
+  ui->docking->setToolWindowProperties(
+      ui->helpGroup, ToolWindowManager::HideCloseButton | ToolWindowManager::DisallowFloatWindow);
+
+  ToolWindowManager::raiseToolWindow(ui->replGroup);
+
+  QVBoxLayout *layout = new QVBoxLayout(this);
+  layout->setSpacing(3);
+  layout->setContentsMargins(3, 3, 3, 3);
+  layout->addWidget(ui->toolbar);
+  layout->addWidget(ui->docking);
+
+  enableButtons(true);
+
+  Q_ASSERT(ui->outputContext->count() == AllOutputFilter);
+  ui->outputContext->addItem(tr("All"));
+  Q_ASSERT(ui->outputContext->count() == ScriptOutputFilter);
+  ui->outputContext->addItem(tr("Script"));
+  Q_ASSERT(ui->outputContext->count() == FirstExtensionOutputFilter);
+
+  for(const ExtensionMetadata &e : m_Ctx.Extensions().GetInstalledExtensions())
+  {
+    if(m_Ctx.Extensions().IsExtensionLoaded(e.package))
+    {
+      ui->outputContext->addItem(tr("Extension %1").arg(e.package));
+      loadedExtensions.push_back(e.package);
+    }
+  }
+
+  QObject::connect(PythonContext::GetExtensionContext(), &PythonContext::textOutput, this,
+                   &PythonShell::textOutput);
+  QObject::connect(PythonContext::GetExtensionContext(), &PythonContext::exception, this,
+                   &PythonShell::exception);
+  QObject::connect(PythonContext::GetExtensionContext(), &PythonContext::extensionLoaded, this,
+                   &PythonShell::extensionLoaded);
+
+  helpContext = newContext();
+
+  helpContext->makeHelpContext();
+
+  QObject::connect(helpContext, &PythonContext::textOutput,
+                   [this](const QString &, bool isStdError, const QString &output) {
+                     appendText(ui->helpText, output);
+                   });
+
+  m_Ctx.GetMainWindow()->RegisterShortcut("CTRL+S", this,
+                                          [this](QWidget *) { this->on_saveScript_clicked(); });
+
+  updateButtonStates();
+
+  // we defer debugging loading onto a thread so check after a delay
+  QTimer::singleShot(1200, [this]() {
+    if(!PythonContext::IsDebuggingEnabled())
+    {
+      updateButtonStates();
+    }
+  });
 }
 
 PythonShell::~PythonShell()
 {
   m_Ctx.BuiltinWindowClosed(this);
 
-  interactiveContext->Finish();
+  m_Ctx.GetMainWindow()->UnregisterShortcut("CTRL+S", this);
 
-  delete m_ThreadCtx;
+  // on a clean shutdown, remove the unsaved temp file
+  QString unsavedFile = interactiveContext->GetTempFilename(lit("script.py"));
+
+  if(!unsavedFile.isEmpty() && QFile::exists(unsavedFile))
+    QFile::remove(unsavedFile);
+
+  for(EditorWrapper *edit : m_Editors)
+    delete edit;
+
+  delete m_ToolTip;
+
+  completionContext->Finish();
+  interactiveContext->Finish();
+  helpContext->Finish();
 
   delete ui;
+}
+
+void PythonShell::doSyntaxCheck()
+{
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return;
+
+  ScintillaEdit *sc = editor->scintilla();
+
+  if(sc->lexer() != SCLEX_PYTHON)
+    return;
+
+  // don't syntax check while the user still seems to be editing, e.g. with autocomplete or a
+  // function tooltip active. The syntax check timer will be restarted when these go away
+  if(sc->autoCActive() || m_FuncTip)
+    return;
+
+  // also don't do it while running, as it makes no sense and also could stall the UI thread if we're debugging
+  if(runningScriptEditor)
+    return;
+
+  QByteArray script = sc->getText(sc->textLength() + 1);
+  PyParseError parseError = completionContext->CheckPyParse(script, "script.py");
+
+  if(parseError.lineno >= 0)
+  {
+    sptr_t end = sc->lineLength(parseError.lineno - 1);
+    sptr_t linePos = sc->positionFromLine(parseError.lineno - 1);
+    while(QChar(QLatin1Char(script[int(linePos + end - 1)])).isSpace())
+      end--;
+    sc->setIndicatorCurrent(0);
+    sc->indicatorFillRange(linePos + parseError.offset - 1, end + 1 - parseError.offset);
+
+    sc->annotationSetText(parseError.lineno - 1, parseError.errStr.c_str());
+    sc->annotationSetVisible(ANNOTATION_BOXED);
+    sc->annotationSetStyle(parseError.lineno - 1, STYLE_ERROR);
+  }
+}
+
+void PythonShell::editorTab_Changed(int index)
+{
+  EditorWrapper *editor = curEditor();
+
+  ui->saveScript->setEnabled(editor && editor->filename() != QString());
+
+  updateButtonStates();
+
+  updateNonDebugWarning();
+}
+
+void PythonShell::openFileModified(const QString &path)
+{
+  for(EditorWrapper *edit : m_Editors)
+  {
+    if(edit->filename() == path)
+    {
+      // delay slightly to avoid reading while the file is being written or if it was deleted before
+      // being written as some editors do
+      QTimer::singleShot(150, [this, edit, path]() {
+        bool mod = edit->isModified();
+
+        // re-add the path, it may have been removed if the file was deleted
+        m_Watcher->addPath(path);
+
+        if(!mod && !m_Ctx.Config().Python_PromptReloadUnchanged)
+        {
+          // unconditionally reload
+        }
+        else
+        {
+          QString prompt = tr("Reload from disk and overwrite your changes?");
+          if(!mod)
+            prompt = tr("Reload from disk?");
+
+          QMessageBox::StandardButton response = RDDialog::question(
+              this, tr("%1 has been modified on disk").arg(QFileInfo(path).fileName()),
+              tr("%1 has been modified on disk. %2").arg(QFileInfo(path).fileName()).arg(prompt));
+
+          if(response == QMessageBox::No)
+            return;
+        }
+
+        QFile f(path);
+        if(f.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+          edit->scintilla()->setText(f.readAll().data());
+          edit->markModified(false);
+          return;
+        }
+      });
+    }
+  }
+}
+
+void PythonShell::editorTab_Menu(const QPoint &pos)
+{
+  ToolWindowManagerArea *editorTabs = ui->docking->areaOf(m_Editors[0]);
+
+  int tabIndex = editorTabs->tabBar()->tabAt(pos);
+
+  if(tabIndex == -1)
+    return;
+
+  if(editorTabs->count() == 1)
+    return;
+
+  QAction closeTab(tr("Close tab"), this);
+  QAction closeOtherTabs(tr("Close other tabs"), this);
+  QAction closeRightTabs(tr("Close tabs to the right"), this);
+
+  QMenu contextMenu(this);
+
+  contextMenu.addAction(&closeTab);
+  contextMenu.addAction(&closeOtherTabs);
+  contextMenu.addAction(&closeRightTabs);
+
+  QObject::connect(&closeTab, &QAction::triggered, [editorTabs, tabIndex]() {
+    // remove the tab at this index
+    delete editorTabs->widget(tabIndex);
+  });
+
+  QObject::connect(&closeRightTabs, &QAction::triggered, [editorTabs, tabIndex]() {
+    for(int i = editorTabs->count() - 1; i > tabIndex; i--)
+      delete editorTabs->widget(i);
+  });
+
+  QObject::connect(&closeOtherTabs, &QAction::triggered, [editorTabs, tabIndex]() {
+    for(int i = editorTabs->count() - 1; i >= 0; i--)
+      if(i != tabIndex)
+        delete editorTabs->widget(i);
+  });
+
+  RDDialog::show(&contextMenu, QCursor::pos());
+}
+
+void PythonShell::updateExtensionProjects()
+{
+  RDTreeViewExpansionState expansion;
+  ui->projectExplorer->saveExpansion(expansion, 0, Qt::UserRole + 1);
+
+  ui->projectExplorer->beginUpdate();
+
+  m_UIExtensions->clear();
+
+  for(const ExtensionMetadata &ext : m_Ctx.Extensions().GetInstalledExtensions())
+  {
+    QString name = ext.name;
+
+    if(ext.hasChanges)
+      name += tr(" (Reload required)");
+
+    if(ext.failedLoad)
+      name += tr(" (Failed to load)");
+
+    RDTreeWidgetItem *root = new RDTreeWidgetItem({name});
+    root->setData(0, Qt::UserRole + 1, ext.package);
+
+    if(ext.hasChanges)
+      root->setItalic(true);
+
+    if(m_Ctx.Config().AlwaysLoad_Extensions.contains(ext.package))
+      root->setBold(true);
+
+    addExtensionDirItems(root, QDir(ext.filePath));
+
+    m_UIExtensions->addChild(root);
+  }
+
+  m_NewExtension = new RDTreeWidgetItem({tr("Create new...")});
+  m_NewExtension->setData(0, Qt::UserRole + 1, m_NewExtension->text(0));
+  m_NewExtension->setItalic(true);
+  m_NewExtension->setIcon(0, Icons::plugin_add());
+
+  m_UIExtensions->addChild(m_NewExtension);
+
+  ui->projectExplorer->endUpdate();
+
+  ui->projectExplorer->applyExpansion(expansion, 0, Qt::UserRole + 1);
+}
+
+void PythonShell::addExtensionDirItems(RDTreeWidgetItem *root, QDir dir)
+{
+  m_Watcher->addPath(dir.absolutePath());
+  for(QString child : dir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot))
+  {
+    QString path = dir.absoluteFilePath(child);
+    QFileInfo fileInfo(path);
+
+    // only show .py files, .md files (for README.md) and the extension.json
+    if(fileInfo.isFile() && fileInfo.suffix().toLower() != lit("py") &&
+       fileInfo.suffix().toLower() != lit("md") && child.toLower() != lit("extension.json"))
+      continue;
+
+    RDTreeWidgetItem *item = new RDTreeWidgetItem({child});
+    item->setData(0, Qt::UserRole + 1, child);
+    if(fileInfo.isDir())
+    {
+      // ignore some directories
+      if(child.toLower() == lit("__pycache__") || child.toLower() == lit(".git") ||
+         child.toLower() == lit(".vscode"))
+        continue;
+
+      item->setIcon(0, Icons::folder());
+
+      addExtensionDirItems(item, QDir(path));
+    }
+    else
+    {
+      item->setData(0, Qt::UserRole, path);
+    }
+
+    root->addChild(item);
+  }
+}
+
+EditorWrapper *PythonShell::curEditor()
+{
+  for(EditorWrapper *edit : m_Editors)
+  {
+    if(edit->isVisible())
+      return edit;
+  }
+
+  return NULL;
+}
+
+EditorWrapper *PythonShell::makeEditor(rdcstr filename, rdcstr text)
+{
+  EditorWrapper *editor = new EditorWrapper(this);
+  editor->setObjectName(lit("scriptEditor"));
+
+  ScintillaEdit *sc = editor->scintilla();
+
+  editor->setFilename(filename);
+
+  sc->indicSetFore(0, 0x0000ff);
+
+  m_FindReplace->configureFindIndicator(sc);
+
+  sc->styleSetFont(STYLE_DEFAULT, Formatter::FixedFont().family().toUtf8().data());
+  sc->styleSetSize(STYLE_DEFAULT, Formatter::FixedFont().pointSize());
+  sc->styleSetFont(STYLE_ERROR, Formatter::FixedFont().family().toUtf8().data());
+  sc->styleSetSize(STYLE_ERROR, Formatter::FixedFont().pointSize());
+  sc->styleSetBack(STYLE_ERROR,
+                   IsDarkTheme() ? SCINTILLA_COLOUR(175, 70, 70) : SCINTILLA_COLOUR(255, 150, 150));
+
+  sc->setMarginLeft(4.0);
+  sc->setMarginWidthN(0, 32.0);
+  sc->setMarginWidthN(1, 0.0);
+  sc->setMarginWidthN(2, 16.0);
+
+  sc->markerSetBack(CURRENT_MARKER, SCINTILLA_COLOUR(240, 128, 128));
+  sc->markerSetBack(CURRENT_MARKER + 1, SCINTILLA_COLOUR(240, 128, 128));
+  sc->markerDefine(CURRENT_MARKER, SC_MARK_SHORTARROW);
+  sc->markerDefine(CURRENT_MARKER + 1, SC_MARK_BACKGROUND);
+
+  sc->usePopUp(SC_POPUP_NEVER);
+
+  sc->setContextMenuPolicy(Qt::CustomContextMenu);
+  QObject::connect(sc, &ScintillaEdit::customContextMenuRequested, this,
+                   &PythonShell::editor_contextMenu);
+
+  QString suffix;
+
+  if(!filename.isEmpty())
+    suffix = QFileInfo(filename).suffix().toLower();
+  if(suffix == lit("md"))
+  {
+    ConfigureSyntax(sc, SCLEX_NULL);
+    sc->setWrapMode(SC_WRAP_WORD);
+  }
+  else if(suffix.toLower() == lit("json"))
+  {
+    ConfigureSyntax(sc, SCLEX_JSON);
+    sc->setWrapMode(SC_WRAP_WORD);
+  }
+  else
+  {
+    ConfigureSyntax(sc, SCLEX_PYTHON);
+  }
+
+  sc->setTabWidth(4);
+  sc->setUseTabs(false);
+
+  sc->setScrollWidth(1);
+  sc->setScrollWidthTracking(true);
+
+  sc->colourise(0, -1);
+
+  sc->autoCSetMaxHeight(10);
+  sc->autoCSetCancelAtStart(false);
+
+  sc->setMouseDwellTime(400);
+
+  sc->installEventFilter(this);
+
+  // start syntax checking if we exit autocomplete
+  QObject::connect(sc, &ScintillaEdit::autoCompleteCancelled,
+                   [this]() { m_SyntaxCheckTimer->start(); });
+  QObject::connect(sc, &ScintillaEdit::autoCompleteSelection,
+                   [this]() { m_SyntaxCheckTimer->start(); });
+
+  QObject::connect(
+      sc, &ScintillaEdit::modified,
+      [this, editor, sc](int type, int, int, int, const QByteArray &text, int, int, int) {
+        if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_BEFOREINSERT | SC_MOD_BEFOREDELETE))
+        {
+          m_FindReplace->clearFindState();
+
+          editor->markModified(true);
+
+          sc->markerDeleteAll(CURRENT_MARKER);
+          sc->markerDeleteAll(CURRENT_MARKER + 1);
+
+          // always remove errors immediately
+          sc->setIndicatorCurrent(0);
+          sc->indicatorClearRange(0, sc->textLength());
+          sc->annotationClearAll();
+
+          m_SyntaxCheckTimer->start();
+        }
+
+        if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))
+        {
+          if(!sc->autoCActive() || text.contains('\r') || text.contains('\n'))
+          {
+            completionContext->reflectSource(QString::fromUtf8(sc->getText(sc->textLength() + 1)));
+          }
+          else if(sc->autoCActive())
+          {
+            // delay updating the autocomplete so the current cursor position is updated
+            GUIInvoke::defer(this, [this, sc]() { doAutocomplete(sc); });
+          }
+        }
+      });
+
+  QObject::connect(sc, &ScintillaEdit::dwellStart, [this, sc](int x, int y) {
+    if(sc->autoCActive())
+      return;
+
+    if(m_ToolTip->isVisible() && m_FuncTip)
+      return;
+
+    if(!sc->geometry().contains(sc->mapFromGlobal(QCursor::pos())))
+      return;
+
+    QWidget *widgetInCursor = QApplication::widgetAt(QCursor::pos());
+    if(widgetInCursor && sc != widgetInCursor && sc != widgetInCursor->parentWidget())
+      return;
+
+    sptr_t pos = sc->positionFromPointClose(x, y);
+
+    if(pos == -1)
+      return;
+
+    sptr_t line = sc->lineFromPosition(pos);
+    sptr_t col = pos - sc->positionFromLine(line);
+
+    QString tooltip = completionContext->tooltipForLoc(line + 1, col);
+
+    if(!tooltip.isEmpty())
+    {
+      hideFunccompleteTooltip();
+
+      m_ToolTip->configureTip(this, tooltip);
+      m_ToolTip->showTipAtPos(QCursor::pos() + QPoint(5, 5));
+    }
+  });
+
+  QObject::connect(sc, &ScintillaEdit::dwellEnd, [this, sc](int, int) {
+    if(sc->autoCActive())
+      return;
+
+    if(!m_FuncTip)
+      m_ToolTip->hideTip();
+  });
+
+  QObject::connect(sc, &ScintillaEdit::charAdded, [this, sc](int ch) { doAutocomplete(sc); });
+
+  QObject::connect(sc, &ScintillaEdit::buttonPressed,
+                   [this](QMouseEvent *ev) { hideFunccompleteTooltip(); });
+
+  QObject::connect(sc, &ScintillaEdit::keyPressed, [this, sc](QKeyEvent *ev) {
+    if(ev->key() == Qt::Key_Space && (ev->modifiers() & Qt::ControlModifier))
+      doAutocomplete(sc);
+
+    if(m_ToolTip->isVisible() && m_FuncTip)
+    {
+      if(sc->lineFromPosition(sc->currentPos()) == m_FuncTipLine)
+      {
+        doFunccomplete(sc);
+        return;
+      }
+
+      hideFunccompleteTooltip();
+    }
+
+    if(ev->key() == Qt::Key_F1)
+    {
+      sptr_t pos = sc->currentPos();
+
+      if(pos >= 0)
+      {
+        sptr_t line = sc->lineFromPosition(pos);
+        sptr_t col = pos - sc->positionFromLine(line);
+
+        QString typeName = completionContext->typenameForLoc(line + 1, col);
+
+        if(!typeName.isEmpty())
+          selectedHelp(typeName);
+      }
+    }
+
+    m_FindReplace->handleEditorKeypress(sc, ev);
+  });
+
+  if(m_Editors.empty())
+  {
+    ui->docking->addToolWindow(editor, ToolWindowManager::EmptySpace);
+  }
+  else
+  {
+    ui->docking->addToolWindow(editor,
+                               ToolWindowManager::AreaReference(ToolWindowManager::AddTo,
+                                                                ui->docking->areaOf(m_Editors[0])));
+  }
+
+  m_Editors.push_back(editor);
+  m_Scintillas.push_back(sc);
+
+  updateEditorCloseButton();
+
+  sc->setText(text.c_str());
+  sc->emptyUndoBuffer();
+  editor->markModified(false);
+
+  return editor;
+}
+
+void PythonShell::updateEditorCloseButton()
+{
+  for(EditorWrapper *edit : m_Editors)
+  {
+    ToolWindowManager::ToolWindowProperty props =
+        ToolWindowManager::DisallowUserDocking | ToolWindowManager::AlwaysDisplayFullTabs;
+
+    // disallow closing last scintilla
+    if(m_Editors.size() == 1)
+      props = props | ToolWindowManager::HideCloseButton;
+
+    ui->docking->setToolWindowProperties(edit, props);
+  }
+}
+
+void PythonShell::updateNonDebugWarning()
+{
+  m_DebuggerAttached = PythonContext::IsDebuggerConnected();
+
+  for(EditorWrapper *edit : m_Editors)
+  {
+    if(edit->filename().isEmpty())
+    {
+      if(m_DebuggerAttached)
+        edit->setWarning(
+            tr("External debugger will not work for unsaved files. "
+               "Save script to disk to allow debugging."));
+    }
+    else
+    {
+      edit->setWarning(QString());
+    }
+  }
+
+  updateButtonStates();
+}
+
+void PythonShell::updateButtonStates()
+{
+  enableButtons(ui->newScript->isEnabled());
+}
+
+void PythonShell::addRecentFile(rdcstr filename)
+{
+  // don't add recent files from UI extensions
+  for(const ExtensionMetadata &ext : m_Ctx.Extensions().GetInstalledExtensions())
+  {
+    if(QString(QFileInfo(filename).absolutePath())
+           .toLower()
+           .startsWith(QDir(ext.filePath).absolutePath().toLower()))
+    {
+      return;
+    }
+  }
+
+  m_Ctx.Config().Python_RecentFiles.removeIf([filename](const rdcstr &o) { return o == filename; });
+
+  if(m_Ctx.Config().Python_RecentFiles.size() == 10)
+    m_Ctx.Config().Python_RecentFiles.pop_back();
+
+  m_Ctx.Config().Python_RecentFiles.insert(0, filename);
+
+  m_Ctx.Config().Save();
+
+  updateRecentFiles(true);
+}
+
+void PythonShell::updateRecentFiles(bool added)
+{
+  ui->projectExplorer->beginUpdate();
+
+  bool expanded = ui->projectExplorer->isItemExpanded(m_RecentFiles);
+
+  // expand if we're adding the first recent file
+  if(m_Ctx.Config().Python_RecentFiles.size() == 1 && added)
+    expanded = true;
+
+  m_RecentFiles->clear();
+
+  QString unsavedFile = interactiveContext->GetTempFilename(lit("script.py"));
+
+  if(!unsavedFile.isEmpty() && QFile::exists(unsavedFile) && !m_IgnoreRecovered)
+  {
+    RDTreeWidgetItem *recent = new RDTreeWidgetItem({tr("Recovered Script")});
+    recent->setItalic(true);
+    recent->setData(0, Qt::UserRole, QString(unsavedFile));
+    m_RecentFiles->addChild(recent);
+  }
+  else
+  {
+    // we didn't have a recovered script, remember that and don't display the file in future
+    // refreshes appears in future due to temp script running. When the window is closed the script
+    // will be removed, and if we crash and restart then the script will be found
+    m_IgnoreRecovered = true;
+  }
+
+  for(rdcstr file : m_Ctx.Config().Python_RecentFiles)
+  {
+    RDTreeWidgetItem *recent = new RDTreeWidgetItem({QFileInfo(file).fileName()});
+    recent->setData(0, Qt::UserRole, QString(file));
+    m_RecentFiles->addChild(recent);
+  }
+
+  ui->projectExplorer->endUpdate();
+
+  if(expanded)
+    ui->projectExplorer->expandItem(m_RecentFiles);
+  else
+    ui->projectExplorer->collapseItem(m_RecentFiles);
+}
+
+bool PythonShell::eventFilter(QObject *watched, QEvent *event)
+{
+  if(qobject_cast<ScintillaEdit *>(watched))
+  {
+    if(event->type() == QEvent::Leave)
+    {
+      if(!m_FuncTip)
+      {
+        m_ToolTip->hideTip();
+      }
+      else if(m_FuncTip)
+      {
+        if(!m_ToolTip->geometry().contains(QCursor::pos()))
+        {
+          hideFunccompleteTooltip();
+        }
+      }
+    }
+    else if(event->type() == QEvent::KeyPress && ((QKeyEvent *)event)->key() == Qt::Key_Escape)
+    {
+      hideFunccompleteTooltip();
+    }
+  }
+
+  if(m_InteractiveCompleter && watched == m_InteractiveCompleter->popup() &&
+     (event->type() == QEvent::Hide || event->type() == QEvent::FocusOut))
+  {
+    m_CurrentCompletionTip = -1;
+    updateCompletionTip();
+  }
+
+  if(m_FuncTip && watched == m_FuncTipWidget && event->type() == QEvent::FocusOut)
+  {
+    hideFunccompleteTooltip();
+  }
+
+  return QObject::eventFilter(watched, event);
+}
+
+QVariant PythonShell::persistData()
+{
+  QVariantMap state = ui->docking->saveState();
+
+  RDTreeViewExpansionState expansion;
+  ui->projectExplorer->saveExpansion(expansion, 0);
+
+  QVariantList expansionList;
+  for(uint x : expansion)
+    expansionList.append(x);
+  state[lit("projectExplorerExpansion")] = expansionList;
+
+  return state;
+}
+
+void PythonShell::setPersistData(const QVariant &persistData)
+{
+  QVariantMap state = persistData.toMap();
+
+  ui->docking->restoreState(state);
+
+  ui->projectExplorer->collapseAll();
+
+  RDTreeViewExpansionState expansion;
+  for(QVariant x : state[lit("projectExplorerExpansion")].toList())
+    expansion.insert(x.toUInt());
+  ui->projectExplorer->applyExpansion(expansion, 0);
+
+  if(ui->docking->areaOf(m_Editors[0]) == NULL)
+    ui->docking->addToolWindow(m_Editors[0], ToolWindowManager::AreaReference(
+                                                 ToolWindowManager::RightOf,
+                                                 ui->docking->areaOf(ui->projectExplorer), 0.8f));
+
+  setupTabs();
+}
+
+void PythonShell::setupTabs()
+{
+  ToolWindowManagerArea *editorTabs = ui->docking->areaOf(m_Editors[0]);
+
+  QObject::connect(editorTabs, &QTabWidget::currentChanged, this, &PythonShell::editorTab_Changed);
+
+  editorTabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+
+  QObject::connect(editorTabs->tabBar(), &QTabBar::customContextMenuRequested, this,
+                   &PythonShell::editorTab_Menu);
 }
 
 PythonContext *PythonShell::GetScriptContext()
@@ -1034,9 +1225,9 @@ PythonContext *PythonShell::GetScriptContext()
   return scriptContext;
 }
 
-void PythonShell::SetScriptText(rdcstr script)
+bool PythonShell::CheckUnsavedChanges()
 {
-  scriptEditor->setText(script.c_str());
+  return checkAllowClose();
 }
 
 bool PythonShell::LoadScriptFromFilename(rdcstr filename)
@@ -1046,7 +1237,16 @@ bool PythonShell::LoadScriptFromFilename(rdcstr filename)
     QFile f(filename);
     if(f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-      scriptEditor->setText(f.readAll().data());
+      makeEditor(filename, f.readAll().data());
+
+      ui->saveScript->setEnabled(true);
+
+      QString unsavedFile = interactiveContext->GetTempFilename(lit("script.py"));
+      if(QString(filename) != unsavedFile)
+        addRecentFile(filename);
+
+      m_Watcher->addPath(filename);
+
       return true;
     }
   }
@@ -1054,39 +1254,159 @@ bool PythonShell::LoadScriptFromFilename(rdcstr filename)
   return false;
 }
 
+void PythonShell::CreateNewScriptEditor(rdcstr name, rdcstr text)
+{
+  EditorWrapper *ed = makeEditor("", text);
+
+  QFileInfo info(name);
+  if(info.isAbsolute() && (info.exists() || info.absoluteDir().exists()))
+    ed->setFilename(name);
+  else
+    ed->setTitle(name);
+
+  ui->saveScript->setEnabled(false);
+  updateNonDebugWarning();
+}
+
 rdcstr PythonShell::GetScriptText()
 {
-  return scriptEditor->getText(scriptEditor->textLength() + 1).data();
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return rdcstr();
+
+  ScintillaEdit *sc = editor->scintilla();
+
+  return sc->getText(sc->textLength() + 1).data();
+}
+
+void PythonShell::SetExtensionOutputFilter(const rdcstr &extensionName)
+{
+  if(extensionName.empty())
+    return;
+
+  int idx = loadedExtensions.indexOf(extensionName);
+  if(idx < 0)
+    return;
+
+  ui->outputContext->setCurrentIndex(FirstExtensionOutputFilter + idx);
+}
+
+void PythonShell::SetScriptOutputFilter()
+{
+  ui->outputContext->setCurrentIndex(ScriptOutputFilter);
+}
+
+void PythonShell::RemoveOutputFilter()
+{
+  ui->outputContext->setCurrentIndex(AllOutputFilter);
+}
+
+void PythonShell::ShowOutput()
+{
+  ToolWindowManager::raiseToolWindow(ui->outputGroup);
+}
+
+void PythonShell::ShowREPL()
+{
+  ToolWindowManager::raiseToolWindow(ui->replGroup);
+}
+
+void PythonShell::ShowHelp()
+{
+  ToolWindowManager::raiseToolWindow(ui->helpGroup);
 }
 
 void PythonShell::RunScript()
 {
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return;
+
+  if(editor->isModified() && !editor->filename().isEmpty())
+    saveEditor(editor, editor->filename());
+
   PythonContext *context = newContext();
 
   ANALYTIC_SET(UIFeatures.PythonInterop, true);
 
-  ui->outputHelpTabs->setCurrentIndex(0);
+  ShowOutput();
 
-  ui->scriptOutput->clear();
+  scriptOutputLines.removeIf([](const ScriptOutputLine &l) { return l.extension.isEmpty(); });
 
-  QString script = QString::fromUtf8(scriptEditor->getText(scriptEditor->textLength() + 1));
+  updateScriptOutput(true);
+
+  QString script = GetScriptText();
 
   enableButtons(false);
 
-  LambdaThread *thread = new LambdaThread([this, script, context]() {
+  // save any changes
+  if(editor->isModified() && !editor->filename().isEmpty())
+  {
+    saveEditor(editor, editor->filename());
+  }
+  else if(editor->filename().isEmpty())
+  {
+    // write the script as a temporary file, so if we crash it will be recoverable.
+    // this only applies if editor is an unsaved file
+    QString unsavedFile = context->GetTempFilename(lit("script.py"));
+    QFile f(unsavedFile);
+    f.open(QFile::Truncate | QFile::WriteOnly);
+    f.write(script.toUtf8().data());
+    f.close();
+  }
+
+  m_CurLineTimer->start();
+
+  LambdaThread *thread = new LambdaThread([this, script, context, editor]() {
+    PythonContext::AddDebuggableThread();
+
     scriptContext = context;
-    context->executeString(lit("script.py"), script);
+    runningScriptEditor = editor->scintilla();
+    context->executeString(editor->filename(), script);
     scriptContext = NULL;
 
     GUIInvoke::call(this, [this, context]() {
+      m_CurLineTimer->stop();
+
       context->Finish();
+      runningScriptEditor = NULL;
       enableButtons(true);
+
+      QString unsavedFile = context->GetTempFilename(lit("script.py"));
+      QFile::remove(unsavedFile);
     });
+
+    PythonContext::RemoveDebuggableThread();
   });
 
   thread->setName(lit("Python script"));
   thread->selfDelete(true);
   thread->start();
+}
+
+void PythonShell::AttachDebugger(const rdcstr &contextLocation)
+{
+  QString path = contextLocation;
+  for(const ExtensionMetadata &e : m_Ctx.Extensions().GetInstalledExtensions())
+  {
+    if(e.package == contextLocation)
+      path = e.filePath;
+  }
+
+  if(!QDir(path).exists())
+    return;
+
+  PythonContext::LaunchDebugger(this, m_Ctx.Config(), path);
+
+  updateButtonStates();
+  updateNonDebugWarning();
+}
+
+void PythonShell::on_findReplace_clicked()
+{
+  m_FindReplace->raiseOrShow();
 }
 
 void PythonShell::on_execute_clicked()
@@ -1097,7 +1417,8 @@ void PythonShell::on_execute_clicked()
 
   appendText(ui->interactiveOutput, command + lit("\n"));
 
-  history.push_front(command);
+  if(!command.trimmed().isEmpty())
+    history.push_front(command);
   historyidx = -1;
 
   ui->lineInput->clear();
@@ -1116,7 +1437,10 @@ void PythonShell::on_execute_clicked()
   m_storedLines = QString();
 
   if(command.trimmed().length() > 0)
+  {
     interactiveContext->executeString(command);
+    interactiveContext->reflectSource(QString());
+  }
 
   appendText(ui->interactiveOutput, lit(">> "));
 }
@@ -1133,6 +1457,7 @@ void PythonShell::on_clear_clicked()
     interactiveContext->Finish();
 
   interactiveContext = newContext();
+  interactiveContext->reflectSource(QString());
 }
 
 void PythonShell::on_newScript_clicked()
@@ -1143,9 +1468,7 @@ void PythonShell::on_newScript_clicked()
 
   minidocHeader = QFormatStr("# %1\n\n").arg(minidocHeader);
 
-  scriptEditor->setText(minidocHeader.toUtf8().data());
-
-  scriptEditor->emptyUndoBuffer();
+  CreateNewScriptEditor("", minidocHeader);
 }
 
 void PythonShell::on_openScript_clicked()
@@ -1161,9 +1484,271 @@ void PythonShell::on_openScript_clicked()
 
 void PythonShell::on_saveScript_clicked()
 {
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return;
+
+  QString filename = editor->filename();
+
+  if(!QFileInfo(filename).isAbsolute())
+    return on_saveAsScript_clicked();
+
+  if(saveEditor(editor, filename))
+    editor->markModified(false);
+}
+
+void PythonShell::on_saveAsScript_clicked()
+{
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return;
+
+  if(saveEditorAs(editor))
+    editor->markModified(false);
+}
+
+void PythonShell::on_runScript_clicked()
+{
+  RunScript();
+}
+
+void PythonShell::on_debugAttach_clicked()
+{
+  EditorWrapper *editor = curEditor();
+
+  if(!editor)
+    return;
+
+  QString filename = editor->filename();
+
+  if(editor->isUIExtension())
+  {
+    filename = QFileInfo(filename).absolutePath();
+
+    for(const ExtensionMetadata &e : m_Ctx.Extensions().GetInstalledExtensions())
+    {
+      if(filename.startsWith(QDir(e.filePath).absolutePath()))
+      {
+        AttachDebugger(e.package);
+        return;
+      }
+    }
+  }
+  else if(!filename.isEmpty())
+  {
+    AttachDebugger(QFileInfo(filename).absoluteDir().absolutePath());
+  }
+}
+
+void PythonShell::on_abortRun_clicked()
+{
+  if(scriptContext)
+    scriptContext->abort();
+}
+
+void PythonShell::traceLine(const QString &file, int line)
+{
+  if(!runningScriptEditor)
+    return;
+
+  // we only update the current line on a fixed timer to avoid DoS'ing ourselves with too many rapid
+  // updates. Both happen on the UI thread so we just need a simple flag
+  m_CurLine = line;
+  m_CurLineDirty = true;
+}
+
+void PythonShell::exception(const QString &extension, const QString &type, const QString &value,
+                            int finalLine, QList<QString> frames)
+{
+  if(finalLine >= 0)
+    traceLine(QString(), finalLine);
+
+  QString exString;
+
+  if(!frames.isEmpty())
+  {
+    exString += tr("Traceback (most recent call last):\n");
+    for(const QString &f : frames)
+      exString += QFormatStr("  %1\n").arg(f);
+  }
+  exString += QFormatStr("%1: %2\n").arg(type).arg(value);
+
+  if(QObject::sender() == (QObject *)interactiveContext)
+  {
+    appendText(ui->interactiveOutput, exString);
+    return;
+  }
+
+  exString.insert(0, QLatin1Char('\n'));
+
+  scriptOutputLines.push_back({extension, exString});
+
+  updateScriptOutput(false);
+}
+
+void PythonShell::textOutput(const QString &extension, bool isStdError, const QString &output)
+{
+  if(QObject::sender() == (QObject *)interactiveContext)
+  {
+    appendText(ui->interactiveOutput, output);
+    return;
+  }
+
+  scriptOutputLines.push_back({extension, output});
+  updateScriptOutput(false);
+}
+
+void PythonShell::on_outputContext_currentIndexChanged(int idx)
+{
+  updateScriptOutput(true);
+}
+
+void PythonShell::on_projectExplorer_itemActivated(RDTreeWidgetItem *item, int column)
+{
+  // ignore these, just let them collapse/expand
+  if(item == m_Examples || item == m_UIExtensions || item == m_RecentFiles)
+    return;
+
+  if(item == m_NewExtension)
+  {
+    createExtension_clicked();
+  }
+  else if(item->parent() == m_Examples)
+  {
+    QString title = tr("Example: ") + item->text(0);
+    QString text = item->data(0, Qt::UserRole).toString();
+
+    for(EditorWrapper *edit : m_Editors)
+    {
+      if(edit->filename() == title || edit->title() == title)
+      {
+        ToolWindowManager::raiseToolWindow(edit);
+        return;
+      }
+    }
+
+    CreateNewScriptEditor("", text);
+
+    m_Editors.back()->setTitle(title);
+  }
+  else
+  {
+    // recent file or UI extension, the user role contains the path
+    QString filename = item->data(0, Qt::UserRole).toString();
+
+    // directories in UI extensions have no filename to activate
+    if(filename.isEmpty())
+      return;
+
+    bool isExt = false;
+    RDTreeWidgetItem *parent = item;
+    while(parent)
+    {
+      if(parent == m_UIExtensions)
+        isExt = true;
+      parent = parent->parent();
+    }
+
+    for(EditorWrapper *edit : m_Editors)
+    {
+      if(edit->filename() == filename)
+      {
+        ToolWindowManager::raiseToolWindow(edit);
+        return;
+      }
+    }
+
+    if(!QFileInfo(filename).exists())
+    {
+      QMessageBox::StandardButton response = RDDialog::question(
+          this, tr("'%1' does not exist").arg(QFileInfo(filename).fileName()),
+          tr("File not found at path:\n%1\n\nRemove from recent files list?").arg(filename));
+
+      if(response == QMessageBox::Yes)
+      {
+        rdcstr f = filename;
+        m_Ctx.Config().Python_RecentFiles.removeIf([f](const rdcstr &o) { return o == f; });
+
+        m_Ctx.Config().Save();
+
+        GUIInvoke::defer(this, [this]() { updateRecentFiles(false); });
+      }
+
+      return;
+    }
+
+    LoadScriptFromFilename(filename);
+
+    if(isExt)
+      m_Editors.back()->setUIExtension(true);
+
+    editorTab_Changed(-1);
+
+    QString unsavedFile = interactiveContext->GetTempFilename(lit("script.py"));
+    if(filename == unsavedFile)
+    {
+      QFile::remove(unsavedFile);
+      updateRecentFiles(false);
+    }
+  }
+}
+
+bool PythonShell::checkAllowClose()
+{
+  for(EditorWrapper *edit : m_Editors)
+  {
+    if(!edit->checkAllowClose())
+      return false;
+  }
+  return true;
+}
+
+void PythonShell::updateScriptOutput(bool fullRefresh)
+{
+  if(fullRefresh)
+  {
+    ui->scriptOutput->clear();
+    lastDisplayedLine = 0;
+  }
+
+  for(size_t i = lastDisplayedLine; i < scriptOutputLines.size(); i++)
+  {
+    bool display = false;
+
+    if(ui->outputContext->currentIndex() == AllOutputFilter)
+      display = true;
+
+    // Script
+    else if(ui->outputContext->currentIndex() == ScriptOutputFilter)
+      display = scriptOutputLines[i].extension.isEmpty();
+
+    else if(loadedExtensions.indexOf(scriptOutputLines[i].extension) + FirstExtensionOutputFilter ==
+            ui->outputContext->currentIndex())
+      display = true;
+
+    if(display)
+    {
+      appendText(ui->scriptOutput, scriptOutputLines[i].text);
+    }
+  }
+
+  lastDisplayedLine = scriptOutputLines.size();
+}
+
+bool PythonShell::saveEditorAs(EditorWrapper *editor)
+{
   QString filename = RDDialog::getSaveFileName(this, tr("Save Python Script"), QString(),
                                                tr("Python scripts (*.py)"));
+  if(filename.isEmpty())
+    return false;
+  return saveEditor(editor, filename);
+}
 
+bool PythonShell::saveEditor(EditorWrapper *editor, QString filename)
+{
+  QString oldFilename = editor->filename();
   if(!filename.isEmpty())
   {
     QDir dirinfo = QFileInfo(filename).dir();
@@ -1172,9 +1757,25 @@ void PythonShell::on_saveScript_clicked()
       QFile f(filename);
       if(f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
       {
-        QString text = QString::fromUtf8(scriptEditor->getText(scriptEditor->textLength() + 1));
+        // remove the path from watching first so we don't get a notification from the write itself
+        m_Watcher->removePath(oldFilename);
+
+        ScintillaEdit *sc = editor->scintilla();
+
+        QString text = QString::fromUtf8(sc->getText(sc->textLength() + 1));
         text.remove(QLatin1Char('\r'));
         f.write(text.toUtf8());
+
+        addRecentFile(filename);
+
+        // delay a short while before starting to watch this file. This is highly unlikely to miss
+        // any real writes (which would have to happen externally after we save), but prevents us
+        // from identifying our own writes as an external modification.
+        QTimer::singleShot(200, [this, filename]() { m_Watcher->addPath(filename); });
+
+        editor->setFilename(filename);
+        updateNonDebugWarning();
+        return true;
       }
       else
       {
@@ -1186,81 +1787,60 @@ void PythonShell::on_saveScript_clicked()
     else
     {
       RDDialog::critical(this, tr("Invalid directory"),
-                         tr("Cannot find target directory to save to"));
+                         tr("Cannot find target directory to save to:\n%1").arg(filename));
     }
   }
+  return false;
 }
 
-void PythonShell::on_runScript_clicked()
+void PythonShell::removeEditor(EditorWrapper *editor)
 {
-  RunScript();
+  hideFunccompleteTooltip();
+  if(!editor->filename().isEmpty())
+    m_Watcher->removePath(editor->filename());
+  m_Editors.removeOne(editor);
+  m_Scintillas.removeOne(editor->scintilla());
+  updateEditorCloseButton();
 }
 
-void PythonShell::on_abortRun_clicked()
+void PythonShell::extensionLoaded(const QString &extension)
 {
-  if(scriptContext)
-    scriptContext->abort();
-}
-
-void PythonShell::traceLine(const QString &file, int line)
-{
-  if(QObject::sender() == (QObject *)interactiveContext)
-    return;
-
-  scriptEditor->markerDeleteAll(CURRENT_MARKER);
-  scriptEditor->markerDeleteAll(CURRENT_MARKER + 1);
-
-  scriptEditor->markerAdd(line > 0 ? line - 1 : 0, CURRENT_MARKER);
-  scriptEditor->markerAdd(line > 0 ? line - 1 : 0, CURRENT_MARKER + 1);
-}
-
-void PythonShell::exception(const QString &type, const QString &value, int finalLine,
-                            QList<QString> frames)
-{
-  QTextEdit *out = ui->scriptOutput;
-  if(QObject::sender() == (QObject *)interactiveContext)
-    out = ui->interactiveOutput;
-
-  QString exString;
-
-  if(finalLine >= 0)
-    traceLine(QString(), finalLine);
-
-  if(!out->toPlainText().endsWith(QLatin1Char('\n')))
-    exString = lit("\n");
-  if(!frames.isEmpty())
+  if(!loadedExtensions.contains(extension))
   {
-    exString += tr("Traceback (most recent call last):\n");
-    for(const QString &f : frames)
-      exString += QFormatStr("  %1\n").arg(f);
+    ui->outputContext->addItem(tr("Extension %1").arg(extension));
+    loadedExtensions.push_back(extension);
   }
-  exString += QFormatStr("%1: %2\n").arg(type).arg(value);
-
-  appendText(out, exString);
-}
-
-void PythonShell::textOutput(bool isStdError, const QString &output)
-{
-  QTextEdit *out = ui->scriptOutput;
-  if(QObject::sender() == (QObject *)interactiveContext)
-    out = ui->interactiveOutput;
-
-  appendText(out, output);
 }
 
 void PythonShell::editor_contextMenu(const QPoint &pos)
 {
-  int scintillaPos = scriptEditor->positionFromPoint(pos.x(), pos.y());
+  ScintillaEdit *editor = qobject_cast<ScintillaEdit *>(QObject::sender());
+
+  if(!editor)
+    return;
+
+  hideFunccompleteTooltip();
+
+  m_ContextMenuVisible = true;
 
   QMenu contextMenu(this);
 
-  QString curWord = getDottedWordAtPoint(scintillaPos);
+  QString typeName;
 
-  bool valid = !curWord.isEmpty();
+  sptr_t scintillaPos = editor->positionFromPoint(pos.x(), pos.y());
+  if(scintillaPos >= 0)
+  {
+    sptr_t line = editor->lineFromPosition(scintillaPos);
+    sptr_t col = scintillaPos - editor->positionFromLine(line);
 
-  QAction help(valid ? tr("Help for '%1'").arg(curWord) : tr("Help"), this);
+    typeName = completionContext->typenameForLoc(line + 1, col);
+  }
 
-  QObject::connect(&help, &QAction::triggered, [this, curWord] { selectedHelp(curWord); });
+  bool valid = !typeName.isEmpty();
+
+  QAction help(valid ? tr("Help for '%1'").arg(typeName) : tr("Help"), this);
+
+  QObject::connect(&help, &QAction::triggered, [this, typeName] { selectedHelp(typeName); });
 
   help.setEnabled(valid);
 
@@ -1270,11 +1850,11 @@ void PythonShell::editor_contextMenu(const QPoint &pos)
   QAction undo(tr("Undo"), this);
   QAction redo(tr("Redo"), this);
 
-  QObject::connect(&undo, &QAction::triggered, [this] { scriptEditor->undo(); });
-  QObject::connect(&redo, &QAction::triggered, [this] { scriptEditor->redo(); });
+  QObject::connect(&undo, &QAction::triggered, [editor] { editor->undo(); });
+  QObject::connect(&redo, &QAction::triggered, [editor] { editor->redo(); });
 
-  undo.setEnabled(scriptEditor->canUndo());
-  redo.setEnabled(scriptEditor->canRedo());
+  undo.setEnabled(editor->canUndo());
+  redo.setEnabled(editor->canRedo());
 
   contextMenu.addAction(&undo);
   contextMenu.addAction(&redo);
@@ -1285,16 +1865,16 @@ void PythonShell::editor_contextMenu(const QPoint &pos)
   QAction pasteText(tr("Paste"), this);
   QAction deleteText(tr("Delete"), this);
 
-  QObject::connect(&cutText, &QAction::triggered, [this] { scriptEditor->cut(); });
+  QObject::connect(&cutText, &QAction::triggered, [editor] { editor->cut(); });
 
-  QObject::connect(&copyText, &QAction::triggered, [this] {
-    scriptEditor->copyRange(scriptEditor->selectionStart(), scriptEditor->selectionEnd());
+  QObject::connect(&copyText, &QAction::triggered, [editor] {
+    editor->copyRange(editor->selectionStart(), editor->selectionEnd());
   });
 
-  QObject::connect(&pasteText, &QAction::triggered, [this] { scriptEditor->paste(); });
+  QObject::connect(&pasteText, &QAction::triggered, [editor] { editor->paste(); });
 
-  QObject::connect(&deleteText, &QAction::triggered, [this] {
-    scriptEditor->deleteRange(scriptEditor->selectionStart(), scriptEditor->selectionEnd());
+  QObject::connect(&deleteText, &QAction::triggered, [editor] {
+    editor->deleteRange(editor->selectionStart(), editor->selectionEnd());
   });
 
   contextMenu.addAction(&cutText);
@@ -1303,51 +1883,325 @@ void PythonShell::editor_contextMenu(const QPoint &pos)
   contextMenu.addAction(&deleteText);
   contextMenu.addSeparator();
 
-  if(scriptEditor->selectionEmpty())
+  if(editor->selectionEmpty())
   {
     cutText.setEnabled(false);
     copyText.setEnabled(false);
     deleteText.setEnabled(false);
   }
 
-  pasteText.setEnabled(scriptEditor->canPaste());
+  pasteText.setEnabled(editor->canPaste());
 
   QAction selectAll(tr("Select All"), this);
-  QObject::connect(&selectAll, &QAction::triggered, [this] { scriptEditor->selectAll(); });
+  QObject::connect(&selectAll, &QAction::triggered, [editor] { editor->selectAll(); });
   contextMenu.addAction(&selectAll);
 
-  RDDialog::show(&contextMenu, scriptEditor->viewport()->mapToGlobal(pos));
+  RDDialog::show(&contextMenu, editor->viewport()->mapToGlobal(pos));
+
+  m_ContextMenuVisible = false;
 }
 
-QString PythonShell::getDottedWordAtPoint(int scintillaPos)
+void PythonShell::projectExplorer_contextMenu(const QPoint &pos)
 {
-  QByteArray wordChars = scriptEditor->wordChars();
+  m_ContextMenuVisible = true;
 
-  QByteArray wordCharsAndDot = wordChars;
-  if(wordCharsAndDot.indexOf('.') < 0)
-    wordCharsAndDot.append('.');
+  RDTreeWidgetItem *item = ui->projectExplorer->itemAt(pos);
 
-  scriptEditor->setWordChars(wordCharsAndDot.data());
+  QMenu contextMenu(this);
 
-  sptr_t start = scriptEditor->wordStartPosition(scintillaPos, true);
-  sptr_t end = scriptEditor->wordEndPosition(scintillaPos, true);
+  QAction expandAll(tr("&Expand All"), this);
+  expandAll.setIcon(Icons::arrow_out());
 
-  scriptEditor->setWordChars(wordChars.data());
+  QAction collapseAll(tr("&Collapse All"), this);
+  collapseAll.setIcon(Icons::arrow_in());
 
-  QString curWord = QString::fromUtf8(scriptEditor->textRange(start, end));
+  expandAll.setEnabled(item && item->childCount() > 0);
+  collapseAll.setEnabled(expandAll.isEnabled());
 
-  bool valid = true;
+  QAction reloadExtension(tr("&Reload Extension"), this);
+  reloadExtension.setIcon(Icons::update());
 
-  if(curWord.isEmpty() || (!curWord[0].isLetterOrNumber() && curWord[0] != QLatin1Char('_')))
-    valid = false;
+  QAction explorerOpen(tr("&Open in File Explorer"), this);
+  explorerOpen.setIcon(Icons::folder());
 
-  for(QChar c : curWord)
+  QAction openEditor(tr("&Edit file"), this);
+  openEditor.setIcon(Icons::page_white_edit());
+
+  QAction viewOutput(tr("&View output"), this);
+  viewOutput.setIcon(Icons::filter());
+
+  QAction createExtension(tr("Create &New Extension"), this);
+  createExtension.setIcon(Icons::plugin_add());
+
+  QObject::connect(&expandAll, &QAction::triggered,
+                   [this, item]() { ui->projectExplorer->expandAllItems(item); });
+
+  QObject::connect(&collapseAll, &QAction::triggered,
+                   [this, item]() { ui->projectExplorer->collapseAllItems(item); });
+
+  contextMenu.addAction(&expandAll);
+  contextMenu.addAction(&collapseAll);
+
+  if(item && !(item == m_UIExtensions || item == m_Examples || item == m_RecentFiles))
   {
-    if(!c.isLetterOrNumber() && c != QLatin1Char('_') && c != QLatin1Char('.'))
-      valid = false;
+    QString diskLocation = item->data(0, Qt::UserRole).toString();
+    contextMenu.addSeparator();
+
+    // if this is the root node of a UI extension, add options to filter output/reload
+    if(item->parent() == m_UIExtensions)
+    {
+      rdcstr itemPath = item->data(0, Qt::UserRole + 1).toString();
+
+      contextMenu.insertAction(contextMenu.actions()[0], &reloadExtension);
+      contextMenu.insertSeparator(contextMenu.actions()[1]);
+
+      contextMenu.addAction(&explorerOpen);
+      contextMenu.addAction(&viewOutput);
+
+      rdcarray<ExtensionMetadata> exts = m_Ctx.Extensions().GetInstalledExtensions();
+      for(const ExtensionMetadata &m : exts)
+      {
+        if(m.package == rdcstr(itemPath))
+        {
+          reloadExtension.setEnabled(m.hasChanges || m.failedLoad);
+          diskLocation = QFileInfo(m.filePath).absoluteFilePath();
+          break;
+        }
+      }
+
+      explorerOpen.setEnabled(!diskLocation.isEmpty());
+      viewOutput.setEnabled(m_Ctx.Extensions().IsExtensionLoaded(itemPath));
+
+      QObject::connect(&reloadExtension, &QAction::triggered,
+                       [this, itemPath]() { m_Ctx.Extensions().LoadExtension(itemPath); });
+
+      if(!m_Ctx.Config().AlwaysLoad_Extensions.contains(itemPath))
+      {
+        reloadExtension.setEnabled(true);
+        reloadExtension.setText(tr("Enable extension"));
+        reloadExtension.setIcon(Icons::add());
+
+        QObject::connect(&reloadExtension, &QAction::triggered, [this, itemPath]() {
+          m_Ctx.Config().AlwaysLoad_Extensions.push_back(itemPath);
+          m_Ctx.Config().Save();
+        });
+      }
+
+      QObject::connect(&explorerOpen, &QAction::triggered,
+                       [diskLocation]() { QDesktopServices::openUrl(diskLocation); });
+
+      QObject::connect(&viewOutput, &QAction::triggered, [this, itemPath]() {
+        ShowOutput();
+        SetExtensionOutputFilter(itemPath);
+      });
+    }
+    else if(item->parent() != m_Examples && !diskLocation.isEmpty())
+    {
+      // real files - either recent or in UI extensions - have options to open as editors or in
+      // explorer, but we ditch the collapse/expand
+      contextMenu.clear();
+
+      // get the containing directory, not the file
+      diskLocation = QFileInfo(diskLocation).absoluteDir().absolutePath();
+
+      contextMenu.addAction(&openEditor);
+      contextMenu.addAction(&explorerOpen);
+
+      QObject::connect(&openEditor, &QAction::triggered,
+                       [this, item]() { on_projectExplorer_itemActivated(item, 0); });
+
+      QObject::connect(&explorerOpen, &QAction::triggered,
+                       [diskLocation]() { QDesktopServices::openUrl(diskLocation); });
+    }
+  }
+  else if(item == m_UIExtensions)
+  {
+    contextMenu.addSeparator();
+
+    contextMenu.addAction(&createExtension);
+
+    QObject::connect(&createExtension, &QAction::triggered, [this]() { createExtension_clicked(); });
   }
 
-  return valid ? curWord : QString();
+  RDDialog::show(&contextMenu, ui->projectExplorer->viewport()->mapToGlobal(pos));
+
+  m_ContextMenuVisible = false;
+}
+
+void PythonShell::createExtension_clicked()
+{
+  QDialog dialog;
+  RDLabel label;
+  RDLineEdit extensionName;
+  QDialogButtonBox buttons;
+
+  dialog.setWindowTitle(tr("Create new UI extension"));
+  dialog.setWindowFlags(dialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
+
+  label.setText(
+      tr("Create a new UI extension, with some example code.\n"
+         "\n"
+         "This will create the directory structure for the specified package name, with a default\n"
+         "extension metadata json and some simple example code to give you a starting point."));
+
+  extensionName.setPlaceholderText(tr("myname.example"));
+
+  buttons.setOrientation(Qt::Horizontal);
+  buttons.setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+  buttons.setCenterButtons(true);
+
+  QObject::connect(&buttons, &QDialogButtonBox::accepted, [this, &dialog, &extensionName]() {
+    QString extName = extensionName.text().trimmed();
+
+    if(extName.isEmpty())
+    {
+      RDDialog::critical(&dialog, tr("Invalid extension name"),
+                         tr("Must specify a name for the new extension."));
+      return;
+    }
+
+    if(extName.startsWith(lit("renderdoc.")))
+    {
+      RDDialog::critical(&dialog, tr("Invalid extension name"),
+                         tr("Extension name conflicts with builtin module 'renderdoc'."));
+      return;
+    }
+
+    if(extName.contains(QLatin1Char(' ')) || extName.contains(QLatin1Char('\t')))
+    {
+      RDDialog::critical(
+          &dialog, tr("Invalid extension name"),
+          tr("Extension names should be valid python package names, note including whitespace."));
+      return;
+    }
+
+    for(const ExtensionMetadata &e : m_Ctx.Extensions().GetInstalledExtensions())
+    {
+      if(QString(e.package) == extName)
+      {
+        RDDialog::critical(&dialog, tr("Extension name in use"),
+                           tr("The extension name '%1' already exists.").arg(e.package));
+        return;
+      }
+    }
+
+    QStringList locations = PythonContext::GetApplicationExtensionsPaths();
+
+    if(!locations.empty())
+    {
+      QDir dir(locations[0]);
+
+      QStringList paths = extName.split(QLatin1Char('.'));
+
+      bool nonexist = false;
+
+      while(!paths.empty())
+      {
+        QString dirname = paths[0];
+        paths.pop_front();
+
+        if(!dir.cd(dirname))
+        {
+          nonexist = true;
+          break;
+        }
+
+        qInfo() << dir.absolutePath();
+      }
+
+      if(!nonexist && dir.exists() && !dir.isEmpty())
+      {
+        RDDialog::critical(&dialog, tr("Directory already exists"),
+                           tr("Extension directory already exists:\n%1").arg(dir.absolutePath()));
+        return;
+      }
+    }
+
+    dialog.accept();
+  });
+  QObject::connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+  QVBoxLayout *layout = new QVBoxLayout(&dialog);
+  layout->addWidget(&label);
+  layout->addWidget(&extensionName);
+  layout->addWidget(&buttons);
+
+  if(!RDDialog::show(&dialog))
+    return;
+
+  if(dialog.result() == QDialog::Accepted)
+  {
+    QStringList locations = PythonContext::GetApplicationExtensionsPaths();
+    QDir dir(locations[0]);
+
+    QString extName = extensionName.text().trimmed();
+    QStringList paths = extName.split(QLatin1Char('.'));
+
+    while(!paths.empty())
+    {
+      QString dirname = paths[0];
+      paths.pop_front();
+
+      dir.mkdir(dirname);
+
+      if(!dir.cd(dirname))
+      {
+        RDDialog::critical(&dialog, tr("Couldn't create directory"),
+                           tr("Failed to create %1 in %2").arg(dirname).arg(dir.absolutePath()));
+        return;
+      }
+    }
+
+    paths = extName.split(QLatin1Char('.'));
+
+    QString metadata = lit(R"({
+	"extension_api": 1,
+	"name": "%3",
+	"version": "1.0",
+	"minimum_renderdoc": "%1.%2",
+	"description": "Template extension %4",
+	"author": "My Name <my.email@example.com>",
+	"url": "https://github.com/example/example"
+}
+)")
+                           .arg(RENDERDOC_VERSION_MAJOR)
+                           .arg(RENDERDOC_VERSION_MINOR)
+                           .arg(paths.back())
+                           .arg(extName);
+
+    {
+      QFile ext(dir.absoluteFilePath(lit("extension.json")));
+      if(ext.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+      {
+        ext.write(metadata.toUtf8());
+      }
+
+      QFile init(dir.absoluteFilePath(lit("__init__.py")));
+      if(init.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+      {
+        init.write(R"(
+# Blank RenderDoc UI extension
+
+import renderdoc as rd
+import qrenderdoc as qrd
+
+def register(version: str, pyrenderdoc: qrd.CaptureContext):
+    print(f"New UI extension loaded in RenderDoc {version}")
+
+def unregister():
+    print(f"New UI extension being unloaded")
+)");
+      }
+    }
+
+    updateExtensionProjects();
+
+    LoadScriptFromFilename(dir.absoluteFilePath(lit("__init__.py")));
+
+    m_Editors.back()->setUIExtension(true);
+
+    editorTab_Changed(-1);
+  }
 }
 
 void PythonShell::selectedHelp(QString word)
@@ -1359,15 +2213,11 @@ void PythonShell::selectedHelp(QString word)
 
 void PythonShell::refreshCurrentHelp()
 {
-  PythonContext *context = newImportedDummyContext();
+  ToolWindowManager::raiseToolWindow(ui->helpGroup);
 
   ui->helpText->clear();
 
-  QObject::connect(
-      context, &PythonContext::textOutput,
-      [this](bool isStdError, const QString &output) { appendText(ui->helpText, output); });
-
-  context->executeString(lit(R"(
+  helpContext->executeString(lit(R"(
 try:
   import keyword
   if keyword.iskeyword("%1"):
@@ -1377,125 +2227,183 @@ try:
 except ImportError:
   help(%1)
 )")
-                             .arg(ui->helpSearch->text()));
+                                 .arg(ui->helpSearch->text()));
 
-  context->Finish();
+  ui->helpText->verticalScrollBar()->setValue(0);
 }
 
 void PythonShell::interactive_keypress(QKeyEvent *event)
 {
-  if(event->key() == Qt::Key_Tab)
+  RDLineEdit *edit = qobject_cast<RDLineEdit *>(QObject::sender());
+  if(!edit)
+    return;
+
+  bool triggerCompletion = false;
+
+  if(m_InteractiveCompleter->popup()->isVisible())
   {
-    QString base = ui->lineInput->text();
-    if(!base.isEmpty() && !base.rbegin()->isSpace())
+    switch(event->key())
     {
-      // search backwards from the end for the first non dotted identifier first, and extract that
-      // substring. This is just ASCII, not unicode
-      for(int i = base.count() - 1; i >= 0; i--)
-      {
-        if(!base[i].isLetterOrNumber() && base[i] != QLatin1Char('.') && base[i] != QLatin1Char('_'))
+      // manually trigger a completion with tab
+      case Qt::Key_Tab:
+        // allow prefixed tabs to be inserted
+        if(edit->text().trimmed().isEmpty())
         {
-          base = base.right(base.count() - 1 - i);
-          break;
+          edit->insert(lit("\t"));
         }
+        else
+        {
+          m_InteractiveCompleter->setWidget(edit);
+          m_InteractiveCompleter->activated(
+              m_InteractiveCompleter->popup()->selectionModel()->currentIndex());
+          m_InteractiveCompleter->popup()->hide();
+        }
+        return;
+      // if a completion is in progress ignore any events the completer will process
+      case Qt::Key_Return:
+      case Qt::Key_Enter: return;
+      // allow key scrolling
+      case Qt::Key_Up:
+      case Qt::Key_Down:
+      case Qt::Key_PageUp:
+      case Qt::Key_PageDown: break;
+      // all other keys close the popup
+      default: triggerCompletion = true;
+    }
+  }
+  else
+  {
+    if(event->text() != QString() && event->text()[0].isPrint() && event->key() != Qt::Key_Return &&
+       event->key() != Qt::Key_Enter)
+      triggerCompletion = true;
+
+    if(event->key() == Qt::Key_Escape && m_FuncTip && m_ToolTip->isVisible())
+      hideFunccompleteTooltip();
+  }
+
+  if(triggerCompletion)
+  {
+    QString base = edit->text();
+
+    QStringList completions;
+    int oldCount = m_CompletionTipList.count();
+    m_CompletionTipList.clear();
+
+    if(base.trimmed() != QString())
+    {
+      PythonContext *ctx = interactiveContext;
+      if(edit == ui->helpSearch)
+        ctx = helpContext;
+      m_CompletionTipList = ctx->completionOptions(0, base, m_InteractiveCompletionPrefix);
+
+      for(const QPair<QString, QString> &item : m_CompletionTipList)
+        completions << item.first;
+    }
+
+    if(oldCount != m_CompletionTipList.count())
+      m_CurrentCompletionTip = -1;
+
+    if(completions.isEmpty())
+    {
+      if(event->key() == Qt::Key_Tab)
+        edit->insert(lit("\t"));
+      m_InteractiveCompleter->popup()->hide();
+
+      QString prompt = interactiveContext->tryFunctionCompletion(0, base);
+
+      if(!prompt.isEmpty())
+      {
+        m_ToolTip->configureTip(this, prompt);
+
+        QPoint p = edit->fontMetrics().boundingRect(base).bottomRight();
+        p.setY(edit->geometry().height());
+        p = edit->mapToGlobal(p);
+        if(!m_ToolTip->isVisible())
+          m_ToolTip->showTipAtPos(p);
+        m_FuncTip = true;
+        m_FuncTipWidget = edit;
       }
-
-      // skip any initial digits that got included in the coarse search above
-      while(!base.isEmpty() && base[0].isDigit())
-        base.remove(0, 1);
-
-      QStringList options = interactiveContext->completionOptions(base);
-
-      QString line = ui->lineInput->text();
-
-      if(!options.isEmpty())
+      else
       {
-        QString commonSubstring = options[0];
-
-        for(int i = 1; i < options.count(); i++)
-        {
-          const QString &opt = options[i];
-          if(opt.count() < commonSubstring.count())
-            commonSubstring.truncate(opt.count());
-
-          for(int j = 0; j < commonSubstring.count(); j++)
-          {
-            if(commonSubstring[j] != opt[j])
-            {
-              commonSubstring.truncate(j);
-              break;
-            }
-          }
-        }
-
-        if(commonSubstring.length() > base.length())
-        {
-          line.chop(base.length());
-          line += commonSubstring;
-          ui->lineInput->setText(line);
-        }
-
-        if(options.count() > 1)
-        {
-          QString text;
-          text += line;
-          text += lit("\n");
-          for(const QString &opt : options)
-          {
-            text += opt;
-            text += lit("\n");
-          }
-          text += m_storedLines.isEmpty() ? lit(">> ") : lit(".. ");
-          appendText(ui->interactiveOutput, text);
-        }
+        hideFunccompleteTooltip();
       }
 
       return;
     }
 
-    ui->lineInput->insert(lit("\t"));
+    hideFunccompleteTooltip();
+
+    m_InteractiveCompletionModel->setStringList(completions);
+
+    QRect r = edit->rect();
+    QFontMetrics fm = edit->fontMetrics();
+
+#if(QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
+#define horizontalAdvance width
+#endif
+
+    int longestWidth = 0;
+    for(QString &c : completions)
+    {
+      longestWidth = qMax(longestWidth, fm.horizontalAdvance(c));
+    }
+
+    base.resize(base.size() - m_InteractiveCompletionPrefix);
+
+    r.setLeft(r.left() + fm.horizontalAdvance(base));
+    r.setWidth(longestWidth + edit->style()->pixelMetric(QStyle::PM_ScrollBarExtent) +
+               edit->style()->pixelMetric(QStyle::PM_ButtonMargin));
+
+    m_InteractiveCompleter->setWidget(edit);
+    m_InteractiveCompleter->complete(r);
+    m_InteractiveCompleter->popup()->selectionModel()->setCurrentIndex(
+        m_InteractiveCompletionModel->index(0), QItemSelectionModel::ClearAndSelect);
+
     return;
   }
 
   if(event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-    on_execute_clicked();
-
-  bool moved = false;
-
-  if(event->key() == Qt::Key_Down && historyidx > -1)
   {
-    historyidx--;
-
-    moved = true;
+    if(edit == ui->lineInput)
+      on_execute_clicked();
+    else if(edit == ui->helpSearch)
+      refreshCurrentHelp();
   }
 
-  QString workingtext;
-
-  if(event->key() == Qt::Key_Up && historyidx + 1 < history.count())
+  // only line input has history
+  if(edit == ui->lineInput)
   {
-    if(historyidx == -1)
-      workingtext = ui->lineInput->text();
+    bool moved = false;
 
-    historyidx++;
+    if(event->key() == Qt::Key_Down && historyidx > -1)
+    {
+      historyidx--;
 
-    moved = true;
+      moved = true;
+    }
+
+    QString workingtext;
+
+    if(event->key() == Qt::Key_Up && historyidx + 1 < history.count())
+    {
+      if(historyidx == -1)
+        workingtext = ui->lineInput->text();
+
+      historyidx++;
+
+      moved = true;
+    }
+
+    if(moved)
+    {
+      if(historyidx == -1)
+        ui->lineInput->setText(workingtext);
+      else
+        ui->lineInput->setText(history[historyidx]);
+
+      ui->lineInput->deselect();
+    }
   }
-
-  if(moved)
-  {
-    if(historyidx == -1)
-      ui->lineInput->setText(workingtext);
-    else
-      ui->lineInput->setText(history[historyidx]);
-
-    ui->lineInput->deselect();
-  }
-}
-
-void PythonShell::helpSearch_keypress(QKeyEvent *e)
-{
-  if(e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)
-    refreshCurrentHelp();
 }
 
 QString PythonShell::scriptHeader()
@@ -1504,7 +2412,7 @@ QString PythonShell::scriptHeader()
 The 'pyrenderdoc' object is the current CaptureContext instance.
 The 'renderdoc' and 'qrenderdoc' modules are available.
 Documentation is available: https://renderdoc.org/docs/python_api/index.html)")
-      .arg(interactiveContext->versionString());
+      .arg(PythonContext::versionString());
 }
 
 void PythonShell::appendText(QTextEdit *output, const QString &text)
@@ -1524,72 +2432,147 @@ void PythonShell::enableButtons(bool enable)
   ui->saveScript->setEnabled(enable);
   ui->runScript->setEnabled(enable);
   ui->abortRun->setEnabled(!enable);
-}
+  ui->debugAttach->setEnabled(enable && !m_DebuggerAttached && PythonContext::IsDebuggingEnabled());
+  ui->debugAttach->setToolTip(QString());
 
-void PythonShell::startAutocomplete()
-{
-  sptr_t pos = scriptEditor->currentPos();
-  sptr_t line = scriptEditor->lineFromPosition(pos);
-  sptr_t lineStart = scriptEditor->positionFromLine(line);
-  QByteArray lineText = scriptEditor->getLine(line);
+  EditorWrapper *editor = curEditor();
 
-  sptr_t end = pos - lineStart - 1;
-  sptr_t start;
-  for(start = end; start >= 0; start--)
+  ui->runScript->setToolTip(QString());
+
+  if(enable && m_DebuggerAttached)
   {
-    char c = lineText[(int)start];
-    if(QChar::fromLatin1(c).isLetterOrNumber() || c == '.' || c == '_')
-      continue;
-
-    start++;
-    break;
+    ui->debugAttach->setToolTip(tr("Debugger is already attached"));
+  }
+  else if(enable && !PythonContext::IsDebuggingEnabled())
+  {
+    ui->debugAttach->setToolTip(
+        tr("Debugging not supported - check documentation for setup instructions"));
   }
 
-  QString comp = QString::fromUtf8(lineText.mid(start, end - start + 1));
+  if(editor)
+  {
+    if(editor->isUIExtension())
+    {
+      ui->runScript->setEnabled(false);
+      ui->runScript->setToolTip(tr("UI Extension files can't be run"));
+    }
+  }
 
-  PythonContext *context = newImportedDummyContext();
-
-  QStringList completions = context->completionOptions(comp);
-
-  context->Finish();
-
-  scriptEditor->autoCShow(comp.count(), completions.join(QLatin1Char(' ')).toUtf8().data());
+  if(editor == NULL || editor->filename().isEmpty())
+  {
+    ui->debugAttach->setEnabled(false);
+    ui->debugAttach->setToolTip(tr("Debugger requires a script saved to disk"));
+  }
 }
 
-PythonContext *PythonShell::newImportedDummyContext()
+void PythonShell::doAutocomplete(ScintillaEdit *editor)
 {
-  sptr_t pos = scriptEditor->currentPos();
+  sptr_t pos = editor->currentPos();
+  sptr_t line = editor->lineFromPosition(pos);
+  sptr_t lineStart = editor->positionFromLine(line);
+  QByteArray lineText = editor->getLine(line);
+  lineText.resize(pos - lineStart);
 
-  PythonContext *context = new PythonContext();
+  int oldCount = m_CompletionTipList.count();
 
-  setGlobals(context);
+  int prefix_len = 0;
+  m_CompletionTipList =
+      completionContext->completionOptions(line, QString::fromUtf8(lineText), prefix_len);
 
-  // super hack. Try to import any modules to get completion suggestions from them.
-  // we only process imports with no indentation since they should be unconditional. We ignore
-  // imports that fail.
-  QByteArray text = scriptEditor->getText(pos + 1);
-
-  for(int offs = 0; offs < text.length();)
+  if(m_CompletionTipList.empty())
   {
-    // find the next newline (may be NULL if we're at the end)
-    int newline = text.indexOf('\n', offs);
+    doFunccomplete(editor);
+    return;
+  }
 
-    // execute the import if there is one
-    const char *c = text.data() + offs;
-    if(!strncmp(c, "import ", 7))
+  QString completion_merged;
+  for(const QPair<QString, QString> &item : m_CompletionTipList)
+  {
+    completion_merged += item.first;
+    completion_merged += QLatin1Char(' ');
+  }
+  completion_merged.remove(completion_merged.count() - 1, 1);
+
+  if(oldCount != m_CompletionTipList.count())
+    m_CurrentCompletionTip = -1;
+
+  hideFunccompleteTooltip();
+  editor->autoCShow(prefix_len, completion_merged.toUtf8().data());
+  // scintilla doesn't give us a callback/event when an item is highlighted, so we query in a timer
+  m_CompletionTipTimer->start();
+}
+
+void PythonShell::doFunccomplete(ScintillaEdit *editor)
+{
+  sptr_t pos = editor->currentPos();
+  sptr_t line = editor->lineFromPosition(pos);
+  sptr_t lineStart = editor->positionFromLine(line);
+  QByteArray lineText = editor->getLine(line);
+  lineText.resize(pos - lineStart);
+
+  QString prompt = completionContext->tryFunctionCompletion(line, QString::fromUtf8(lineText));
+
+  if(!prompt.isEmpty())
+  {
+    m_ToolTip->configureTip(this, prompt);
+
+    sptr_t tooltipPos = editor->positionFromLine(line + 1);
+
+    QPoint p(editor->pointXFromPosition(tooltipPos),
+             editor->pointYFromPosition(lineStart + lineText.size()) + editor->textHeight(line));
+    p = editor->mapToGlobal(p);
+    if(!m_ToolTip->isVisible())
+      m_ToolTip->showTipAtPos(p);
+    m_FuncTip = true;
+    m_FuncTipWidget = editor;
+    m_FuncTipLine = line;
+  }
+  else
+  {
+    hideFunccompleteTooltip();
+  }
+}
+
+void PythonShell::hideFunccompleteTooltip()
+{
+  m_ToolTip->hideTip();
+  m_FuncTip = false;
+  m_FuncTipWidget = NULL;
+  // start the syntax check timer in case this naturally disappeared
+  m_SyntaxCheckTimer->start();
+}
+
+void PythonShell::updateCompletionTip()
+{
+  if(m_CompletionTipList.empty() || m_CurrentCompletionTip < 0 ||
+     m_CurrentCompletionTip >= m_CompletionTipList.count())
+  {
+    m_CurrentCompletionTip = -1;
+    m_CompletionTip->hideTip();
+    return;
+  }
+
+  m_CompletionTip->configureTip(this, m_CompletionTipList[m_CurrentCompletionTip].second);
+  {
+    QPoint pos;
+    if(m_InteractiveCompleter->popup()->isVisible())
     {
-      context->executeString(newline >= 0 ? QString::fromUtf8(c, newline - offs + 1)
-                                          : QString::fromUtf8(c));
+      pos = m_InteractiveCompleter->popup()->mapToGlobal(
+          m_InteractiveCompleter->popup()->rect().topRight());
+    }
+    else
+    {
+      EditorWrapper *editor = curEditor();
+
+      if(editor)
+      {
+        pos = QPoint(editor->scintilla()->autoCRectRight(), editor->scintilla()->autoCRectTop());
+      }
     }
 
-    if(newline < 0)
-      break;
-
-    // move to the next line
-    offs = newline + 1;
+    if(pos != QPoint())
+      m_CompletionTip->showTipAtPos(pos);
   }
-
-  return context;
 }
 
 PythonContext *PythonShell::newContext()
@@ -1600,12 +2583,5 @@ PythonContext *PythonShell::newContext()
   QObject::connect(ret, &PythonContext::exception, this, &PythonShell::exception);
   QObject::connect(ret, &PythonContext::textOutput, this, &PythonShell::textOutput);
 
-  setGlobals(ret);
-
   return ret;
-}
-
-void PythonShell::setGlobals(PythonContext *ret)
-{
-  ret->setGlobal("pyrenderdoc", (ICaptureContext *)m_ThreadCtx);
 }

@@ -28,6 +28,7 @@
 #include <QStyledItemDelegate>
 #include <QTreeView>
 #include "Code/QRDUtils.h"
+#include "RDToolTip.h"
 
 class RDTreeView;
 
@@ -45,40 +46,6 @@ public:
   void paint(QPainter *painter, const QStyleOptionViewItem &option,
              const QModelIndex &index) const override;
   QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-};
-
-struct ITreeViewTipDisplay
-{
-public:
-  virtual void hideTip() = 0;
-  virtual QSize configureTip(QWidget *widget, QModelIndex idx, QString text) = 0;
-  virtual void showTip(QPoint pos) = 0;
-  virtual bool forceTip(QWidget *widget, QModelIndex idx) = 0;
-};
-
-class RDTipLabel : public QLabel, public ITreeViewTipDisplay
-{
-private:
-  Q_OBJECT
-
-  QWidget *mouseListener;
-
-public:
-  explicit RDTipLabel(QWidget *listener = NULL);
-
-  void hideTip() { hide(); }
-  QSize configureTip(QWidget *widget, QModelIndex idx, QString text);
-  void showTip(QPoint pos);
-  bool forceTip(QWidget *widget, QModelIndex idx);
-
-protected:
-  void paintEvent(QPaintEvent *);
-  void mousePressEvent(QMouseEvent *);
-  void mouseReleaseEvent(QMouseEvent *);
-  void mouseDoubleClickEvent(QMouseEvent *);
-  void resizeEvent(QResizeEvent *);
-
-  void sendListenerEvent(QMouseEvent *e);
 };
 
 typedef std::function<uint(QModelIndex, uint)> ExpansionKeyGen;
@@ -116,7 +83,7 @@ public:
   void setItemDelegate(QAbstractItemDelegate *delegate);
   QAbstractItemDelegate *itemDelegate() const;
 
-  void setCustomTooltip(ITreeViewTipDisplay *tip)
+  void setCustomTooltip(ICustomToolTipDisplay *tip)
   {
     m_Tooltip = tip;
     m_TooltipElidedItems = false;
@@ -230,8 +197,8 @@ private:
   QAbstractItemDelegate *m_userDelegate = NULL;
   RDTreeViewDelegate *m_delegate;
 
-  RDTipLabel *m_TooltipLabel;
-  ITreeViewTipDisplay *m_Tooltip;
+  RDToolTip *m_TooltipLabel;
+  ICustomToolTipDisplay *m_Tooltip;
   bool m_CurrentTooltipElided = false;
 
   int m_VertMargin = 6;

@@ -72,6 +72,27 @@ void main()
 
 )EOSHADER";
 
+  // Generate LLVM CST_CODE_CE_GEP
+  std::string compute_dxil_gep = R"EOSHADER(
+
+RWStructuredBuffer<uint4> bufout : register(u0);
+
+#define MyRS1 "RootFlags( ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+              "UAV(u0, visibility = SHADER_VISIBILITY_ALL)"
+
+groupshared uint4 g_temp[1];
+
+[RootSignature(MyRS1)]
+[numthreads(1,1,1)]
+void main()
+{
+  [unroll]
+  for (uint i = 0; i < 1; i++)
+    bufout[0] += g_temp[i+2];
+}
+
+)EOSHADER";
+
   int main()
   {
     // initialise, create window, create device, etc
@@ -380,6 +401,9 @@ void main()
     ID3DBlobPtr csblob = Compile(compute_root, "main", "cs_5_1");
     ID3D12PipelineStatePtr psoCompNoSig = MakePSO().CS(csblob);
 
+    ID3DBlobPtr cs_dxil_gep_blob = Compile(compute_dxil_gep, "main", "cs_6_0");
+    ID3D12PipelineStatePtr psoCompDxilGep = MakePSO().CS(cs_dxil_gep_blob);
+
     ID3D12ResourcePtr rtvtex = MakeTexture(DXGI_FORMAT_R32G32B32A32_FLOAT, 4, 4)
                                    .RTV()
                                    .InitialState(D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -501,6 +525,13 @@ void main()
       setMarker(cmd, "No Sig Dispatch");
 
       cmd->SetPipelineState(psoCompNoSig);
+      cmd->SetComputeRootSignature(compsig);
+      cmd->SetComputeRootUnorderedAccessView(0, bufout->GetGPUVirtualAddress());
+      cmd->Dispatch(1, 1, 1);
+
+      setMarker(cmd, "DXIL GEP Dispatch");
+
+      cmd->SetPipelineState(psoCompDxilGep);
       cmd->SetComputeRootSignature(compsig);
       cmd->SetComputeRootUnorderedAccessView(0, bufout->GetGPUVirtualAddress());
       cmd->Dispatch(1, 1, 1);

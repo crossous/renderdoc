@@ -1909,7 +1909,7 @@ private:
 // passed around and moved between owners before being serialised out
 class Chunk
 {
-  Chunk(bool fromAllocator) : m_FromAllocator(fromAllocator) {}
+  Chunk(bool fromAllocator) : m_FromAllocator(fromAllocator ? 1 : 0) {}
   ~Chunk()
   {
     FreeAlignedBuffer(m_Data);
@@ -1921,8 +1921,8 @@ class Chunk
   }
 
 public:
-  void Delete() { Delete(m_FromAllocator); }
-  bool IsFromAllocator() { return m_FromAllocator; }
+  void Delete() { Delete(IsFromAllocator()); }
+  bool IsFromAllocator() { return m_FromAllocator != 0; }
   void Delete(bool fromAllocator)
   {
     if(!fromAllocator)
@@ -1954,7 +1954,7 @@ public:
     ret->m_ChunkType = m_ChunkType;
 
     ret->m_Data = AllocAlignedBuffer(m_Length);
-    ret->m_FromAllocator = false;
+    ret->m_FromAllocator = 0;
 
     memcpy(ret->m_Data, m_Data, (size_t)m_Length);
 
@@ -1976,11 +1976,12 @@ private:
   Chunk(const Chunk &) = delete;
   Chunk &operator=(const Chunk &) = delete;
 
-  uint16_t m_ChunkType;
+#define CHUNK_LENGTH_BITS 45
 
-  bool m_FromAllocator = false;
+  uint64_t m_ChunkType : 16;
+  uint64_t m_FromAllocator : 1;
+  uint64_t m_Length : CHUNK_LENGTH_BITS;
 
-  uint32_t m_Length;
   byte *m_Data;
 
 #if ENABLED(RDOC_DEVEL)
@@ -2131,6 +2132,7 @@ struct ScopedDeserialiseArray<SerialiserType, byte *>
 // can be overridden to change the name in the helper macros locally
 #define GET_SERIALISER (ser)
 
+#define LARGE_CHUNK_SIZE (~0ULL)
 #define SCOPED_SERIALISE_CHUNK(...) ScopedChunk scope(GET_SERIALISER, __VA_ARGS__);
 
 // these helper macros are intended for use when serialising objects in chunks

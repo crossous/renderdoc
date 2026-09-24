@@ -164,6 +164,11 @@ void cmdPushDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint pipelineBind
                             writes.data());
 }
 
+void cmdSetViewport(VkCommandBuffer cmd, VkViewport viewport)
+{
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+}
+
 GraphicsPipelineCreateInfo::GraphicsPipelineCreateInfo()
 {
   sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

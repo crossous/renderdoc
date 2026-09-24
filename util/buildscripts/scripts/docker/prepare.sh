@@ -104,7 +104,7 @@ make install
 cd ..
 
 # build qt for static linking
-wget https://download.qt.io/official_releases/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+wget https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
 echo "e1447db4f06c841d8947f0a6ce83a7b5  qt-everywhere-src-5.15.2.tar.xz" | md5sum -c -
 
 tar -xf qt-everywhere-src-5.15.2.tar.xz
@@ -131,9 +131,9 @@ make install
 cd ..
 
 # build python locally to static link against
-wget https://www.python.org/ftp/python/3.6.1/Python-3.6.1.tgz
-tar xf Python-3.6.1.tgz
-cd Python-3.6.1
+wget https://www.python.org/ftp/python/3.8.20/Python-3.8.20.tgz
+tar xf Python-3.8.20.tgz
+cd Python-3.8.20
 ./configure --prefix=/usr
 make -j$(nproc)
 make install

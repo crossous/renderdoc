@@ -69,7 +69,7 @@
 
 #include "pipestate.inl"
 
-CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
+CaptureContext::CaptureContext(PersistentConfig &cfg) : m_Config(cfg)
 {
   RENDERDOC_PROFILEFUNCTION();
 
@@ -93,6 +93,8 @@ CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
   m_QtHelper = new MiniQtHelper(*this);
 
   qApp->setApplicationVersion(QString::fromLatin1(RENDERDOC_GetVersionString()));
+
+  PythonContext::setCtxGlobal(*this);
 
   m_Icon = new QIcon();
   m_Icon->addFile(QStringLiteral(":/logo.svg"), QSize(), QIcon::Normal, QIcon::Off);
@@ -221,7 +223,78 @@ CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
       dir.mkpath(dir.absolutePath());
   }
 
+  m_ExtensionWatcher = new QFileSystemWatcher({}, GetMainWindow()->Widget());
+
+  QObject::connect(m_ExtensionWatcher, &QFileSystemWatcher::directoryChanged,
+                   [this](const QString &path) { ExtensionTouched(path); });
+  QObject::connect(m_ExtensionWatcher, &QFileSystemWatcher::fileChanged,
+                   [this](const QString &path) { ExtensionTouched(path); });
+
   rdcarray<ExtensionMetadata> exts = CaptureContext::GetInstalledExtensions();
+
+  {
+    QDir sentinelSearch(ConfigFilePath(QString()));
+
+    bool questioned = false;
+
+    for(QString child : sentinelSearch.entryList(QStringList() << lit("python_load*.sentinel"),
+                                                 QDir::Files | QDir::NoDotAndDotDot))
+    {
+      QFileInfo finfo(ConfigFilePath(child));
+
+      // to avoid this being racey, we only care if we see a sentinel that's over 10 seconds old.
+      // This means if two instances are starting up and both enter this section the second one
+      // won't detect the temporary sentinel of the first as a crash
+      if(finfo.exists() && finfo.lastModified().secsTo(QDateTime::currentDateTime()) > 10)
+      {
+        QFile f(ConfigFilePath(child));
+
+        if(questioned)
+        {
+          f.remove();
+          continue;
+        }
+
+        if(f.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+          QString extNames = QString::fromUtf8(f.readAll());
+
+          QMessageBox::StandardButton res = RDDialog::question(
+              NULL, tr("Possible python crash detected"),
+              tr("A previous instance of RenderDoc crashed while loading python extensions.\n\n"
+                 "These extensions were enabled:\n%1\n"
+                 "Would you like to disable python extensions?")
+                  .arg(extNames));
+
+          questioned = true;
+
+          if(res == QMessageBox::Yes)
+          {
+            cfg.AlwaysLoad_Extensions.clear();
+            cfg.Save();
+          }
+        }
+
+        f.remove();
+      }
+    }
+  }
+
+  QString sentinelFilename =
+      ConfigFilePath(lit("python_load%1.sentinel").arg(QCoreApplication::applicationPid()));
+
+  // create a sentinel with the list of extensions we're loading
+  {
+    QFile f(sentinelFilename);
+
+    if(f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+      QTextStream stream(&f);
+
+      for(rdcstr ext : cfg.AlwaysLoad_Extensions)
+        stream << ext << lit("\n");
+    }
+  }
 
   for(const ExtensionMetadata &e : exts)
   {
@@ -231,10 +304,18 @@ CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
       LoadExtension(e.package);
     }
   }
+
+  // remove our sentinel now
+  {
+    QFile f(sentinelFilename);
+    f.remove();
+  }
 }
 
 CaptureContext::~CaptureContext()
 {
+  delete m_ExtensionWatcher;
+
   delete m_QtHelper;
   RENDERDOC_UnregisterMemoryRegion(this);
   delete m_Icon;
@@ -341,15 +422,8 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
           ext.package = package;
           ext.filePath = fileinfo.absolutePath();
 
-          if(json.contains(lit("name")))
-          {
-            ext.name = json[lit("name")].toString();
-          }
-          else
-          {
-            qCritical() << "Extension" << package << "is corrupt, no name entry";
-            continue;
-          }
+          ext.hasChanges = m_DirtyExtensions.contains(rdcstr(package));
+          ext.failedLoad = m_FailedExtensions.contains(rdcstr(package));
 
           ext.extensionAPI = 1;
           if(json.contains(lit("extension_api")))
@@ -368,8 +442,16 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
           }
           else
           {
-            qCritical() << "Extension" << QString(ext.name) << "is corrupt, no version entry";
-            continue;
+            ext.version = lit("1.0");
+          }
+
+          if(json.contains(lit("name")))
+          {
+            ext.name = json[lit("name")].toString();
+          }
+          else
+          {
+            ext.name = package;
           }
 
           if(json.contains(lit("description")))
@@ -378,8 +460,7 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
           }
           else
           {
-            qCritical() << "Extension" << QString(ext.name) << "is corrupt, no description entry";
-            continue;
+            ext.description = tr("No description provided");
           }
 
           if(json.contains(lit("author")))
@@ -388,8 +469,7 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
           }
           else
           {
-            qCritical() << "Extension" << QString(ext.name) << "is corrupt, no author entry";
-            continue;
+            ext.author = tr("Unknown Author");
           }
 
           if(json.contains(lit("url")))
@@ -398,8 +478,7 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
           }
           else
           {
-            qCritical() << "Extension" << QString(ext.name) << "is corrupt, no URL entry";
-            continue;
+            ext.extensionURL = rdcstr();
           }
 
           if(json.contains(lit("minimum_renderdoc")))
@@ -454,9 +533,19 @@ rdcarray<ExtensionMetadata> CaptureContext::GetInstalledExtensions()
   return ret;
 }
 
+rdcarray<rdcstr> CaptureContext::GetLoadedExtensions()
+{
+  return m_ExtensionObjects.keys();
+}
+
 bool CaptureContext::IsExtensionLoaded(rdcstr name)
 {
   return m_ExtensionObjects.contains(name);
+}
+
+bool CaptureContext::IsPythonDebuggerConnected()
+{
+  return PythonContext::IsDebuggingEnabled() && PythonContext::IsDebuggerConnected();
 }
 
 rdcstr CaptureContext::LoadExtension(rdcstr name)
@@ -474,10 +563,18 @@ rdcstr CaptureContext::LoadExtension(rdcstr name)
     if(ret.isEmpty())
     {
       m_ExtensionObjects[name].swap(m_PendingExtensionObjects);
+
+      m_DirtyExtensions.removeOne(name);
+      m_FailedExtensions.removeOne(name);
+
+      for(const ExtensionMetadata &e : GetInstalledExtensions())
+        if(e.package == name)
+          AddExtensionWatches(e.filePath);
     }
     else
     {
       m_ExtensionObjects.remove(name);
+      m_FailedExtensions.push_back(name);
 
       for(QObject *o : m_PendingExtensionObjects)
         delete o;
@@ -523,7 +620,9 @@ void CaptureContext::RegisterWindowMenu(WindowMenu base, const rdcarray<rdcstr> 
     return;
   }
 
-  std::function<void()> slotcallback = [this, callback]() { callback(this, {}); };
+  std::function<void()> slotcallback = [callback]() {
+    callback(PythonContext::GetExtensionPyrenderdoc(), {});
+  };
 
   // if it's a new menu, GetBaseMenu already did the work, so skip the 0th element of submenus
   if(base == WindowMenu::NewMenu)
@@ -595,12 +694,12 @@ void CaptureContext::MenuDisplaying(ContextMenu contextMenu, QMenu *menu,
   {
     if(item->context == contextMenu || item->context == contextMenuAlt)
     {
-      AddSortedMenuItem(menu, true, item->submenus, [this, item, data]() {
+      AddSortedMenuItem(menu, true, item->submenus, [item, data]() {
         rdcarray<rdcpair<rdcstr, PyObject *>> args;
 
         PythonContext::ConvertPyArgs(data, args);
 
-        item->callback(this, args);
+        item->callback(PythonContext::GetExtensionPyrenderdoc(), args);
 
         PythonContext::FreePyArgs(args);
       });
@@ -615,12 +714,12 @@ void CaptureContext::MenuDisplaying(PanelMenu panelMenu, QMenu *menu, QWidget *e
   {
     if(item->panel == panelMenu)
     {
-      AddSortedMenuItem(menu, false, item->submenus, [this, item, data]() {
+      AddSortedMenuItem(menu, false, item->submenus, [item, data]() {
         rdcarray<rdcpair<rdcstr, PyObject *>> args;
 
         PythonContext::ConvertPyArgs(data, args);
 
-        item->callback(this, args);
+        item->callback(PythonContext::GetExtensionPyrenderdoc(), args);
 
         PythonContext::FreePyArgs(args);
       });
@@ -644,12 +743,12 @@ IMiniQtHelper &CaptureContext::GetMiniQtHelper()
 
 void CaptureContext::MessageDialog(const rdcstr &text, const rdcstr &title)
 {
-  RDDialog::information(m_MainWindow, title, text);
+  RDDialog::information(m_MainWindow, title.isEmpty() ? "Python Extension Message" : title, text);
 }
 
 void CaptureContext::ErrorDialog(const rdcstr &text, const rdcstr &title)
 {
-  RDDialog::critical(m_MainWindow, title, text);
+  RDDialog::critical(m_MainWindow, title.isEmpty() ? "Python Extension Error" : title, text);
 }
 
 DialogButton CaptureContext::QuestionDialog(const rdcstr &text, const rdcarray<DialogButton> &options,
@@ -658,22 +757,26 @@ DialogButton CaptureContext::QuestionDialog(const rdcstr &text, const rdcarray<D
   QMessageBox::StandardButtons buttons;
   for(DialogButton b : options)
     buttons |= (QMessageBox::StandardButton)b;
-  return (DialogButton)RDDialog::question(m_MainWindow, title, text, buttons);
+  return (DialogButton)RDDialog::question(
+      m_MainWindow, title.isEmpty() ? "Python Extension Prompt" : title, text, buttons);
 }
 
 rdcstr CaptureContext::OpenFileName(const rdcstr &caption, const rdcstr &dir, const rdcstr &filter)
 {
-  return RDDialog::getOpenFileName(m_MainWindow, caption, dir, filter);
+  return RDDialog::getOpenFileName(m_MainWindow, caption.isEmpty() ? "Open a file" : caption, dir,
+                                   filter);
 }
 
 rdcstr CaptureContext::OpenDirectoryName(const rdcstr &caption, const rdcstr &dir)
 {
-  return RDDialog::getExistingDirectory(m_MainWindow, caption, dir);
+  return RDDialog::getExistingDirectory(m_MainWindow,
+                                        caption.isEmpty() ? "Open a directory" : caption, dir);
 }
 
 rdcstr CaptureContext::SaveFileName(const rdcstr &caption, const rdcstr &dir, const rdcstr &filter)
 {
-  return RDDialog::getSaveFileName(m_MainWindow, caption, dir, filter);
+  return RDDialog::getSaveFileName(m_MainWindow, caption.isEmpty() ? "Save a file" : caption, dir,
+                                   filter);
 }
 
 void CaptureContext::AddSortedMenuItem(QMenu *menu, bool rootMenu, const rdcarray<rdcstr> &items,
@@ -833,6 +936,8 @@ void CaptureContext::LoadCapture(const rdcstr &captureFile, const ReplayOptions 
   CloseCapture();
 
   PointerTypeRegistry::Init();
+
+  BufferInterpreter::context = this;
 
   m_LoadInProgress = true;
 
@@ -1422,6 +1527,14 @@ void CaptureContext::CloseCapture()
   if(!m_CaptureLoaded)
     return;
 
+  rdcarray<ICaptureViewer *> capviewers(m_CaptureViewers);
+
+  for(ICaptureViewer *viewer : capviewers)
+  {
+    if(viewer && m_CaptureViewers.contains(viewer))
+      viewer->OnCaptureClosed();
+  }
+
   delete m_Watcher;
   m_Watcher = NULL;
 
@@ -1466,13 +1579,7 @@ void CaptureContext::CloseCapture()
 
   m_CaptureLoaded = false;
 
-  rdcarray<ICaptureViewer *> capviewers(m_CaptureViewers);
-
-  for(ICaptureViewer *viewer : capviewers)
-  {
-    if(viewer && m_CaptureViewers.contains(viewer))
-      viewer->OnCaptureClosed();
-  }
+  BufferInterpreter::context = NULL;
 
   m_Replay.CloseThread();
 }
@@ -1737,6 +1844,11 @@ void CaptureContext::RefreshUIStatus(const rdcarray<ICaptureViewer *> &exclude,
     if(updateEvent)
       viewer->OnEventChanged(m_EventID);
   }
+}
+
+void CaptureContext::InvokeOntoUIThread(std::function<void()> callback)
+{
+  GUIInvoke::call(GetMainWindow()->Widget(), callback);
 }
 
 void CaptureContext::AddMessages(const rdcarray<DebugMessage> &msgs)
@@ -2324,11 +2436,11 @@ ICaptureDialog *CaptureContext::GetCaptureDialog()
       *this,
       [this](const QString &exe, const QString &workingDir, const QString &cmdLine,
              const rdcarray<EnvironmentModification> &env, CaptureOptions opts,
-             std::function<void(LiveCapture *)> callback) {
+             std::function<void(ICaptureConnection *)> callback) {
         return m_MainWindow->OnCaptureTrigger(exe, workingDir, cmdLine, env, opts, callback);
       },
       [this](uint32_t PID, const rdcarray<EnvironmentModification> &env, const QString &name,
-             CaptureOptions opts, std::function<void(LiveCapture *)> callback) {
+             CaptureOptions opts, std::function<void(ICaptureConnection *)> callback) {
         return m_MainWindow->OnInjectTrigger(PID, env, name, opts, callback);
       },
       m_MainWindow, m_MainWindow);
@@ -2814,6 +2926,47 @@ void CaptureContext::setupDockWindow(QWidget *shad, bool hide)
     shad->hide();
 }
 
+void CaptureContext::AddExtensionWatches(rdcstr filePath)
+{
+  QDir dir(filePath);
+
+  // ignore directories with no python files
+  QStringList pyfiles = dir.entryList(QStringList() << lit("*.py"));
+  if(pyfiles.empty())
+    return;
+
+  // don't watch the directory itself. New files will not be usable and we will already catch
+  // renames.
+  // m_ExtensionWatcher->addPath(filePath);
+  for(QString pyfile : pyfiles)
+    m_ExtensionWatcher->addPath(dir.absoluteFilePath(pyfile));
+
+  for(QString subdir : dir.entryList(QStringList(), QDir::Dirs | QDir::NoDotAndDotDot))
+    AddExtensionWatches(dir.absoluteFilePath(subdir));
+}
+
+void CaptureContext::ExtensionTouched(const QString &extensionPath)
+{
+  // find the root extension dir containing this path
+  for(const ExtensionMetadata &m : GetInstalledExtensions())
+  {
+    if(extensionPath.contains(m.filePath))
+    {
+      // remove all watched paths underneath
+      QStringList paths = m_ExtensionWatcher->directories();
+      paths.append(m_ExtensionWatcher->files());
+      for(QString path : paths)
+      {
+        if(path.contains(m.filePath))
+          m_ExtensionWatcher->removePath(path);
+      }
+
+      // mark it as 'dirty' / needing reload
+      m_DirtyExtensions.push_back(m.package);
+    }
+  }
+}
+
 void CaptureContext::RaiseDockWindow(QWidget *dockWindow)
 {
   ToolWindowManager::raiseToolWindow(dockWindow);
@@ -2851,11 +3004,59 @@ void CaptureContext::AddDockWindow(QWidget *newWindow, DockReference ref, QWidge
         newWindow, ToolWindowManager::AreaReference(ToolWindowManager::LastUsedArea));
     return;
   }
+  else if(ref == DockReference::NoArea)
+  {
+    m_MainWindow->mainToolManager()->addToolWindow(
+        newWindow, ToolWindowManager::AreaReference(ToolWindowManager::NoArea));
+    return;
+  }
+  else if(ref == DockReference::EmptySpace)
+  {
+    m_MainWindow->mainToolManager()->addToolWindow(
+        newWindow, ToolWindowManager::AreaReference(ToolWindowManager::EmptySpace));
+    return;
+  }
 
   if(!refWindow)
   {
+    // expect a reference window for all other docking types
+    // try to decay down to the main window so that we place the window somewhere
     qCritical() << "Unexpected NULL refWindow in AddDockWindow";
-    return;
+
+    // AddTo doesn't have any fallback - put it in the main area.
+    if(ref == DockReference::AddTo)
+    {
+      m_MainWindow->mainToolManager()->addToolWindow(newWindow, m_MainWindow->mainToolArea());
+      return;
+    }
+
+    // if this was meant to be relative to a panel instead put it relative to the whole window
+    if(ref == DockReference::LeftOf)
+      ref = DockReference::LeftWindowSide;
+    if(ref == DockReference::RightOf)
+      ref = DockReference::RightWindowSide;
+    if(ref == DockReference::TopOf)
+      ref = DockReference::TopWindowSide;
+    if(ref == DockReference::BottomOf)
+      ref = DockReference::BottomWindowSide;
+  }
+
+  if(refWindow == m_MainWindow)
+    refWindow = NULL;
+
+  if(!refWindow)
+  {
+    // we're now placing only relative to a whole window so the particular widget we pick doesn't
+    // matter. pick something
+    if(!m_MainWindow->mainToolManager()->toolWindows().isEmpty())
+    {
+      refWindow = m_MainWindow->mainToolManager()->toolWindows()[0];
+    }
+    else
+    {
+      // if there are no tool windows at all we're panicking! just put it in empty space
+      ref = DockReference::EmptySpace;
+    }
   }
 
   if(ref == DockReference::TransientPopupArea)
@@ -2865,6 +3066,9 @@ void CaptureContext::AddDockWindow(QWidget *newWindow, DockReference ref, QWidge
     if(buf && buf->IsCBufferView())
     {
       ToolWindowManager *manager = ToolWindowManager::managerOf(refWindow);
+
+      if(!manager)
+        manager = m_MainWindow->mainToolManager();
 
       BufferViewer *cb = BufferViewer::GetFirstCBufferView(buf);
       if(cb)
@@ -2888,6 +3092,9 @@ void CaptureContext::AddDockWindow(QWidget *newWindow, DockReference ref, QWidge
     {
       ToolWindowManager *manager = ToolWindowManager::managerOf(refWindow);
 
+      if(!manager)
+        manager = m_MainWindow->mainToolManager();
+
       PixelHistoryView *hist = manager->findChild<PixelHistoryView *>();
       if(hist)
       {
@@ -2901,6 +3108,9 @@ void CaptureContext::AddDockWindow(QWidget *newWindow, DockReference ref, QWidge
   }
 
   ToolWindowManager *manager = ToolWindowManager::managerOf(refWindow);
+
+  if(!manager)
+    manager = m_MainWindow->mainToolManager();
 
   ToolWindowManager::AreaReference areaRef((ToolWindowManager::AreaReferenceType)ref,
                                            manager->areaOf(refWindow), percentage);

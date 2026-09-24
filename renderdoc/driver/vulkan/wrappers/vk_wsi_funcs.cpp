@@ -1808,6 +1808,42 @@ VkResult WrappedVulkan::vkReleaseSwapchainImagesEXT(VkDevice device,
   return vkReleaseSwapchainImagesKHR(device, pReleaseInfo);
 }
 
+VkResult WrappedVulkan::vkGetPastPresentationTimingEXT(
+    VkDevice device, const VkPastPresentationTimingInfoEXT *pPastPresentationTimingInfo,
+    VkPastPresentationTimingPropertiesEXT *pPastPresentationTimingProperties)
+{
+  VkPastPresentationTimingInfoEXT timingInfo = *pPastPresentationTimingInfo;
+  timingInfo.swapchain = Unwrap(timingInfo.swapchain);
+  return ObjDisp(device)->GetPastPresentationTimingEXT(Unwrap(device), &timingInfo,
+                                                       pPastPresentationTimingProperties);
+}
+
+VkResult WrappedVulkan::vkGetSwapchainTimeDomainPropertiesEXT(
+    VkDevice device, VkSwapchainKHR swapchain,
+    VkSwapchainTimeDomainPropertiesEXT *pSwapchainTimeDomainProperties, uint64_t *pTimeDomainsCounter)
+{
+  return ObjDisp(device)->GetSwapchainTimeDomainPropertiesEXT(
+      Unwrap(device), Unwrap(swapchain), pSwapchainTimeDomainProperties, pTimeDomainsCounter);
+}
+
+VkResult WrappedVulkan::vkGetSwapchainTimingPropertiesEXT(
+    VkDevice device, VkSwapchainKHR swapchain,
+    VkSwapchainTimingPropertiesEXT *pSwapchainTimingProperties,
+    uint64_t *pSwapchainTimingPropertiesCounter)
+{
+  return ObjDisp(device)->GetSwapchainTimingPropertiesEXT(Unwrap(device), Unwrap(swapchain),
+                                                          pSwapchainTimingProperties,
+                                                          pSwapchainTimingPropertiesCounter);
+}
+
+VkResult WrappedVulkan::vkSetSwapchainPresentTimingQueueSizeEXT(VkDevice device,
+                                                                VkSwapchainKHR swapchain,
+                                                                uint32_t size)
+{
+  return ObjDisp(device)->SetSwapchainPresentTimingQueueSizeEXT(Unwrap(device), Unwrap(swapchain),
+                                                                size);
+}
+
 #ifdef VK_USE_PLATFORM_WIN32_KHR
 VkResult WrappedVulkan::vkCreateWin32SurfaceKHR(VkInstance instance,
                                                 const VkWin32SurfaceCreateInfoKHR *pCreateInfo,

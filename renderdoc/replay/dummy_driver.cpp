@@ -25,9 +25,10 @@
 #include "dummy_driver.h"
 
 DummyDriver::DummyDriver(IReplayDriver *original, const rdcarray<const ShaderReflection *> &shaders,
-                         SDFile *sdfile)
+                         SDFile *sdfile, const rdcarray<SDObject *> &annotations)
 {
   m_Shaders = shaders;
+  m_Annotations = annotations;
   m_SDFile = sdfile;
 
   m_Props = original->GetAPIProperties();
@@ -53,6 +54,10 @@ DummyDriver::~DummyDriver()
   // we own the shaders
   for(const ShaderReflection *refl : m_Shaders)
     delete refl;
+
+  // and annotations
+  for(const SDObject *ann : m_Annotations)
+    delete ann;
 
   // and we own the structured file
   delete m_SDFile;

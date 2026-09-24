@@ -582,14 +582,14 @@
     <ClCompile Include="Code\pyrenderdoc\PythonContext.cpp">
       <Filter>Code\pyrenderdoc</Filter>
     </ClCompile>
+    <ClCompile Include="Code\pyrenderdoc\PythonInvokers.cpp">
+      <Filter>Code\pyrenderdoc</Filter>
+    </ClCompile>
     <ClCompile Include="$(IntDir)generated\qrenderdoc_python.cxx">
       <Filter>Generated Files</Filter>
     </ClCompile>
     <ClCompile Include="$(IntDir)generated\moc_PythonContext.cpp">
       <Filter>Generated Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Code\Interface\PersistantConfig.cpp">
-      <Filter>Code\Interface</Filter>
     </ClCompile>
     <ClCompile Include="Code\Interface\RemoteHost.cpp">
       <Filter>Code\Interface</Filter>
@@ -794,6 +794,18 @@
     </ClCompile>
     <ClCompile Include="Windows\Dialogs\ProjectionGuessDialog.cpp">
       <Filter>Windows\Dialogs</Filter>
+    </ClCompile>
+    <ClCompile Include="$(IntDir)generated\moc_RDToolTip.cpp">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Widgets\Extended\RDToolTip.cpp">
+      <Filter>Widgets\Extended</Filter>
+    </ClCompile>
+    <ClCompile Include="Code\Interface\PersistentConfig.cpp">
+      <Filter>Code\Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="Code\Interface\Helpers.cpp">
+      <Filter>Code\Interface</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1085,9 +1097,6 @@
     <ClInclude Include="$(IntDir)generated\ui_FindReplace.h">
       <Filter>Generated Files</Filter>
     </ClInclude>
-    <ClInclude Include="Code\Interface\PersistantConfig.h">
-      <Filter>Code\Interface</Filter>
-    </ClInclude>
     <ClInclude Include="Code\Interface\RemoteHost.h">
       <Filter>Code\Interface</Filter>
     </ClInclude>
@@ -1184,6 +1193,12 @@
     <ClInclude Include="$(IntDir)generated\ui_CameraControlsDialog.h">
       <Filter>Generated Files</Filter>
     </ClInclude>
+    <ClInclude Include="Code\Interface\PersistentConfig.h">
+      <Filter>Code\Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="Code\Interface\Helpers.h">
+      <Filter>Code\Interface</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Code\pyrenderdoc\pyconversion.h">
@@ -1212,6 +1227,9 @@
     </None>
     <None Include="Code\AppleUtils.mm">
       <Filter>Code</Filter>
+    </None>
+    <None Include="Code\pyrenderdoc\parse_reflection.py">
+      <Filter>Code\pyrenderdoc</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -1627,6 +1645,9 @@
     </CustomBuild>
     <CustomBuild Include="Windows\Dialogs\ProjectionGuessDialog.ui">
       <Filter>Windows\Dialogs</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Widgets\Extended\RDToolTip.h">
+      <Filter>Widgets\Extended</Filter>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
@@ -2056,5 +2077,6 @@
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="python36.natvis" />
+    <Natvis Include="python38.natvis" />
   </ItemGroup>
 </Project>

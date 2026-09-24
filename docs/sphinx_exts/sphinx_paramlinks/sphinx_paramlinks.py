@@ -82,9 +82,10 @@ def autodoc_process_docstring(app, what, name, obj, options, lines):
             modifier, objname, paramname = m.group(1) or '', name, m.group(2)
             return ":type %s_sphinx_paramlinks_%s.%s:" % (
                 modifier, objname, paramname)
-        
-        line = re.sub(r'^:param ([^:]+? )?([^:]+?):', cvt, line)
-        line = re.sub(r'^:type ([^:]+? )?([^:]+?):', secondary_cvt, line)
+
+        if 'Callable' not in line:
+            line = re.sub(r'^:param ([^:]+? )?([^:]+?):', cvt, line)
+            line = re.sub(r'^:type ([^:]+? )?([^:]+?):', secondary_cvt, line)
         return line
 
     if what in ('function', 'method', 'class'):

@@ -287,7 +287,8 @@ int main(int argc, char *argv[])
 
     {
       QCoreApplication application(argc, mod_argv);
-      PythonContext::GlobalInit();
+      PersistentConfig cfg;
+      PythonContext::GlobalInit(cfg);
 
       logstream << "Checking python binding consistency.\n";
 
@@ -509,7 +510,7 @@ int main(int argc, char *argv[])
   RegisterMetatypeConversions();
 
   {
-    PersistantConfig config;
+    PersistentConfig config;
 
     {
       QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -632,7 +633,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-      PythonContext::GlobalInit();
+      PythonContext::GlobalInit(config);
 
       if(updateApplied)
       {
@@ -671,33 +672,31 @@ int main(int argc, char *argv[])
 
         ANALYTIC_SET(UIFeatures.PythonInterop, true);
 
-        py.ctx().setGlobal("pyrenderdoc", (ICaptureContext *)&ctx);
+        QObject::connect(&py.ctx(), &PythonContext::exception,
+                         [&pythonExited](const QString &, const QString &type, const QString &value,
+                                         int, QList<QString> frames) {
+                           if(type == lit("SystemExit"))
+                           {
+                             pythonExited = true;
+                             return;
+                           }
 
-        QObject::connect(
-            &py.ctx(), &PythonContext::exception,
-            [&pythonExited](const QString &type, const QString &value, int, QList<QString> frames) {
-              if(type == lit("SystemExit"))
-              {
-                pythonExited = true;
-                return;
-              }
+                           QString exString;
 
-              QString exString;
+                           if(!frames.isEmpty())
+                           {
+                             exString += tr("Traceback (most recent call last):\n");
+                             for(const QString &f : frames)
+                               exString += QFormatStr("  %1\n").arg(f);
+                           }
 
-              if(!frames.isEmpty())
-              {
-                exString += tr("Traceback (most recent call last):\n");
-                for(const QString &f : frames)
-                  exString += QFormatStr("  %1\n").arg(f);
-              }
+                           exString += QFormatStr("%1: %2\n").arg(type).arg(value);
 
-              exString += QFormatStr("%1: %2\n").arg(type).arg(value);
-
-              qCritical("%s", exString.toUtf8().data());
-            });
+                           qCritical("%s", exString.toUtf8().data());
+                         });
 
         QObject::connect(&py.ctx(), &PythonContext::textOutput,
-                         [](bool isStdError, const QString &output) {
+                         [](const QString &, bool isStdError, const QString &output) {
                            if(isStdError)
                              qCritical("%s", output.toUtf8().data());
                            else

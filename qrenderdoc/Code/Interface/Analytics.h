@@ -94,7 +94,7 @@ struct AnalyticsAverage
   }
 };
 
-class PersistantConfig;
+class PersistentConfig;
 struct ICaptureContext;
 
 // we set this struct to byte-packing, so that any change will affect sizeof() and fail a
@@ -117,7 +117,7 @@ struct Analytics
   static void Disable();
   // utility function - performs any UI-level prompting, such as asking the user if they want to
   // opt-out, or manually vetting a report for uploading.
-  static void Prompt(ICaptureContext &ctx, PersistantConfig &config);
+  static void Prompt(ICaptureContext &ctx, PersistentConfig &config);
   // the singleton instance of analytics. May be NULL if analytics aren't initialised or have been
   // opted-out from.
   static Analytics *db;
@@ -307,14 +307,14 @@ struct Analytics
 #define ANALYTIC_ADDAVG(name, val) (void)val
 #define ANALYTIC_ADDUNIQ(name, val) (void)val
 
-class PersistantConfig;
+class PersistentConfig;
 struct ICaptureContext;
 
 namespace Analytics
 {
 void Disable();
 void Load();
-void Prompt(ICaptureContext &ctx, PersistantConfig &config);
+void Prompt(ICaptureContext &ctx, PersistentConfig &config);
 void DocumentReport();
 };
 

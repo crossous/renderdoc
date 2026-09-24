@@ -121,8 +121,8 @@ static ActionDescription *SetupActionPointers(rdcarray<ActionDescription *> &act
     else
     {
       if(previous)
-        previous->next = action;
-      action->previous = previous;
+        previous->nextAction = action;
+      action->previousAction = previous;
 
       {
         // we also allow non-contiguous EIDs for fake markers that have high EIDs
@@ -167,7 +167,7 @@ void SetupActionPointers(rdcarray<ActionDescription *> &actionTable,
     {
       // point the previous pointer to the last non-marker action we got. If we haven't hit one yet
       // because this is near the start, this will just be NULL.
-      action->previous = previous;
+      action->previousAction = previous;
 
       // because there can be multiple markers consecutively we want to point all of their nexts to
       // the next action we encounter. Accumulate this list, though in most cases it will only be 1
@@ -181,7 +181,7 @@ void SetupActionPointers(rdcarray<ActionDescription *> &actionTable,
 
       // all previous markers point to this one
       for(ActionDescription *m : markers)
-        m->next = action;
+        m->nextAction = action;
 
       markers.clear();
     }
@@ -423,6 +423,10 @@ void StandardFillCBufferVariable(ResourceId shader, const ShaderConstantType &de
             outvar.value.u8v[ri * cols + ci] = tmp.value.u8v[ci * rows + ri];
       }
     }
+  }
+  else
+  {
+    outvar.flags |= ShaderVariableFlags::Truncated;
   }
 
   if(desc.pointerTypeID != ~0U)

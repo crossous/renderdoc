@@ -33,7 +33,12 @@
 #include "resourceid.h"
 #include "stringise.h"
 
-DOCUMENT("A 64-bit pointer value with optional type information.")
+DOCUMENT(R"(
+PointerVal()
+PointerVal(other: PointerVal)
+
+A 64-bit pointer value with optional type information.
+)")
 struct PointerVal
 {
   DOCUMENT("");
@@ -64,7 +69,14 @@ DECLARE_STRINGISE_TYPE(PointerVal);
 
 struct DescriptorAccess;
 
-DOCUMENT(R"(References a particular individual binding element in a shader interface.
+DOCUMENT(R"(
+ShaderBindIndex()
+ShaderBindIndex(other: ShaderBindIndex)
+ShaderBindIndex(category: DescriptorCategory, index: int)
+ShaderBindIndex(category: DescriptorCategory, index: int, arrayElement: int)
+ShaderBindIndex(access: DescriptorAccess)
+
+References a particular individual binding element in a shader interface.
 
 This is the shader interface side of a :class:`DescriptorAccess` and so can be compared to one to
 check if an access refers to a given index or not.
@@ -137,8 +149,13 @@ identifies the particular array index being referred to.
 
 DECLARE_REFLECTION_STRUCT(ShaderBindIndex);
 
-DOCUMENT(R"(References a particular resource accessed via the shader using direct heap access (as opposed to a direct binding).
+DOCUMENT(R"(
+ShaderDirectAccess()
+ShaderDirectAccess(other: ShaderDirectAccess)
+ShaderDirectAccess(category: DescriptorCategory, index: int)
+ShaderDirectAccess(type: DescriptorType, descriptorStore: ResourceId, byteOffset: int, byteSize: int)
 
+References a particular resource accessed via the shader using direct heap access (as opposed to a direct binding).
 )");
 struct ShaderDirectAccess
 {
@@ -232,7 +249,12 @@ private:
 };
 DECLARE_STRINGISE_TYPE(rdhalf);
 
-DOCUMENT("A C union that holds 16 values, with each different basic variable type.");
+DOCUMENT(R"(
+ShaderValue()
+ShaderValue(other: ShaderValue)
+
+A C union that holds 16 values, with each different basic variable type.
+)");
 union ShaderValue
 {
   DOCUMENT(R"(16-tuple of ``float`` values.
@@ -302,7 +324,13 @@ union ShaderValue
   rdcfixedarray<int8_t, 16> s8v;
 };
 
-DOCUMENT(R"(Holds a single named shader variable. It contains either a primitive type (up to a 4x4
+DOCUMENT(R"(
+ShaderVariable()
+ShaderVariable(other: ShaderVariable)
+ShaderVariable(name: str, x: float, y: float, z: float, w: float)
+ShaderVariable(name: str, x: int, y: int, z: int, w: int)
+
+Holds a single named shader variable. It contains either a primitive type (up to a 4x4
 matrix of a :class:`basic type <VarType>`) or a list of members, which can either be struct or array
 members of this parent variable.
 
@@ -564,8 +592,13 @@ The :class:`ShaderDirectAccess` uniquely refers to a resource descriptor.
 
 DECLARE_REFLECTION_STRUCT(ShaderVariable);
 
-DOCUMENT(
-    "A particular component of a debugging variable that a high-level variable component maps to");
+DOCUMENT(R"(
+DebugVariableReference()
+DebugVariableReference(other: DebugVariableReference)
+DebugVariableReference(type: DebugVariableType, name: str, component: int)
+
+A particular component of a debugging variable that a high-level variable component maps to
+)");
 struct DebugVariableReference
 {
   DOCUMENT("");
@@ -616,13 +649,17 @@ struct DebugVariableReference
 
 DECLARE_REFLECTION_STRUCT(DebugVariableReference);
 
-DOCUMENT(R"(Maps the contents of a high-level source variable to one or more shader variables in a
+DOCUMENT(R"(
+SourceVariableMapping()
+SourceVariableMapping(other: SourceVariableMapping)
+
+Maps the contents of a high-level source variable to one or more shader variables in a
 :class:`ShaderDebugState`, with type information.
 
 A single high-level variable may be represented by multiple mappings but only along regular
 boundaries, typically whole vectors. For example an array may have each element in a different
 mapping, or a matrix may have a mapping per row. The properties such as :data:`rows` and
-:data:`elements` reflect the *parent* object.
+:data:`columns` reflect the *parent* object.
 
 .. note::
 
@@ -723,7 +760,12 @@ space.
 };
 DECLARE_REFLECTION_STRUCT(SourceVariableMapping);
 
-DOCUMENT("Details the current region of code that an instruction maps to");
+DOCUMENT(R"(
+LineColumnInfo()
+LineColumnInfo(other: LineColumnInfo)
+
+Details the current region of code that an instruction maps to.
+)");
 struct LineColumnInfo
 {
   DOCUMENT("");
@@ -810,7 +852,11 @@ treated as covering the code.
 };
 DECLARE_REFLECTION_STRUCT(LineColumnInfo);
 
-DOCUMENT(R"(Gives per-instruction source code mapping information, including what line(s) correspond
+DOCUMENT(R"(
+InstructionSourceInfo()
+InstructionSourceInfo(other: InstructionSourceInfo)
+
+Gives per-instruction source code mapping information, including what line(s) correspond
 to this instruction and which source variables exist
 )");
 struct InstructionSourceInfo
@@ -847,7 +893,12 @@ instruction.
 };
 DECLARE_REFLECTION_STRUCT(InstructionSourceInfo);
 
-DOCUMENT("This stores the before and after state of a :class:`ShaderVariable`.");
+DOCUMENT(R"(
+ShaderVariableChange()
+ShaderVariableChange(other: ShaderVariableChange)
+
+This stores the before and after state of a :class:`ShaderVariable`.
+)");
 struct ShaderVariableChange
 {
   DOCUMENT("");
@@ -873,7 +924,7 @@ struct ShaderVariableChange
   }
 
   DOCUMENT(R"(The value of the variable before the change. If this variable is uninitialised that
-means the variable came into existance on this step.
+means the variable came into existence on this step.
 
 :type: ShaderVariable
 )");
@@ -888,7 +939,11 @@ means the variable stopped existing on this step.
 };
 DECLARE_REFLECTION_STRUCT(ShaderVariableChange);
 
-DOCUMENT(R"(This stores the current state of shader debugging at one particular step in the shader,
+DOCUMENT(R"(
+ShaderDebugState()
+ShaderDebugState(other: ShaderDebugState)
+
+This stores the current state of shader debugging at one particular step in the shader,
 with all mutable variable contents.
 )");
 struct ShaderDebugState
@@ -974,16 +1029,27 @@ public:
 
 DECLARE_REFLECTION_STRUCT(ShaderDebugger);
 
-DOCUMENT(R"(This stores the whole state of a shader's execution from start to finish, with each
+DOCUMENT(R"(
+This stores the whole state of a shader's execution from start to finish, with each
 individual debugging step along the way, as well as the immutable global constant values that do not
 change with shader execution.
 )");
 struct ShaderDebugTrace
 {
+  // do not allow swig to create/copy traces
+#if defined(SWIG)
+protected:
   DOCUMENT("");
   ShaderDebugTrace() = default;
   ShaderDebugTrace(const ShaderDebugTrace &) = default;
   ShaderDebugTrace &operator=(const ShaderDebugTrace &) = default;
+
+public:
+#else
+  ShaderDebugTrace() = default;
+  ShaderDebugTrace(const ShaderDebugTrace &) = default;
+  ShaderDebugTrace &operator=(const ShaderDebugTrace &) = default;
+#endif
 
   DOCUMENT(R"(The shader stage being debugged in this trace
 
@@ -1077,7 +1143,11 @@ per-instruction information such as source line mapping, and source variables.
 
 DECLARE_REFLECTION_STRUCT(ShaderDebugTrace);
 
-DOCUMENT(R"(The information describing an input or output signature element describing the interface
+DOCUMENT(R"(
+SigParameter()
+SigParameter(other: SigParameter)
+
+The information describing an input or output signature element describing the interface
 between shader stages.
 
 .. data:: NoIndex
@@ -1213,7 +1283,12 @@ DECLARE_REFLECTION_STRUCT(SigParameter);
 
 struct ShaderConstant;
 
-DOCUMENT("Describes the type and members of a :class:`ShaderConstant`.");
+DOCUMENT(R"(
+ShaderConstantType()
+ShaderConstantType(other: ShaderConstantType)
+
+Describes the type and members of a :class:`ShaderConstant`.
+)");
 struct ShaderConstantType
 {
   DOCUMENT("");
@@ -1329,7 +1404,11 @@ manually, but since it is common this helper is provided.
 
 DECLARE_REFLECTION_STRUCT(ShaderConstantType);
 
-DOCUMENT(R"(Contains the detail of a constant within a struct, such as a :class:`ConstantBlock`,
+DOCUMENT(R"(
+ShaderConstant()
+ShaderConstant(other: ShaderConstant)
+
+Contains the detail of a constant within a struct, such as a :class:`ConstantBlock`,
 with its type and relative location in memory.
 )");
 struct ShaderConstant
@@ -1413,7 +1492,11 @@ packing.
 
 DECLARE_REFLECTION_STRUCT(ShaderConstant);
 
-DOCUMENT(R"(Contains the information for a block of constant values. The values are not present,
+DOCUMENT(R"(
+ConstantBlock()
+ConstantBlock(other: ConstantBlock)
+
+Contains the information for a block of constant values. The values are not present,
 only the metadata about how the variables are stored in memory itself and their type/name
 information.
 )");
@@ -1530,7 +1613,11 @@ specialisation constants.
 
 DECLARE_REFLECTION_STRUCT(ConstantBlock);
 
-DOCUMENT(R"(Contains the information for a separate sampler in a shader. If the API doesn't have
+DOCUMENT(R"(
+ShaderSampler()
+ShaderSampler(other: ShaderSampler)
+
+Contains the information for a separate sampler in a shader. If the API doesn't have
 the concept of separate samplers, this struct will be unused and only :class:`ShaderResource` is
 relevant.
 
@@ -1610,7 +1697,11 @@ This value may be set to a very large number if the array is unbounded in the sh
 
 DECLARE_REFLECTION_STRUCT(ShaderSampler);
 
-DOCUMENT(R"(Contains the information for a shader resource that is made accessible to shaders
+DOCUMENT(R"(
+ShaderResource()
+ShaderResource(other: ShaderResource)
+
+Contains the information for a shader resource that is made accessible to shaders
 directly by means of the API resource binding system.
 
 .. note:: that constant blocks and samplers will not have a shader resource entry, see
@@ -1741,7 +1832,13 @@ able to be read from and written to arbitrarily.
 
 DECLARE_REFLECTION_STRUCT(ShaderResource);
 
-DOCUMENT("Describes an entry point in a shader.");
+DOCUMENT(R"(
+ShaderEntryPoint()
+ShaderEntryPoint(other: ShaderEntryPoint)
+ShaderEntryPoint(name: str, stage: ShaderStage)
+
+Describes an entry point in a shader.
+)");
 struct ShaderEntryPoint
 {
   ShaderEntryPoint() = default;
@@ -1773,7 +1870,12 @@ struct ShaderEntryPoint
 
 DECLARE_REFLECTION_STRUCT(ShaderEntryPoint);
 
-DOCUMENT("Contains a single flag used at compile-time on a shader.");
+DOCUMENT(R"(
+ShaderCompileFlag()
+ShaderCompileFlag(other: ShaderCompileFlag)
+
+Contains a single flag used at compile-time on a shader.
+)");
 struct ShaderCompileFlag
 {
   DOCUMENT("");
@@ -1805,7 +1907,12 @@ struct ShaderCompileFlag
 
 DECLARE_REFLECTION_STRUCT(ShaderCompileFlag);
 
-DOCUMENT("Contains the information about the compilation environment of a shader");
+DOCUMENT(R"(
+ShaderCompileFlags()
+ShaderCompileFlags(other: ShaderCompileFlags)
+
+Contains the information about the compilation environment of a shader
+)");
 struct ShaderCompileFlags
 {
   DOCUMENT("");
@@ -1822,7 +1929,12 @@ struct ShaderCompileFlags
 
 DECLARE_REFLECTION_STRUCT(ShaderCompileFlags);
 
-DOCUMENT("Contains the source prefix to add to a given type of shader source");
+DOCUMENT(R"(
+ShaderSourcePrefix()
+ShaderSourcePrefix(other: ShaderSourcePrefix)
+
+Contains the source prefix to add to a given type of shader source
+)");
 struct ShaderSourcePrefix
 {
   DOCUMENT("");
@@ -1857,7 +1969,12 @@ struct ShaderSourcePrefix
 
 DECLARE_REFLECTION_STRUCT(ShaderSourcePrefix);
 
-DOCUMENT("Contains a source file available in a debug-compiled shader.");
+DOCUMENT(R"(
+ShaderSourceFile()
+ShaderSourceFile(other: ShaderSourceFile)
+
+Contains a source file available in a debug-compiled shader.
+)");
 struct ShaderSourceFile
 {
   DOCUMENT("");
@@ -1892,7 +2009,11 @@ struct ShaderSourceFile
 
 DECLARE_REFLECTION_STRUCT(ShaderSourceFile);
 
-DOCUMENT(R"(Contains the information about a shader contained within API-specific debugging
+DOCUMENT(R"(
+ShaderDebugInfo()
+ShaderDebugInfo(other: ShaderDebugInfo)
+
+Contains the information about a shader contained within API-specific debugging
 information attached to the shader.
 
 Primarily this means the embedded original source files.
@@ -1992,10 +2113,21 @@ The information in this structure is API agnostic.
 )");
 struct ShaderReflection
 {
+  // do not allow swig to create/copy shader reflections
+#if defined(SWIG)
+protected:
+  DOCUMENT("");
+  ShaderDebugTrace() = default;
+  ShaderDebugTrace(const ShaderDebugTrace &) = default;
+  ShaderDebugTrace &operator=(const ShaderDebugTrace &) = default;
+
+public:
+#else
   DOCUMENT("");
   ShaderReflection() = default;
   ShaderReflection(const ShaderReflection &) = default;
   ShaderReflection &operator=(const ShaderReflection &) = default;
+#endif
 
   DOCUMENT(R"(The :class:`ResourceId` of this shader.
 

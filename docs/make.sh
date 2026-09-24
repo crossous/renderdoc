@@ -107,6 +107,14 @@ if [ $1 == "html" ]; then
 	exit
 fi
 
+if [ $1 == "spelling" ]; then
+	"$SPHINXBUILD" -t spelling -b spelling $ALLSPHINXOPTS $BUILDDIR/spelling
+	if [ $? != 0 ]; then exit 1; fi
+	echo
+	echo "Build finished. The spelling pages are in $BUILDDIR/spelling."
+	exit
+fi
+
 if [ $1 == "dirhtml" ]; then
 	"$SPHINXBUILD" -b dirhtml $ALLSPHINXOPTS $BUILDDIR/dirhtml
 	if [ $? != 0 ]; then exit 1; fi

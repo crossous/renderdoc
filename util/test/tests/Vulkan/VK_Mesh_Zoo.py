@@ -16,9 +16,9 @@ class VK_Mesh_Zoo(rdtest.TestCase):
         xfbDraw = self.find_action("XFB")
 
         if xfbDraw is not None:
-            self.controller.SetFrameEvent(xfbDraw.next.eventId, False)
+            self.controller.SetFrameEvent(xfbDraw.nextAction.eventId, False)
 
-            postgs_data = self.get_postvs(xfbDraw.next, rd.MeshDataStage.GSOut, 0, 4)
+            postgs_data = self.get_postvs(xfbDraw.nextAction, rd.MeshDataStage.GSOut, 0, 4)
 
             postgs_ref = {
                 0: {

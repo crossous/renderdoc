@@ -28,11 +28,50 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
 {
   static constexpr const char *Description = "Test annotations via the vulkan API.";
 
+  float sqSize;
+  VkViewport viewPort;
+
+  void NextTest()
+  {
+    viewPort.x += sqSize;
+
+    if(viewPort.x + sqSize >= (float)screenWidth)
+    {
+      viewPort.x = 0.0f;
+      viewPort.y += sqSize;
+    }
+  }
+
+  void Prepare(int argc, char **argv)
+  {
+    optDevExts.push_back(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+
+    features.multiDrawIndirect = VK_TRUE;
+
+    VulkanGraphicsTest::Prepare(argc, argv);
+
+    if(!Avail.empty())
+      return;
+  }
+
   int main()
   {
     // initialise, create window, create context, etc
     if(!Init())
       return 3;
+
+    bool draw_indirect_count = false;
+    if(devVersion >= VK_MAKE_VERSION(1, 2, 0))
+    {
+      draw_indirect_count = true;
+    }
+    else
+    {
+      draw_indirect_count = hasExt(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+    }
+
+    if(draw_indirect_count)
+      TEST_LOG("Running tests with draw indirect count");
 
     // these tags provide the layer a way (for dispatchable objects at least) to identify
     // dispatchable objects that may be wrapped by the loader
@@ -65,6 +104,32 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
 
     setName(img.image, "Annotated Image");
     setName(DefaultTriVB.buffer, "Vertex Buffer");
+
+    VkDeviceSize indirectDataSize = 16 * 1024;
+    struct uvec4
+    {
+      uint32_t x;
+      uint32_t y;
+      uint32_t z;
+      uint32_t w;
+    };
+
+    AllocatedBuffer indirectData(
+        this,
+        vkh::BufferCreateInfo(indirectDataSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+        VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_CPU_TO_GPU}));
+    setName(indirectData.buffer, "Indirect Data");
+    {
+      uvec4 data[4];
+      // vkCmdDrawIndirect() (2 draws)
+      data[0] = {3, 1, 0, 0};    // draw verts 0..2
+      data[1] = {3, 1, 0, 0};    // draw verts 0..2
+
+      // Counts
+      data[2] = {2, 0, 0, 0};
+      indirectData.upload(data, sizeof(data));
+    }
 
     // cache the device pointer we pass in
     void *d = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(instance);
@@ -132,8 +197,12 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
       rdoc->SetObjectAnnotation(d, img.image, "path.deleted", eRENDERDOC_Empty, 0, NULL);
     }
 
+    sqSize = float(screenHeight) / 3.0f;
+
     while(Running())
     {
+      viewPort = {0.0f, 0.0f, sqSize, sqSize, 0.0f, 1.0f};
+
       if(rdoc)
       {
         // queue annotations are only included when in the captured frame
@@ -152,6 +221,9 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
 
         rdoc->SetCommandAnnotation(d, queue, "command.deleted", eRENDERDOC_Int32, 0,
                                    RDAnnotationHelper(50));
+
+        rdoc->SetCommandAnnotation(d, queue, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(10000));
       }
 
       VkCommandBuffer cmd = GetCommandBuffer();
@@ -172,6 +244,9 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
                                    RDAnnotationHelper(3333));
 
         rdoc->SetCommandAnnotation(d, cmd, "command.deleted", eRENDERDOC_Empty, 0, NULL);
+
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(20000));
       }
 
       setMarker(cmd, "Initial");
@@ -212,24 +287,104 @@ RD_TEST(VK_Annotations, VulkanGraphicsTest)
 
       setMarker(cmd, "Draw 1");
 
-      vkCmdDraw(cmd, 3, 1, 0, 0);
+      vkCmdSetViewport(cmd, 0, 1, &viewPort);
 
-      VkViewport view = mainWindow->viewport;
-      view.width /= 2;
-      view.height /= 2;
-      vkCmdSetViewport(cmd, 0, 1, &view);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      NextTest();
+
+      vkCmdSetViewport(cmd, 0, 1, &viewPort);
 
       setMarker(cmd, "Draw 2");
 
       vkCmdDraw(cmd, 3, 1, 0, 0);
+      NextTest();
+
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(30000));
+      }
+      setMarker(cmd, "Pre-DrawIndirectCount");
+      if(draw_indirect_count)
+      {
+        const uint32_t strideDraw = sizeof(uvec4);
+        const size_t drawIndirectOffset = 0;
+        size_t countOffset = 2 * sizeof(uvec4);
+        size_t countZeroOffset = countOffset + sizeof(uint32_t);
+
+        pushMarker(cmd, "DrawIndirectCount");
+
+        setMarker(cmd, "DrawIndirectCount(0:0)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(1));
+        }
+        vkCmdDrawIndirectCountKHR(cmd, indirectData.buffer, drawIndirectOffset, indirectData.buffer,
+                                  countOffset, 0, strideDraw);
+        NextTest();
+
+        setMarker(cmd, "DrawIndirectCount(10:0)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(2));
+        }
+        vkCmdDrawIndirectCountKHR(cmd, indirectData.buffer, drawIndirectOffset, indirectData.buffer,
+                                  countZeroOffset, 10, strideDraw);
+        NextTest();
+
+        setMarker(cmd, "DrawIndirectCount(10:N)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(3));
+        }
+        vkCmdDrawIndirectCountKHR(cmd, indirectData.buffer, drawIndirectOffset, indirectData.buffer,
+                                  countOffset, 10, strideDraw);
+        NextTest();
+
+        popMarker(cmd);
+      }
+
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(40000));
+      }
+      setMarker(cmd, "Post-DrawIndirectCount");
 
       vkCmdEndRenderPass(cmd);
 
+      setMarker(cmd, "Loose");
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "loose.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(1));
+      }
+
       FinishUsingBackbuffer(cmd);
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "loose.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(2));
+        rdoc->SetCommandAnnotation(d, cmd, "new.value", eRENDERDOC_Empty, 0, NULL);
+      }
 
       vkEndCommandBuffer(cmd);
 
-      SubmitAndPresent({cmd});
+      VkCommandBuffer empty = GetCommandBuffer();
+
+      vkBeginCommandBuffer(empty, vkh::CommandBufferBeginInfo());
+      setMarker(empty, "Empty");
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, empty, "empty.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(1));
+      }
+      vkEndCommandBuffer(empty);
+
+      SubmitAndPresent({empty, cmd});
     }
 
     return 0;

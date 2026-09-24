@@ -20,7 +20,7 @@ class D3D12_Vertex_UAV(rdtest.TestCase):
 
                 rdtest.log.print("Checking quad overdraw on {}".format(name))
 
-                self.controller.SetFrameEvent(marker.next.eventId, True)
+                self.controller.SetFrameEvent(marker.nextAction.eventId, True)
 
                 pipe: rd.PipeState = self.controller.GetPipelineState()
 

@@ -73,6 +73,12 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
     D3D12RenderState &rs = m_pDevice->GetQueue()->GetCommandData()->GetCurRenderState();
     m_PrevState = rs;
 
+    D3D12CommandData *cmdData = m_pDevice->GetQueue()->GetCommandData();
+    ID3D12CommandSignature *comSig = NULL;
+    if(cmdData)
+      comSig = cmdData->m_IndirectData.commandSig;
+    m_PrevComSig = comSig;
+
     // check cache first
     CachedPipeline cache = m_PipelineCache[rs.pipe];
 
@@ -170,6 +176,27 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
       hr = m_pDevice->CreatePipeState(pipeDesc, &cache.pipe);
       RDCASSERTEQUAL(hr, S_OK);
 
+      if(comSig)
+      {
+        // Need to create a new command signature using our modified root signature if the command
+        // signature modifies the root arguments i.e. setting root constants, updating bindings.
+        if(DoesCommandSignatureModifyRootArgs(comSig))
+        {
+          WrappedID3D12CommandSignature *rdComSig = (WrappedID3D12CommandSignature *)comSig;
+          D3D12_COMMAND_SIGNATURE_DESC comSigDesc;
+          comSigDesc.ByteStride = rdComSig->sig.ByteStride;
+          comSigDesc.NodeMask = 0;
+          comSigDesc.NumArgumentDescs = (uint32_t)rdComSig->sig.arguments.size();
+          comSigDesc.pArgumentDescs = rdComSig->sig.arguments.data();
+
+          m_pDevice->CreateCommandSignature(
+              &comSigDesc, cache.sig, __uuidof(ID3D12CommandSignature), (void **)&cache.comSig);
+
+          RDCASSERT(cache.comSig);
+          comSig = cache.comSig;
+        }
+      }
+
       m_PipelineCache[rs.pipe] = cache;
     }
 
@@ -207,6 +234,9 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
     // so just apply all state
     if(cmd)
       rs.ApplyState(m_pDevice, cmd);
+
+    if(cmdData)
+      cmdData->m_IndirectData.commandSig = comSig;
   }
 
   bool PostDraw(uint32_t eid, ID3D12GraphicsCommandListX *cmd)
@@ -235,6 +265,10 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
 
     RDCASSERT(cmd);
     m_pDevice->GetQueue()->GetCommandData()->GetCurRenderState().ApplyState(m_pDevice, cmd);
+
+    D3D12CommandData *cmdData = m_pDevice->GetQueue()->GetCommandData();
+    if(cmdData)
+      cmdData->m_IndirectData.commandSig = m_PrevComSig;
 
     return true;
   }
@@ -270,10 +304,12 @@ struct D3D12QuadOverdrawCallback : public D3D12ActionCallback
     ID3D12RootSignature *sig;
     uint32_t sigElem;
     ID3D12PipelineState *pipe;
+    ID3D12CommandSignature *comSig;
   };
   std::map<ResourceId, CachedPipeline> m_PipelineCache;
   std::set<ResourceId> m_CopiedHeaps;
   D3D12RenderState m_PrevState;
+  ID3D12CommandSignature *m_PrevComSig;
 };
 
 static void SetRTVDesc(D3D12_RENDER_TARGET_VIEW_DESC &rtDesc, const D3D12_RESOURCE_DESC &texDesc,
@@ -2001,6 +2037,7 @@ ResourceId D3D12Replay::RenderOverlay(ResourceId texid, FloatVector clearCol, De
       {
         SAFE_RELEASE(it->second.pipe);
         SAFE_RELEASE(it->second.sig);
+        SAFE_RELEASE(it->second.comSig);
       }
 
       SAFE_RELEASE(overdrawTex);

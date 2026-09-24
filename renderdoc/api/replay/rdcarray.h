@@ -429,7 +429,7 @@ public:
       // destruct it before inserting.
 
       // first pass, move construct elements in place
-      const size_t moveCount = count < oldSize ? count : oldSize;
+      const size_t moveCount = count < oldSize - offs ? count : oldSize - offs;
       for(size_t i = 0; i < moveCount; i++)
       {
         new(elems + oldSize + count - 1 - i) T(std::move(elems[oldSize - 1 - i]));

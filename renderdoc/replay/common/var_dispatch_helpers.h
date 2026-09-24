@@ -167,6 +167,19 @@ inline void setFloatComp(ShaderVariable &var, uint32_t c, float f)
     var.value.f64v[c] = f;
 }
 
+inline void setUint64Comp(ShaderVariable &var, uint32_t c, uint64_t u)
+{
+  uint32_t byteSize = VarTypeByteSize(var.type);
+  if(byteSize == 4)
+    var.value.u32v[c] = u & 0xffffffffu;
+  else if(byteSize == 2)
+    var.value.u16v[c] = u & 0xffffu;
+  else if(byteSize == 8)
+    var.value.u64v[c] = u;
+  else if(byteSize == 1)
+    var.value.u8v[c] = u & 0xffu;
+}
+
 inline void setUintComp(ShaderVariable &var, uint32_t c, uint32_t u)
 {
   uint32_t byteSize = VarTypeByteSize(var.type);

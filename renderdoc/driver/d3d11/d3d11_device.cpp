@@ -1560,7 +1560,7 @@ RDResult WrappedID3D11Device::ReadLogInitialisation(RDCFile *rdc, bool storeStru
   GetReplay()->WriteFrameRecord().frameInfo.initDataSize =
       chunkInfos[(D3D11Chunk)SystemChunk::InitialContents].totalsize;
 
-  RDCDEBUG("Allocating %llu persistant bytes of memory for the log.",
+  RDCDEBUG("Allocating %llu persistent bytes of memory for the log.",
            GetReplay()->WriteFrameRecord().frameInfo.persistentSize);
 
   if(HasFatalError())

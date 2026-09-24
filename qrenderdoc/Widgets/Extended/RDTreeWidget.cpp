@@ -163,6 +163,11 @@ public:
     if(item->editable(index.column()))
       ret |= Qt::ItemIsEditable;
 
+    if(item->selectable())
+      ret |= Qt::ItemIsSelectable;
+    else
+      ret &= ~Qt::ItemIsSelectable;
+
     return ret;
   }
 
@@ -813,6 +818,11 @@ void RDTreeWidget::setCurrentItem(RDTreeWidgetItem *node)
 RDTreeWidgetItem *RDTreeWidget::itemAt(const QPoint &p) const
 {
   return m_model->itemForIndex(indexAt(p));
+}
+
+bool RDTreeWidget::isItemExpanded(RDTreeWidgetItem *item)
+{
+  return isExpanded(m_model->indexForItem(item, 0));
 }
 
 void RDTreeWidget::expandItem(RDTreeWidgetItem *item)

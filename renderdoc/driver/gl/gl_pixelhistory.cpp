@@ -153,6 +153,10 @@ GLuint RefreshUniforms(WrappedOpenGL *driver, GLRenderState &rs, GLuint dstProgr
                      .name;
   }
 
+  // if there's no program bound, nothing to do
+  if(srcProgram == 0)
+    return dstProgram;
+
   PerStageReflections stages;
   driver->FillReflectionArray(ProgramRes(ctx, srcProgram), stages);
 
@@ -1051,7 +1055,7 @@ void readPixelValues(WrappedOpenGL *driver, const GLPixelHistoryResources &resou
     driver->glReadPixels(0, 0, GLint(numPixels), 1, eGL_RGBA_INTEGER, eGL_UNSIGNED_INT,
                          (void *)intColourValues.data());
   }
-  else if(colourFormatType == eGL_UNSIGNED_INT)
+  else if(colourFormatType == eGL_INT)
   {
     driver->glReadPixels(0, 0, GLint(numPixels), 1, eGL_RGBA_INTEGER, eGL_INT,
                          (void *)intColourValues.data());
@@ -2138,36 +2142,57 @@ void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     int postModLastJ = 0;
 
     // save D/S attachment since we'll substitute our own depth
+    // for simplicity we assume sanity and that different objects won't be bound to each point.
     GLuint curDepth;
-    GLint curDepthType;
     GLuint curStencil;
-    GLint curStencilType;
-    GLint curStencilLevel = 0, curDepthLevel = 0;
+    GLint curType = eGL_NONE;
+    GLint curLevel = 0, curLayered = 0, curLayer = 0, curVirtualSamples = 0, curStartView = 0,
+          curNumViews = 0;
 
     driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
                                                   eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME,
                                                   (GLint *)&curDepth);
-    driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
-                                                  eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
-                                                  &curDepthType);
-    if(curDepth)
-    {
-      driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
-                                                    eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL,
-                                                    &curDepthLevel);
-    }
-
     driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_STENCIL_ATTACHMENT,
                                                   eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME,
                                                   (GLint *)&curStencil);
-    driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_STENCIL_ATTACHMENT,
-                                                  eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE,
-                                                  &curStencilType);
-    if(curStencil)
+
+    GLenum queryAtt = eGL_NONE;
+    if(curDepth)
+      queryAtt = eGL_DEPTH_ATTACHMENT;
+    else if(curStencil)
+      queryAtt = eGL_STENCIL_ATTACHMENT;
+
+    if(queryAtt)
     {
-      driver->glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, eGL_STENCIL_ATTACHMENT,
-                                                    eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL,
-                                                    &curStencilLevel);
+      driver->glGetFramebufferAttachmentParameteriv(
+          eGL_DRAW_FRAMEBUFFER, queryAtt, eGL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &curType);
+      driver->glGetFramebufferAttachmentParameteriv(
+          eGL_DRAW_FRAMEBUFFER, queryAtt, eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL, &curLevel);
+
+      if(HasExt[ARB_geometry_shader4])
+        GL.glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, queryAtt,
+                                                 eGL_FRAMEBUFFER_ATTACHMENT_LAYERED, &curLayered);
+      else
+        curLayered = 0;
+
+      if(curLayered == 0)
+        GL.glGetFramebufferAttachmentParameteriv(
+            eGL_DRAW_FRAMEBUFFER, queryAtt, eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER, &curLayer);
+
+      if(HasExt[EXT_multisampled_render_to_texture])
+        GL.glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, queryAtt,
+                                                 eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_SAMPLES_EXT,
+                                                 &curVirtualSamples);
+
+      if(HasExt[OVR_multiview])
+      {
+        GL.glGetFramebufferAttachmentParameteriv(eGL_DRAW_FRAMEBUFFER, queryAtt,
+                                                 eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_NUM_VIEWS_OVR,
+                                                 &curNumViews);
+        GL.glGetFramebufferAttachmentParameteriv(
+            eGL_DRAW_FRAMEBUFFER, queryAtt, eGL_FRAMEBUFFER_ATTACHMENT_TEXTURE_BASE_VIEW_INDEX_OVR,
+            &curStartView);
+      }
     }
 
     // if we didn't have a depth buffer, turn off depth testing so we don't have to worry about
@@ -2464,25 +2489,92 @@ void QueryPrePostModPerFragment(WrappedOpenGL *driver, GLReplay *replay,
     }
 
     // restore original D/S attachments
-    if(curDepthType != eGL_RENDERBUFFER)
+    GLenum attachment = eGL_DEPTH_STENCIL_ATTACHMENT;
+    GLuint obj = 0;
+    if(curDepth)
     {
-      driver->glFramebufferTexture(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT, curDepth,
-                                   curDepthLevel);
+      attachment = eGL_DEPTH_ATTACHMENT;
+      obj = curDepth;
+
+      if(curStencil)
+        attachment = eGL_DEPTH_STENCIL_ATTACHMENT;
+    }
+    else if(curStencil)
+    {
+      attachment = eGL_STENCIL_ATTACHMENT;
+      obj = curStencil;
+    }
+
+    if(curType == eGL_RENDERBUFFER && obj)
+    {
+      GL.glFramebufferRenderbuffer(eGL_DRAW_FRAMEBUFFER, attachment, eGL_RENDERBUFFER, obj);
     }
     else
     {
-      driver->glFramebufferRenderbuffer(eGL_DRAW_FRAMEBUFFER, eGL_DEPTH_ATTACHMENT,
-                                        eGL_RENDERBUFFER, curDepth);
-    }
-    if(curStencilType != eGL_RENDERBUFFER)
-    {
-      driver->glFramebufferTexture(eGL_DRAW_FRAMEBUFFER, eGL_STENCIL_ATTACHMENT, curStencil,
-                                   curStencilLevel);
-    }
-    else
-    {
-      driver->glFramebufferRenderbuffer(eGL_DRAW_FRAMEBUFFER, eGL_STENCIL_ATTACHMENT,
-                                        eGL_RENDERBUFFER, curStencil);
+      if(!curLayered && obj)
+      {
+        // if obj is a cubemap use face-specific targets
+        WrappedOpenGL::TextureData &details =
+            driver->m_Textures[driver->GetResourceManager()->GetResID(TextureRes(driver->GetCtx(), obj))];
+
+        if(details.curType == eGL_TEXTURE_CUBE_MAP)
+        {
+          GLenum faces[] = {
+              eGL_TEXTURE_CUBE_MAP_POSITIVE_X, eGL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+              eGL_TEXTURE_CUBE_MAP_POSITIVE_Y, eGL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+              eGL_TEXTURE_CUBE_MAP_POSITIVE_Z, eGL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+          };
+
+          if(curLayer < 6)
+          {
+            GL.glFramebufferTexture2D(eGL_DRAW_FRAMEBUFFER, attachment, faces[curLayer], obj,
+                                      curLevel);
+          }
+          else
+          {
+            RDCWARN("Invalid layer %u used to bind cubemap to framebuffer. Binding POSITIVE_X");
+            GL.glFramebufferTexture2D(eGL_DRAW_FRAMEBUFFER, attachment, faces[0], obj, curLevel);
+          }
+        }
+        else if(details.curType == eGL_TEXTURE_CUBE_MAP_ARRAY ||
+                details.curType == eGL_TEXTURE_1D_ARRAY || details.curType == eGL_TEXTURE_2D_ARRAY ||
+                details.curType == eGL_TEXTURE_2D_MULTISAMPLE_ARRAY ||
+                details.curType == eGL_TEXTURE_3D)
+        {
+          if(curNumViews > 1)
+          {
+            if(curVirtualSamples > 1)
+            {
+              GL.glFramebufferTextureMultisampleMultiviewOVR(eGL_DRAW_FRAMEBUFFER, attachment, obj,
+                                                             curLevel, curVirtualSamples,
+                                                             curStartView, curNumViews);
+            }
+            else
+            {
+              GL.glFramebufferTextureMultiviewOVR(eGL_DRAW_FRAMEBUFFER, attachment, obj, curLevel,
+                                                  curStartView, curNumViews);
+            }
+          }
+          else
+          {
+            GL.glFramebufferTextureLayer(eGL_DRAW_FRAMEBUFFER, attachment, obj, curLevel, curLayer);
+          }
+        }
+        else if(curVirtualSamples > 1)
+        {
+          GL.glFramebufferTexture2DMultisampleEXT(eGL_DRAW_FRAMEBUFFER, attachment, details.curType,
+                                                  obj, curLevel, curVirtualSamples);
+        }
+        else
+        {
+          RDCASSERT(curLayer == 0);
+          GL.glFramebufferTexture(eGL_DRAW_FRAMEBUFFER, attachment, obj, curLevel);
+        }
+      }
+      else
+      {
+        GL.glFramebufferTexture(eGL_DRAW_FRAMEBUFFER, attachment, obj, curLevel);
+      }
     }
 
     driver->glDeleteTextures(1, &forcedDepth);

@@ -34,7 +34,7 @@ class DummyDriver : public IReplayDriver
 {
 public:
   DummyDriver(IReplayDriver *original, const rdcarray<const ShaderReflection *> &shaders,
-              SDFile *sdfile);
+              SDFile *sdfile, const rdcarray<SDObject *> &annotations);
 
   void Shutdown();
 
@@ -193,6 +193,7 @@ private:
   virtual ~DummyDriver();
 
   rdcarray<const ShaderReflection *> m_Shaders;
+  rdcarray<SDObject *> m_Annotations;
   SDFile *m_SDFile;
 
   APIProperties m_Props;

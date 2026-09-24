@@ -408,8 +408,8 @@ public:
       if(data.width == 0)
         return rdcspv::DeviceOpResult::Failed;
 
-      uint32_t coords[4];
-      for(int i = 0; i < 4; i++)
+      uint32_t coords[4] = {};
+      for(int i = 0; i < coord.columns; i++)
         coords[i] = uintComp(coord, i);
 
       if(coords[0] >= data.width || coords[1] >= data.height || coords[2] >= data.depth)
@@ -551,8 +551,8 @@ public:
       if(data.width == 0)
         return rdcspv::DeviceOpResult::Failed;
 
-      uint32_t coords[4];
-      for(int i = 0; i < 4; i++)
+      uint32_t coords[4] = {};
+      for(int i = 0; i < coord.columns; i++)
         coords[i] = uintComp(coord, i);
 
       if(coords[0] >= data.width || coords[1] >= data.height || coords[2] >= data.depth)
@@ -1557,7 +1557,7 @@ public:
     return true;
   }
 
-  virtual bool QueueCalculateMathOp(rdcspv::GLSLstd450 op,
+  virtual bool QueueCalculateMathOp(rdcspv::Op opcode, rdcspv::GLSLstd450 glslop,
                                     const rdcarray<ShaderVariable> &params) override
   {
     CHECK_DEVICE_THREAD();
@@ -1645,8 +1645,16 @@ public:
     }
 
     // push the operation afterwards
+
+    if(glslop == rdcspv::GLSLstd450::Invalid)
+    {
+      RDCCOMPILE_ASSERT(rdcspv::GLSLstd450::Max < (rdcspv::GLSLstd450)1000,
+                        "GLSL std450 ops max is higher than expected");
+      glslop = (rdcspv::GLSLstd450)(1000 + (uint32_t)opcode);
+    }
+
     ObjDisp(cmd)->CmdPushConstants(Unwrap(cmd), Unwrap(m_DebugData.PipeLayout), VK_SHADER_STAGE_ALL,
-                                   sizeof(Vec4f) * 6, sizeof(uint32_t), &op);
+                                   sizeof(Vec4f) * 6, sizeof(uint32_t), &glslop);
 
     ObjDisp(cmd)->CmdDispatch(Unwrap(cmd), 1, 1, 1);
 
@@ -2762,6 +2770,22 @@ private:
       rdcspv::Id eta = cases.add(rdcspv::OpCompositeExtract(floatType, editor.MakeId(), c, {0}));
       rdcspv::Id result =
           cases.add(rdcspv::OpGLSL450(vec4Type, editor.MakeId(), glsl450, op, {a, b, eta}));
+      cases.add(rdcspv::OpStore(outVar, result));
+      cases.add(rdcspv::OpBranch(breakLabel));
+    }
+
+    // non-glsl opcodes
+    if(m_pDriver->PreciseFMAMask() & floatBitSize)
+    {
+      editor.AddCapability(rdcspv::Capability::FMAKHR);
+
+      uint32_t op = 1000 + (uint32_t)rdcspv::Op::FmaKHR;
+
+      rdcspv::Id label = editor.MakeId();
+      targets.push_back({(uint32_t)op, label});
+
+      cases.add(rdcspv::OpLabel(label));
+      rdcspv::Id result = cases.add(rdcspv::OpFmaKHR(vec4Type, editor.MakeId(), a, b, c));
       cases.add(rdcspv::OpStore(outVar, result));
       cases.add(rdcspv::OpBranch(breakLabel));
     }
@@ -3883,9 +3907,14 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
   rdcspv::MemoryAccessAndParamDatas alignedAccess;
   alignedAccess.setAligned(sizeof(uint32_t));
 
+  rdcspv::MemoryAccessAndParamDatas aligned8Access;
+  alignedAccess.setAligned(sizeof(uint64_t));
+
   rdcspv::Id uint32Type = editor.DeclareType(rdcspv::scalar<uint32_t>());
+  rdcspv::Id sint32Type = editor.DeclareType(rdcspv::scalar<int32_t>());
   rdcspv::Id floatType = editor.DeclareType(rdcspv::scalar<float>());
   rdcspv::Id boolType = editor.DeclareType(rdcspv::scalar<bool>());
+  rdcspv::Id uint2Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<uint32_t>(), 2));
   rdcspv::Id uint3Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<uint32_t>(), 3));
   rdcspv::Id uint4Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<uint32_t>(), 4));
   rdcspv::Id float4Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<float>(), 4));
@@ -3912,6 +3941,7 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
     ResultBase_electBallot,
     ResultBase_helperBallot,
     ResultBase_numSubgroups,
+    ResultBase_shadRate,
     ResultBase_firstUser,
   };
 
@@ -4227,10 +4257,13 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
       }
       editor.SetName(value.base, StringFormat::Fmt("__rd_base_%zu_%s", i, param.varName.c_str()));
       // non-float inputs are considered flat
-      value.flat = VarTypeCompType(param.varType) != CompType::Float;
+      // doubles are also flat
+      value.flat =
+          VarTypeCompType(param.varType) != CompType::Float || param.varType == VarType::Double;
 
       // mark this as non-flat so we still derive it for helper lanes as it will vary
-      if(param.systemValue == ShaderBuiltin::IndexInSubgroup)
+      if(param.systemValue == ShaderBuiltin::IndexInSubgroup ||
+         param.systemValue == ShaderBuiltin::PackedFragRate)
         value.flat = false;
 
       laneValues.push_back(value);
@@ -4243,7 +4276,7 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
 
       // align offset conservatively, to 16-byte aligned. We do this with explicit uints so we can
       // preview with spirv-cross (and because it doesn't cost anything particularly)
-      uint32_t paddingWords = ((paramAlign - (offset % 16)) / 4) % 4;
+      uint32_t paddingWords = ((paramAlign - (offset % paramAlign)) / 4) % (paramAlign / 4);
       for(uint32_t p = 0; p < paddingWords; p++)
       {
         structMembers.push_back({uint32Type, "__pad", offset});
@@ -4333,12 +4366,13 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
     members.push_back({uint4Type, "electBallot", offsetof(rdcspv::ResultDataBase, electBallot)});
     members.push_back({uint4Type, "helperBallot", offsetof(rdcspv::ResultDataBase, helperBallot)});
     members.push_back({uint32Type, "numSubgroups", offsetof(rdcspv::ResultDataBase, numSubgroups)});
+    members.push_back({uint32Type, "shadRate", offsetof(rdcspv::ResultDataBase, shadRate)});
 
-    // uint3 padding
+    // uint2 padding
 
     const uint32_t dataStart = (uint32_t)AlignUp(sizeof(rdcspv::ResultDataBase), sizeof(Vec4f));
 
-    RDCASSERT((structStride % sizeof(Vec4f)) == 0);
+    RDCASSERT((structStride % paramAlign) == 0);
 
     rdcspv::Id LaneDataArray = editor.AddType(rdcspv::OpTypeArray(
         editor.MakeId(), LaneDataStruct, editor.AddConstantImmediate<uint32_t>(numLanes)));
@@ -4353,19 +4387,20 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
   rdcspv::Id ResultDataRTArray =
       editor.AddType(rdcspv::OpTypeRuntimeArray(editor.MakeId(), ResultDataBaseType));
 
+  const uint32_t resultStride = structStride * numLanes + sizeof(rdcspv::ResultDataBase);
   editor.AddDecoration(rdcspv::OpDecorate(
-      ResultDataRTArray, rdcspv::DecorationParam<rdcspv::Decoration::ArrayStride>(
-                             structStride * numLanes + sizeof(rdcspv::ResultDataBase))));
+      ResultDataRTArray, rdcspv::DecorationParam<rdcspv::Decoration::ArrayStride>(resultStride)));
 
-  rdcspv::Id bufBase =
-      editor.DeclareStructType("__rd_HitStorage", {
-                                                      {uint32Type, "hit_count", 0},
-                                                      {uint32Type, "total_count", sizeof(uint32_t)},
-                                                      {uint32Type, "dummy", sizeof(uint32_t) * 2},
-                                                      // uint padding
+  RDCASSERT((resultStride % paramAlign) == 0);
 
-                                                      {ResultDataRTArray, "hits", sizeof(Vec4f)},
-                                                  });
+  rdcspv::Id bufBase = editor.DeclareStructType(
+      "__rd_ResultBaseBuffer",
+      {
+          {uint32Type, "hit_count", offsetof(rdcspv::ResultBaseBuffer, hit_count)},
+          {uint32Type, "total_count", offsetof(rdcspv::ResultBaseBuffer, total_count)},
+          {uint32Type, "dummy", offsetof(rdcspv::ResultBaseBuffer, dummy)},
+          {ResultDataRTArray, "hits", offsetof(rdcspv::ResultBaseBuffer, hits)},
+      });
 
   rdcspv::StorageClass bufferClass = editor.PrepareAddedBufferAccess();
 
@@ -4454,6 +4489,8 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
       rdcspv::Id fragCoord, ddxDerivativeCheck = editor.AddConstantImmediate<float>(1.0f);
       rdcspv::Id laneIndex;
 
+      rdcspv::Id shadRate = editor.AddConstantImmediate<uint32_t>(0);
+
       // identify the candidate thread in a stage-specific way
       rdcspv::Id candidateThread;
 
@@ -4499,27 +4536,145 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
         rdcspv::Id fragXY = ops.add(
             rdcspv::OpVectorShuffle(float2Type, editor.MakeId(), fragCoord, fragCoord, {0, 1}));
 
-        /*
+        // masks in the quad are usually 1 apart
+        rdcspv::Id xmask = editor.AddConstantImmediate<uint32_t>(1);
+        rdcspv::Id ymask = editor.AddConstantImmediate<uint32_t>(1);
+
+        // optionally we may need to shift, if shading rate makes the step larger than 1 to ensure
+        // we still get the 0, 1, 2, 3 quad indices we expect
+        rdcspv::Id xshift, yshift;
+
+        rdcspv::Id half = editor.AddConstantImmediate<float>(0.5f);
+        rdcspv::Id half2D = editor.AddConstant(
+            rdcspv::OpConstantComposite(float2Type, editor.MakeId(), {half, half}));
+
+        rdcspv::Id destCentre;
+
+        // when fragment shading rate is active, we need to adjust the expected co-ordinates for a
+        // quad, as only half/quarter of the pixels will be shaded so our normal calculations won't
+        // work.
+        //
+        // effectively the xmask and ymask above are taken from the shading rate in each direction,
+        // and the dest pixel co-ordinate is adjusted. so that instead of
+        //
+        // destCentre = destXY + 0.5, 0.5
+        //
+        // we do:
+        //
+        // roundedDestXY = (destXY >> shadingRateXY) << shadingRateXY
+        // destCentre = roundedDestXY + (shadingRateXY/2.0f)
+        //
+        // to first truncate the lower bits first to get the 'quad' or 'oct-area' and then add on
+        // half the shading rate to get to the centre co-ordinate
+        //
+        // since pixels at 0,0  0,1  1,0  and 1,1 are all shaded as one and the 'centre' becomes 1,1
+        // since that is the co-ordinate for exactly in the middle (normally when shading 1,1 at
+        // full rate the centre is 1.5, 1.5 as above).
+        //
+        // xmask/ymask is also adjusted to get the quadLaneIndex based on proportionally larger quads
+        if(editor.HasCapability(rdcspv::Capability::FragmentShadingRateKHR))
+        {
+          shadRate = editor.AddBuiltinInputLoad(ops, newGlobals, stage,
+                                                rdcspv::BuiltIn::ShadingRateKHR, uint32Type);
+
+          RDCCOMPILE_ASSERT(uint32_t(rdcspv::FragmentShadingRate::Vertical2Pixels) == 1,
+                            "Vertical mask isn't as expected");
+          RDCCOMPILE_ASSERT(uint32_t(rdcspv::FragmentShadingRate::Vertical4Pixels) == 2,
+                            "Vertical mask isn't as expected");
+          RDCCOMPILE_ASSERT(uint32_t(rdcspv::FragmentShadingRate::Horizontal2Pixels) == 4,
+                            "Vertical mask isn't as expected");
+          RDCCOMPILE_ASSERT(uint32_t(rdcspv::FragmentShadingRate::Horizontal4Pixels) == 8,
+                            "Vertical mask isn't as expected");
+
+          const uint32_t vertMask = uint32_t(rdcspv::FragmentShadingRate::Vertical2Pixels |
+                                             rdcspv::FragmentShadingRate::Vertical4Pixels);
+          const uint32_t horizMask = uint32_t(rdcspv::FragmentShadingRate::Horizontal2Pixels |
+                                              rdcspv::FragmentShadingRate::Horizontal4Pixels);
+
+          rdcspv::Id vertRate =
+              ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), shadRate,
+                                           editor.AddConstantImmediate<uint32_t>(vertMask)));
+          editor.SetName(vertRate, "vertRate");
+
+          // shift horizRate to be in the right spot
+          rdcspv::Id horizRate =
+              ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), shadRate,
+                                           editor.AddConstantImmediate<uint32_t>(horizMask)));
+          horizRate = ops.add(rdcspv::OpShiftRightLogical(
+              uint32Type, editor.MakeId(), horizRate, editor.AddConstantImmediate<uint32_t>(2)));
+          editor.SetName(horizRate, "horizRate");
+
+          xshift = horizRate;
+          yshift = vertRate;
+
+          rdcspv::Id shadingRateXY = ops.add(
+              rdcspv::OpCompositeConstruct(uint2Type, editor.MakeId(), {horizRate, vertRate}));
+          editor.SetName(shadingRateXY, "shadingRateXY");
+
+          rdcspv::Id destXYint = ops.add(rdcspv::OpConvertFToU(uint2Type, editor.MakeId(), destXY));
+          editor.SetName(destXYint, "destXYint");
+          rdcspv::Id destXYshifted = ops.add(
+              rdcspv::OpShiftRightLogical(uint2Type, editor.MakeId(), destXYint, shadingRateXY));
+          rdcspv::Id roundedDestXY = ops.add(
+              rdcspv::OpShiftLeftLogical(uint2Type, editor.MakeId(), destXYshifted, shadingRateXY));
+          roundedDestXY = ops.add(rdcspv::OpConvertUToF(float2Type, editor.MakeId(), roundedDestXY));
+          editor.SetName(roundedDestXY, "roundedDestXY");
+
+          rdcspv::Id one = editor.AddConstantImmediate<uint32_t>(1U);
+
+          // the masks are 1 shifted from the rate, because rate is 0=full rate, 1=2x2, 2=4x4
+          // we also need to max with 1
+          xmask = ops.add(rdcspv::OpShiftLeftLogical(uint32Type, editor.MakeId(), horizRate,
+                                                     editor.AddConstantImmediate<uint32_t>(1)));
+          xmask = ops.add(rdcspv::OpGLSL450(uint32Type, editor.MakeId(), glsl450,
+                                            rdcspv::GLSLstd450::UMax, {xmask, one}));
+          ymask = ops.add(rdcspv::OpShiftLeftLogical(uint32Type, editor.MakeId(), vertRate,
+                                                     editor.AddConstantImmediate<uint32_t>(1)));
+          ymask = ops.add(rdcspv::OpGLSL450(uint32Type, editor.MakeId(), glsl450,
+                                            rdcspv::GLSLstd450::UMax, {ymask, one}));
+
+          rdcspv::Id pixelWidthX = ops.add(rdcspv::OpConvertUToF(floatType, editor.MakeId(), xmask));
+          rdcspv::Id pixelWidthY = ops.add(rdcspv::OpConvertUToF(floatType, editor.MakeId(), ymask));
+          rdcspv::Id halfPixelX =
+              ops.add(rdcspv::OpFMul(floatType, editor.MakeId(), pixelWidthX, half));
+          rdcspv::Id halfPixelY =
+              ops.add(rdcspv::OpFMul(floatType, editor.MakeId(), pixelWidthY, half));
+          rdcspv::Id halfPixelWidth = ops.add(
+              rdcspv::OpCompositeConstruct(float2Type, editor.MakeId(), {halfPixelX, halfPixelY}));
+
+          destCentre =
+              ops.add(rdcspv::OpFAdd(float2Type, editor.MakeId(), roundedDestXY, halfPixelWidth));
+        }
+        else
+        {
+          // without shading rate the pixel centre is just 0.5, 0.5 from the dest integer co-ordinate
+          destCentre = ops.add(rdcspv::OpFAdd(float2Type, editor.MakeId(), destXY, half2D));
+        }
+
+        editor.SetName(xmask, "xmask");
+        editor.SetName(ymask, "ymask");
+        editor.SetName(destCentre, "destCentre");
+
         // figure out the TL pixel's coords and calculate our index relative to it. Assume even top
         // left (towards 0,0) though the spec does not guarantee this is the actual quad
-        int yTL = y & (~1);
-
-        // get the index of our desired pixel
-        */
-
-        rdcspv::Id mask = editor.AddConstantImmediate<uint32_t>(1);
 
         // int x01 = x & 1;
         rdcspv::Id xInt =
             ops.add(rdcspv::OpCompositeExtract(floatType, editor.MakeId(), fragXY, {0}));
         xInt = ops.add(rdcspv::OpConvertFToU(uint32Type, editor.MakeId(), xInt));
-        rdcspv::Id x01 = ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), xInt, mask));
+        rdcspv::Id x01 = ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), xInt, xmask));
+
+        if(xshift)
+          x01 = ops.add(rdcspv::OpShiftRightLogical(uint32Type, editor.MakeId(), x01, xshift));
 
         // int y01 = y & 1;
         rdcspv::Id yInt =
             ops.add(rdcspv::OpCompositeExtract(floatType, editor.MakeId(), fragXY, {1}));
         yInt = ops.add(rdcspv::OpConvertFToU(uint32Type, editor.MakeId(), yInt));
-        rdcspv::Id y01 = ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), yInt, mask));
+        rdcspv::Id y01 = ops.add(rdcspv::OpBitwiseAnd(uint32Type, editor.MakeId(), yInt, ymask));
+
+        if(yshift)
+          y01 = ops.add(rdcspv::OpShiftRightLogical(uint32Type, editor.MakeId(), y01, yshift));
 
         // int destIdx = x01 + 2 * y01;
         rdcspv::Id sum = ops.add(rdcspv::OpIMul(uint32Type, editor.MakeId(),
@@ -4528,26 +4683,21 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
         laneIndex = quadLaneIndex;
         editor.SetName(quadLaneIndex, "quadLaneIndex");
 
-        // bool candidateThread = all(abs(gl_FragCoord.xy - dest.xy) < 0.5f);
-        rdcspv::Id bool2Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<bool>(), 2));
-
         // subtract frag coord from the destination co-ord in x-y to get relative
         rdcspv::Id fragXYRelative =
-            ops.add(rdcspv::OpFSub(float2Type, editor.MakeId(), fragXY, destXY));
+            ops.add(rdcspv::OpFSub(float2Type, editor.MakeId(), fragXY, destCentre));
 
         // abs()
         rdcspv::Id fragXYAbs = ops.add(rdcspv::OpGLSL450(
             float2Type, editor.MakeId(), glsl450, rdcspv::GLSLstd450::FAbs, {fragXYRelative}));
 
-        rdcspv::Id half = editor.AddConstantImmediate<float>(0.5f);
-        rdcspv::Id threshold = editor.AddConstant(
-            rdcspv::OpConstantComposite(float2Type, editor.MakeId(), {half, half}));
+        rdcspv::Id bool2Type = editor.DeclareType(rdcspv::Vector(rdcspv::scalar<bool>(), 2));
 
-        // less than 0.5
+        // less than 0.5 component-wise
         rdcspv::Id inPixelXY =
-            ops.add(rdcspv::OpFOrdLessThan(bool2Type, editor.MakeId(), fragXYAbs, threshold));
+            ops.add(rdcspv::OpFOrdLessThan(bool2Type, editor.MakeId(), fragXYAbs, half2D));
 
-        // both less than 0.5
+        // both less than threshold
         candidateThread = ops.add(rdcspv::OpAll(boolType, editor.MakeId(), inPixelXY));
       }
       else if(stage == ShaderStage::Compute || stage == ShaderStage::Task ||
@@ -4600,6 +4750,23 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
               editor.SetName(valQ, StringFormat::Fmt("%s_swiz%u", val.name.c_str(), q));
 
               valQ = ops.add(rdcspv::OpConvertFToU(uint32Type, editor.MakeId(), valQ));
+              editor.SetName(valQ, StringFormat::Fmt("%s_swiz%u_u", val.name.c_str(), q));
+
+              val.quadSwizzledData[q] = valQ;
+            }
+          }
+          else if(dataType.IsS32())
+          {
+            for(uint32_t q = 0; q < 4; q++)
+            {
+              rdcspv::Id valQ = val.base;
+              valQ = ops.add(rdcspv::OpConvertSToF(floatType, editor.MakeId(), valQ));
+              valQ = ops.add(rdcspv::OpFunctionCall(floatType, editor.MakeId(), quadSwizzleHelper[1],
+                                                    {valQ, quadLaneIndex, quadIdxConst[q]}));
+              // named as convenience because spirv-cross declares a variable here and then does the cast at the usage
+              editor.SetName(valQ, StringFormat::Fmt("%s_swiz%u", val.name.c_str(), q));
+
+              valQ = ops.add(rdcspv::OpConvertFToS(sint32Type, editor.MakeId(), valQ));
               editor.SetName(valQ, StringFormat::Fmt("%s_swiz%u_u", val.name.c_str(), q));
 
               val.quadSwizzledData[q] = valQ;
@@ -5054,6 +5221,10 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
           rdcspv::OpAccessChain(uint32BufPtr, editor.MakeId(), hit,
                                 {editor.AddConstantImmediate<uint32_t>(ResultBase_numSubgroups)}));
       ops.add(rdcspv::OpStore(storePtr, numSubgroups, alignedAccess));
+      storePtr = ops.add(
+          rdcspv::OpAccessChain(uint32BufPtr, editor.MakeId(), hit,
+                                {editor.AddConstantImmediate<uint32_t>(ResultBase_shadRate)}));
+      ops.add(rdcspv::OpStore(storePtr, shadRate, alignedAccess));
 
       // merge after doing the fixed data section
       ops.add(rdcspv::OpBranch(fixedDataMerge));
@@ -5089,22 +5260,27 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
                 ptrType, editor.MakeId(), outputPtr,
                 {editor.AddConstantImmediate<uint32_t>((uint32_t)val.structIndex)}));
 
+            const rdcspv::DataType &dataType = editor.GetDataType(val.type);
+            rdcspv::MemoryAccessAndParamDatas access = alignedAccess;
+            if(dataType.scalar().width == 8)
+              access = aligned8Access;
+
             if(val.base == isHelper)
             {
-              ops.add(rdcspv::OpStore(valPtr, isHelperPerQuad[q], alignedAccess));
+              ops.add(rdcspv::OpStore(valPtr, isHelperPerQuad[q], access));
             }
             else if(val.base == quadLaneIndex)
             {
-              ops.add(rdcspv::OpStore(valPtr, quadIdxConst[q], alignedAccess));
+              ops.add(rdcspv::OpStore(valPtr, quadIdxConst[q], access));
             }
             else if(val.flat)
             {
-              ops.add(rdcspv::OpStore(valPtr, val.base, alignedAccess));
+              ops.add(rdcspv::OpStore(valPtr, val.base, access));
             }
             else
             {
               RDCASSERT(!val.quadSwizzledData.empty());
-              ops.add(rdcspv::OpStore(valPtr, val.quadSwizzledData[q], alignedAccess));
+              ops.add(rdcspv::OpStore(valPtr, val.quadSwizzledData[q], access));
             }
           }
 
@@ -5140,7 +5316,12 @@ static void CreateInputFetcher(rdcarray<uint32_t> &spv, const rdcarray<SpecConst
               ptrType, editor.MakeId(), outputPtr,
               {editor.AddConstantImmediate<uint32_t>((uint32_t)val.structIndex)}));
 
-          ops.add(rdcspv::OpStore(valPtr, val.base, alignedAccess));
+          const rdcspv::DataType &dataType = editor.GetDataType(val.type);
+          rdcspv::MemoryAccessAndParamDatas access = alignedAccess;
+          if(dataType.scalar().width == 8)
+            access = aligned8Access;
+
+          ops.add(rdcspv::OpStore(valPtr, val.base, access));
         }
       }
 
@@ -5372,14 +5553,17 @@ ShaderDebugTrace *VulkanReplay::DebugVertex(uint32_t eventId, uint32_t vertid, u
       new VulkanAPIWrapper(m_pDriver, c, ShaderStage::Vertex, eventId, shadRefl.refl->resourceId);
 
   // clamp the view index to the number of multiviews, just to be sure
-  size_t numViews;
+  uint32_t numViews = 1;
 
   if(state.dynamicRendering.active)
-    numViews = Log2Ceil(state.dynamicRendering.viewMask + 1);
+    numViews = state.dynamicRendering.viewMask == ~0U
+                   ? 32
+                   : RDCMAX(numViews, Log2Ceil(state.dynamicRendering.viewMask + 1));
   else
-    numViews = c.m_RenderPass[state.GetRenderPass()].subpasses[state.subpass].multiviews.size();
+    numViews =
+        (uint32_t)c.m_RenderPass[state.GetRenderPass()].subpasses[state.subpass].multiviews.size();
   if(numViews > 1)
-    view = RDCMIN((uint32_t)numViews - 1, view);
+    view = RDCMIN(numViews - 1, view);
   else
     view = 0;
 
@@ -5562,7 +5746,7 @@ ShaderDebugTrace *VulkanReplay::DebugVertex(uint32_t eventId, uint32_t vertid, u
 
     RDCASSERTMSG("Should only get one hit for vertex shaders", hit_count == 1, hit_count);
 
-    base += sizeof(Vec4f);
+    base += offsetof(rdcspv::ResultBaseBuffer, hits);
 
     rdcspv::ResultDataBase *winner = (rdcspv::ResultDataBase *)base;
 
@@ -5987,6 +6171,21 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
     RDCLOG("useSampleID is %u because of bare capability", useSampleID);
   }
 
+  // don't fetch sample ID if it would interfere with fragment rate fetch and wouldn't be needed
+  // probably we could disable this entirely if MSAA is not in use, but this is the case that has
+  // side effects as it disabled the VRS rates
+  if(state.rastSamples == VK_SAMPLE_COUNT_1_BIT)
+  {
+    for(size_t i = 0; i < shadRefl.refl->inputSignature.size(); i++)
+    {
+      if(shadRefl.refl->inputSignature[i].systemValue == ShaderBuiltin::PackedFragRate)
+      {
+        useSampleID = false;
+        break;
+      }
+    }
+  }
+
   bool useViewIndex = (view == ~0U) ? false : true;
   if(useViewIndex)
   {
@@ -6045,8 +6244,8 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
   SpecData specData = {};
 
   specData.arrayLength = overdrawLevels;
-  specData.destX = float(x) + 0.5f;
-  specData.destY = float(y) + 0.5f;
+  specData.destX = float(x);
+  specData.destY = float(y);
 
   // make copy of state to draw from
   VulkanRenderState modifiedstate = state;
@@ -6132,7 +6331,7 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
     hit_count = overdrawLevels;
   }
 
-  base += sizeof(Vec4f);
+  base += offsetof(rdcspv::ResultBaseBuffer, hits);
 
   rdcspv::ResultDataBase *winner = NULL;
 
@@ -6160,7 +6359,13 @@ ShaderDebugTrace *VulkanReplay::DebugPixel(uint32_t eventId, uint32_t x, uint32_
       continue;
     }
 
-    if(hit->ddxDerivCheck != 1.0f)
+    float ddxExpectation = 1.0f;
+    if(hit->shadRate & (uint32_t)rdcspv::FragmentShadingRate::Horizontal2Pixels)
+      ddxExpectation = 2.0f;
+    else if(hit->shadRate & (uint32_t)rdcspv::FragmentShadingRate::Horizontal4Pixels)
+      ddxExpectation = 4.0f;
+
+    if(hit->ddxDerivCheck != ddxExpectation)
     {
       RDCWARN("Hit %u doesn't have valid derivatives", i);
       continue;
@@ -6682,7 +6887,7 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
       hit_count = maxHits;
     }
 
-    base += sizeof(Vec4f);
+    base += offsetof(rdcspv::ResultBaseBuffer, hits);
 
     rdcspv::ResultDataBase *winner = (rdcspv::ResultDataBase *)base;
 
@@ -6745,16 +6950,16 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
         uint32_t quadZ = compData->threadid[2];
         quadId = quadX + (quadY * countQuadX) + (quadZ * countQuadY * countQuadX);
         quadLaneIndex = (compData->threadid[0] % quadW) + (compData->threadid[1] % quadH) * 2;
-
-        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
-        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadId] =
-            quadId + quadIdOffset;
       }
 
       if(hasWorkgroupScope)
       {
         if(hasQuadScope)
         {
+          // There won't be any data them for inactive lanes
+          if(subgroupData->isActive == 0)
+            continue;
+
           // quad scope, derive the lane from the quad layout
           lane = quadId * 4 + quadLaneIndex;
         }
@@ -6764,6 +6969,13 @@ ShaderDebugTrace *VulkanReplay::DebugComputeCommon(ShaderStage stage, uint32_t e
           lane = compData->threadid[2] * threadDim[0] * threadDim[1] +
                  compData->threadid[1] * threadDim[0] + compData->threadid[0];
         }
+      }
+
+      if(hasQuadScope)
+      {
+        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadLane] = quadLaneIndex;
+        apiWrapper->thread_props[lane][(size_t)rdcspv::ThreadProperty::QuadId] =
+            quadId + quadIdOffset;
       }
 
       if(rdcfixedarray<uint32_t, 3>(compData->threadid) == threadid && subgroupData->isActive)

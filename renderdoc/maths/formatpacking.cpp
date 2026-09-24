@@ -856,7 +856,7 @@ void DecodePixelData(const ResourceFormat &fmt, const byte *data, PixelValue &ou
 
     if(fmt.type == ResourceFormatType::A8)
     {
-      out.floatValue[2] = out.floatValue[0];
+      out.floatValue[3] = out.floatValue[0];
       out.floatValue[0] = 0.0f;
     }
     else if(fmt.type == ResourceFormatType::S8)

@@ -30,7 +30,7 @@ class VK_Line_Raster(rdtest.TestCase):
 
         self.check(action is not None)
 
-        action = action.previous
+        action = action.previousAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 

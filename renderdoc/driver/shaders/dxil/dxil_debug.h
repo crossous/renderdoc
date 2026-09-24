@@ -263,6 +263,12 @@ struct SRVInfo
   ResourceInfo resInfo;
 };
 
+struct ConstantBlockData
+{
+  bytebuf bufferData;
+  size_t byteSize;
+};
+
 enum class ThreadProperty : uint32_t
 {
   Helper,
@@ -337,7 +343,8 @@ public:
   virtual bool IsCBVCached(const DXDebug::BindingSlot &slot) const = 0;
   virtual bool IsSRVCached(const DXDebug::BindingSlot &slot) const = 0;
   virtual bool IsUAVCached(const DXDebug::BindingSlot &slot) const = 0;
-  virtual bool IsResourceInfoCached(const DXDebug::BindingSlot &slot, uint32_t mipLevel) = 0;
+  virtual bool IsResourceInfoCached(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                                    uint32_t mipLevel) = 0;
   virtual bool IsSampleInfoCached(const DXDebug::BindingSlot &slot) = 0;
   virtual bool IsRenderTargetSampleInfoCached() = 0;
   virtual bool IsResourceReferenceInfoCached(const DXDebug::BindingSlot &slot) = 0;
@@ -346,7 +353,7 @@ public:
   virtual const ShaderVariable &GetInputPlaceholder() const = 0;
   virtual const rdcarray<DXILDebug::ThreadProperties> &GetWorkgroupProperties() const = 0;
   virtual const rdcarray<ShaderVariable> &GetConstantBlocks() const = 0;
-  virtual const std::map<ConstantBlockReference, bytebuf> &GetConstantBlocksDatas() const = 0;
+  virtual const std::map<ConstantBlockReference, ConstantBlockData> &GetConstantBlocksDatas() const = 0;
   virtual const BuiltinInputs &GetBuiltins() const = 0;
   virtual uint32_t GetSubgroupSize() const = 0;
   virtual const rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> &GetThreadsBuiltins() const = 0;
@@ -795,7 +802,7 @@ struct GlobalState
 
   // allocated storage for opaque uniform blocks, does not change over the course of debugging
   rdcarray<ShaderVariable> constantBlocks;
-  std::map<ConstantBlockReference, bytebuf> constantBlocksDatas;
+  std::map<ConstantBlockReference, ConstantBlockData> constantBlocksDatas;
 
   rdcarray<Id> groupSharedMemoryIds;
   // resources may be read-write but the variable itself doesn't change
@@ -925,7 +932,7 @@ public:
   DebugAPIWrapper *GetAPIWrapper() const { return m_ApiWrapper; }
 
   static rdcstr GetResourceBaseName(const DXIL::Program *program,
-                                    const DXIL::ResourceReference *resRef);
+                                    const DXIL::EntryPointInterface::ResourceBase &resBase);
 
   static rdcstr GetResourceReferenceName(const DXIL::Program *program, DXIL::ResourceClass resClass,
                                          const BindingSlot &slot);

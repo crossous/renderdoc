@@ -546,8 +546,16 @@ void main()
     if(vkr != VK_SUCCESS)
       props3D = {};
 
-    // rendering to depth 3D textures is broken on NV, fixed in a future driver version (guess made,
-    // will be updated once fix ships)
+    // hide support for 1D textures on certain formats that are very rarely used and might cause
+    // problems if the file-loading proxy API doesn't support it.
+    if(int(f.cfg.type) >= int(TextureType::BC1) && int(f.cfg.type) <= int(TextureType::BC7))
+      props1D = {};
+
+    if(f.cfg.type == TextureType::A8)
+      props1D = {};
+
+    // rendering to depth 3D textures is broken on NV, fixed in a future driver version (guess
+    // made, will be updated once fix ships)
     if(depth && physProperties.vendorID == PCI_VENDOR_NV &&
        physProperties.driverVersion < VK_MAKE_VERSION_NV(445, 0, 0, 0))
       props3D = {};

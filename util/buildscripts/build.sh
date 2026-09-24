@@ -166,6 +166,8 @@ usage() {
 	echo "  --symstore <symbol store>   [Windows only] Specify a path to a symbol store.";
 	echo "  --llvm_arm32 <path>         Give the path to an ARM32 build of LLVM, for android.";
 	echo "  --llvm_arm64 <path>         Give the path to an ARM64 build of LLVM, for android.";
+	echo "  --python <path>             Give the path to a Python root, for windows.";
+	echo "  --qt <path>                 Give the path to a Qt root, for windows.";
 	echo "  --skipcompile               Skip compile steps, package already compiled binaries.";
 	echo "  --strict                    Require all build steps to complete successfully,";
 	echo "                              including optional steps e.g. android/installer.";
@@ -199,6 +201,17 @@ while [[ $# -gt 0 ]]; do
 		;;
 		--llvm_arm64)
 		LLVM_ARM64="$(realpath "$2")"
+		shift
+		shift
+		;;
+
+		--python)
+		PYTHON_ROOT="$(realpath "$2")"
+		shift
+		shift
+		;;
+		--qt)
+		QT_ROOT="$(realpath "$2")"
 		shift
 		shift
 		;;
@@ -271,6 +284,11 @@ PLATFORM=$(uname)
 
 if uname -a | grep -qiE 'msys|cygwin|microsoft'; then
 	PLATFORM=Windows
+
+	echo "Using Python from '$PYTHON_ROOT' and Qt from '$QT_ROOT'"
+
+	export PYTHON_ROOT;
+	export QT_ROOT;
 
 	if [ -d /c/Windows ]; then
 		WIN_ROOT=/

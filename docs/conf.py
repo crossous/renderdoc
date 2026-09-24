@@ -24,6 +24,7 @@ import datetime
 #sys.path.insert(0, os.path.abspath('.'))
 
 import struct
+import inspect
 
 # path to module libraries for windows
 if struct.calcsize("P") == 8:
@@ -40,8 +41,10 @@ os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + 'Development/')
 os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + 'Release/')
 
 if sys.platform == 'win32' and sys.version_info[1] >= 8:
-    os.add_dll_directory(binpath + 'Release/')
-    os.add_dll_directory(binpath + 'Development/')
+    for sub in ['Release', 'Development']:
+        path = os.path.abspath(binpath + sub)
+        if os.path.exists(path):
+            os.add_dll_directory(path)
 
 # path to module libraries for linux
 sys.path.insert(0, os.path.abspath('../build/lib'))
@@ -56,7 +59,22 @@ sys.path.insert(0, os.path.abspath('sphinx_exts'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx_paramlinks']
+extensions = ['sphinx.ext.autodoc', 'sphinx_paramlinks', 'sphinxcontrib_jquery', 'sphinx_copybutton']
+
+if tags.has('spelling'): # type: ignore
+    extensions.append('sphinxcontrib.spelling')
+    spelling_lang = tokenizer_lang = 'en_US'
+    spelling_show_suggestions = True
+    spelling_exclude_patterns = ['credits_*']
+    spelling_word_list_filename = [
+            # for personal ease and to avoid too many renames, british english words
+            # as well as a few english words not in the spelling dictionary
+            'spelling_english.txt',
+            # graphics-specific terms or proper nouns
+            'spelling_graphics.txt',
+            # more general technology language or terms
+            'spelling_general.txt'
+        ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -131,13 +149,45 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'sphinx_exts', 'include'
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'default'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
 #keep_warnings = False
+
+# warn about all missing references
+nitpicky = True
+nitpick_ignore = {
+        ('py:class', 'datetime'),
+        ('cpp:identifier', 'uint32_t'),
+        ('cpp:identifier', 'uint64_t'),
+        ('cpp:identifier', 'int32_t'),
+        ('cpp:identifier', 'int64_t'),
+
+        # opaque types
+        ('py:class', 'QWidget'),
+        ('py:class', 'HWND'),
+        ('py:class', 'Display'),
+        ('py:class', 'Drawable'),
+        ('py:class', 'xcb_connection_t'),
+        ('py:class', 'xcb_window_t'),
+        ('py:class', 'wl_display'),
+        ('py:class', 'wl_surface'),
+        ('py:class', 'ANativeWindow'),
+        ('py:class', 'NSView'),
+        ('py:class', 'CALayer'),
+        ('py:class', 'NSView'),
+
+        # faux-defined callback types
+        ('py:func', 'ProgressCallback'),
+        ('py:func', 'KillCallback'),
+        ('py:func', 'PreviewWindowCallback'),
+        ('py:func', 'SaveCallback'),
+        ('py:func', 'ReplaceCallback'),
+        ('py:func', 'RevertCallback'),
+}
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -344,7 +394,7 @@ html_context = {
 # We need 1.5 and above for the htmlhelp links to be handled properly without
 # needing separate ugly _blank links. If you don't care about that, you can
 # disable this
-if(tags.has('htmlhelp')):
+if(tags.has('htmlhelp')): # type: ignore
     print("**** We require sphinx 1.5 for htmlhelp build to have the fix for issue #2550 ****")
     needs_sphinx = '1.5'
 
@@ -432,10 +482,17 @@ def build_finished(app, exception):
         module = sys.modules[module_name]
         entries = dir(module)
         for item in dir(module):
+            if '_' in item:
+                segments = item.split("_")
+                if hasattr(module, segments[0]) and inspect.isclass(
+                    getattr(module, segments[0])
+                ):
+                    continue
+
             if 'INTERNAL:' not in str(module.__dict__[item].__doc__):
                 items.append('{}.{}'.format(module_name, item))
 
-    items = set(filter(lambda i: re.search('__|SWIG|ResourceId_Null|rdcfixedarray_of|rdcarray_of|Structured.*List', i) is None, items))
+    items = set(filter(lambda i: re.search('__|SWIG|rdcfixedarray_of|rdcarray_of|Structured.*List', i) is None, items))
 
     # Remove any documented/indexed python objects
     items -= set(objs.keys())
@@ -447,6 +504,25 @@ def build_finished(app, exception):
 
     print("All python objects are linked in the documentation.")
 
+from sphinx.ext import autodoc 
+from typing import Any
+
+class MethodDocumenter(autodoc.MethodDocumenter):
+    def format_signature(self, **kwargs: Any) -> str:
+        sigs = super().format_signature(**kwargs)
+        # don't print overloads with each optional parameter removed, just the main entry
+        return sigs.split('\n')[0]
+
+class FunctionDocumenter(autodoc.FunctionDocumenter):
+    def format_signature(self, **kwargs: Any) -> str:
+        sigs = super().format_signature(**kwargs)
+        # don't print overloads with each optional parameter removed, just the main entry
+        return sigs.split('\n')[0]
+
+
 def setup(app):
     app.connect('autodoc-skip-member', maybe_skip_member)
     app.connect('build-finished', build_finished)
+
+    app.add_autodocumenter(FunctionDocumenter, override=True)
+    app.add_autodocumenter(MethodDocumenter, override=True)

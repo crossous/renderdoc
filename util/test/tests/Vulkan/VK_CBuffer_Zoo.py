@@ -78,7 +78,7 @@ class VK_CBuffer_Zoo(rdtest.TestCase):
         rdtest.log.success("Specialization constants are as expected")
 
         # Move to the HLSL action
-        action = action.next
+        action = action.nextAction
 
         self.check(action is not None)
 

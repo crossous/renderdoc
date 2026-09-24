@@ -13,7 +13,7 @@ class D3D11_Shader_Debug_Zoo(rdtest.TestCase):
         for idx, action in enumerate([self.find_action("Main Test"), self.find_action("Optimised Test")]):
             name = action.customName
 
-            action = action.next
+            action = action.nextAction
 
             self.controller.SetFrameEvent(action.eventId, False)
 
@@ -54,7 +54,7 @@ class D3D11_Shader_Debug_Zoo(rdtest.TestCase):
             rdtest.log.end_section(name)
 
         rdtest.log.begin_section("Flow tests")
-        action = self.find_action("Flow Test").next
+        action = self.find_action("Flow Test").nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -80,7 +80,7 @@ class D3D11_Shader_Debug_Zoo(rdtest.TestCase):
         rdtest.log.end_section("Flow tests")
 
         rdtest.log.begin_section("MSAA tests")
-        action = self.find_action("MSAA Test").next
+        action = self.find_action("MSAA Test").nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         pipe: rd.PipeState = self.controller.GetPipelineState()
         for (x,y) in [(4, 4), (4, 5), (3, 4), (3, 5)]:

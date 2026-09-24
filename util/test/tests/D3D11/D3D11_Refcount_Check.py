@@ -22,7 +22,7 @@ class D3D11_Refcount_Check(rdtest.TestCase):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 

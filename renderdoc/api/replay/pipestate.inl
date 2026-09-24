@@ -944,7 +944,11 @@ rdcarray<UsedDescriptor> PipeState::GetAllUsedDescriptors(bool onlyUsed) const
     if(onlyUsed == false || !m_Access[i].staticallyUnused)
     {
       if(i < m_Descriptors.size())
-        ret.push_back({m_Access[i], m_Descriptors[i], m_SamplerDescriptors[i]});
+      {
+        UsedDescriptor d = {m_Access[i], m_Descriptors[i], m_SamplerDescriptors[i]};
+        ApplyVulkanDynamicOffsets(d);
+        ret.push_back(d);
+      }
     }
   }
 
@@ -1190,6 +1194,110 @@ rdcarray<Descriptor> PipeState::GetOutputTargets() const
   return ret;
 }
 
+rdcfixedarray<float, 4> PipeState::GetBlendFactor() const
+{
+  if(IsCaptureLoaded())
+  {
+    if(IsCaptureD3D11())
+    {
+      return m_D3D11->outputMerger.blendState.blendFactor;
+    }
+    else if(IsCaptureD3D12())
+    {
+      return m_D3D12->outputMerger.blendState.blendFactor;
+    }
+    else if(IsCaptureGL())
+    {
+      return m_GL->framebuffer.blendState.blendFactor;
+    }
+    else if(IsCaptureVK())
+    {
+      return m_Vulkan->colorBlend.blendFactor;
+    }
+  }
+
+  return {};
+}
+
+DepthTestState PipeState::GetDepthTestState() const
+{
+  DepthTestState ret = {};
+
+  if(IsCaptureLoaded())
+  {
+    if(IsCaptureD3D11())
+    {
+      ret.depthEnable = m_D3D11->outputMerger.depthStencilState.depthEnable;
+      ret.depthWrites = m_D3D11->outputMerger.depthStencilState.depthWrites;
+      ret.depthFunction = m_D3D11->outputMerger.depthStencilState.depthFunction;
+    }
+    else if(IsCaptureD3D12())
+    {
+      ret.depthEnable = m_D3D12->outputMerger.depthStencilState.depthEnable;
+      ret.depthWrites = m_D3D12->outputMerger.depthStencilState.depthWrites;
+      ret.depthFunction = m_D3D12->outputMerger.depthStencilState.depthFunction;
+      ret.depthBounds = m_D3D12->outputMerger.depthStencilState.depthBoundsEnable;
+      ret.minDepthBounds = m_D3D12->outputMerger.depthStencilState.minDepthBounds;
+      ret.maxDepthBounds = m_D3D12->outputMerger.depthStencilState.maxDepthBounds;
+    }
+    else if(IsCaptureGL())
+    {
+      ret.depthEnable = m_GL->depthState.depthEnable;
+      ret.depthWrites = m_GL->depthState.depthWrites;
+      ret.depthFunction = m_GL->depthState.depthFunction;
+      ret.depthBounds = m_GL->depthState.depthBounds;
+      ret.minDepthBounds = m_GL->depthState.nearBound;
+      ret.maxDepthBounds = m_GL->depthState.farBound;
+    }
+    else if(IsCaptureVK())
+    {
+      ret.depthEnable = m_Vulkan->depthStencil.depthTestEnable;
+      ret.depthWrites = m_Vulkan->depthStencil.depthWriteEnable;
+      ret.depthFunction = m_Vulkan->depthStencil.depthFunction;
+      ret.depthBounds = m_Vulkan->depthStencil.depthBoundsEnable;
+      ret.minDepthBounds = m_Vulkan->depthStencil.minDepthBounds;
+      ret.maxDepthBounds = m_Vulkan->depthStencil.maxDepthBounds;
+    }
+  }
+
+  return ret;
+}
+
+RasterState PipeState::GetRasterState() const
+{
+  RasterState ret = {};
+
+  if(IsCaptureLoaded())
+  {
+    if(IsCaptureD3D11())
+    {
+      ret.cullMode = m_D3D11->rasterizer.state.cullMode;
+      ret.fillMode = m_D3D11->rasterizer.state.fillMode;
+      ret.frontCCW = m_D3D11->rasterizer.state.frontCCW;
+    }
+    else if(IsCaptureD3D12())
+    {
+      ret.cullMode = m_D3D12->rasterizer.state.cullMode;
+      ret.fillMode = m_D3D12->rasterizer.state.fillMode;
+      ret.frontCCW = m_D3D12->rasterizer.state.frontCCW;
+    }
+    else if(IsCaptureGL())
+    {
+      ret.cullMode = m_GL->rasterizer.state.cullMode;
+      ret.fillMode = m_GL->rasterizer.state.fillMode;
+      ret.frontCCW = m_GL->rasterizer.state.frontCCW;
+    }
+    else if(IsCaptureVK())
+    {
+      ret.cullMode = m_Vulkan->rasterizer.cullMode;
+      ret.fillMode = m_Vulkan->rasterizer.fillMode;
+      ret.frontCCW = m_Vulkan->rasterizer.frontCCW;
+    }
+  }
+
+  return ret;
+}
+
 rdcarray<ColorBlend> PipeState::GetColorBlends() const
 {
   if(IsCaptureLoaded())
@@ -1225,6 +1333,31 @@ rdcarray<ColorBlend> PipeState::GetColorBlends() const
   }
 
   return {};
+}
+
+bool PipeState::IsStencilTestEnabled() const
+{
+  if(IsCaptureLoaded())
+  {
+    if(IsCaptureD3D11())
+    {
+      return m_D3D11->outputMerger.depthStencilState.stencilEnable;
+    }
+    else if(IsCaptureD3D12())
+    {
+      return m_D3D12->outputMerger.depthStencilState.stencilEnable;
+    }
+    else if(IsCaptureGL())
+    {
+      return m_GL->stencilState.stencilEnable;
+    }
+    else if(IsCaptureVK())
+    {
+      return m_Vulkan->depthStencil.stencilTestEnable;
+    }
+  }
+
+  return false;
 }
 
 rdcpair<StencilFace, StencilFace> PipeState::GetStencilFaces() const

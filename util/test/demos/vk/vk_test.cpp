@@ -736,8 +736,7 @@ bool VulkanGraphicsTest::Init()
     queueCreates.push_back(vkh::DeviceQueueCreateInfo(transferQueueFamilyIndex, 1, priorities));
 
   CHECK_VKR(vkCreateDevice(
-      phys, vkh::DeviceCreateInfo(queueCreates, enabledLayers, devExts, features).next(devInfoNext),
-      NULL, &device));
+      phys, vkh::DeviceCreateInfo(queueCreates, devExts, features).next(devInfoNext), NULL, &device));
 
   volkLoadDevice(device);
 
@@ -1692,6 +1691,16 @@ bool VulkanWindow::CreateSwapchain()
         vkh::AttachmentDescription(format, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL));
 
     renderPassCreateInfo.addSubpass({VkAttachmentReference({0, VK_IMAGE_LAYOUT_GENERAL})});
+
+    // add deps to allow clear/copy on the main target before or after
+    renderPassCreateInfo.dependencies.push_back(vkh::SubpassDependency(
+        ~0U, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT));
+    renderPassCreateInfo.dependencies.push_back(vkh::SubpassDependency(
+        0, ~0U, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT));
 
     rp = m_Test->createRenderPass(renderPassCreateInfo);
   }

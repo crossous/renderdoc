@@ -24,6 +24,61 @@
 
 #include "vk_test.h"
 
+std::string simple_mesh = R"EOSHADER(
+
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(triangles, max_vertices = 6, max_primitives = 2) out;
+layout(location = 0) out vec4 outColor[];
+
+void main()
+{
+  uint triangleCount = 2;
+  uint vertexCount = 3 * triangleCount;
+
+  SetMeshOutputsEXT(vertexCount, triangleCount);
+
+  for (uint i = 0; i < 2; ++i)
+  {
+    uint vertIdx = i * 3;
+    uint tri = i + 2 * gl_WorkGroupID.x;
+    vec4 org = vec4(-0.65, +0.65, 0.0, 0.0) + vec4(0.42, 0.0, 0.0, 0.0) * tri;
+
+    uint vert0 = 0 + vertIdx;
+    uint vert1 = 1 + vertIdx;
+    uint vert2 = 2 + vertIdx;
+
+    gl_MeshVerticesEXT[vert0].gl_Position = vec4(-0.2, -0.2, 0.0, 1.0) + org;
+    gl_MeshVerticesEXT[vert1].gl_Position = vec4(0.0, 0.2, 0.0, 1.0) + org;
+    gl_MeshVerticesEXT[vert2].gl_Position = vec4(0.2, -0.2, 0.0, 1.0) + org;
+
+    outColor[vert0] = vec4(1.0, 0.0, 0.0, 1.0);
+    outColor[vert1] = vec4(1.0, 0.0, 0.0, 1.0);
+    outColor[vert2] = vec4(1.0, 0.0, 0.0, 1.0);
+
+    gl_PrimitiveTriangleIndicesEXT[i] =  uvec3(vert0, vert1, vert2);
+  }
+}
+
+)EOSHADER";
+
+std::string simple_mesh_pixel = R"EOSHADER(
+
+#version 460
+
+layout(location = 0) in vec4 inColor;
+layout(location = 0) out vec4 outColor;
+
+void main()
+{
+  outColor = inColor;
+}
+
+)EOSHADER";
+
 std::string pixel = R"EOSHADER(
 
 #version 460 core
@@ -125,6 +180,23 @@ void main()
     indirectData.data[10].y = 2;
     indirectData.data[10].z = 0;
     indirectData.data[10].w = 0;
+
+    // DrawMeshIndirect
+    indirectData.data[11].x = 9;
+    indirectData.data[11].y = 7;
+    indirectData.data[11].z = 5;
+    indirectData.data[11].w = 0;
+
+    indirectData.data[12].x = 2;
+    indirectData.data[12].y = 1;
+    indirectData.data[12].z = 1;
+    indirectData.data[12].w = 0;
+
+    // DrawMeshIndirect Counts
+    indirectData.data[13].x = 1;
+    indirectData.data[13].y = 0;
+    indirectData.data[13].z = 0;
+    indirectData.data[13].w = 0;
   }
 }
 
@@ -150,6 +222,10 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
   };
 
+  VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeats = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+  };
+
   float sqSize;
   VkViewport viewPort;
 
@@ -173,6 +249,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
     optDevExts.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
     optDevExts.push_back(VK_EXT_NESTED_COMMAND_BUFFER_EXTENSION_NAME);
     optDevExts.push_back(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+    optDevExts.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
     VulkanGraphicsTest::Prepare(argc, argv);
 
@@ -236,6 +313,18 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       {
         descBufFeats.pNext = (void *)devInfoNext;
         devInfoNext = &descBufFeats;
+      }
+    }
+
+    if(hasExt(VK_EXT_MESH_SHADER_EXTENSION_NAME))
+    {
+      getPhysFeatures2(&meshShaderFeats);
+      if(meshShaderFeats.meshShader)
+      {
+        meshShaderFeats.multiviewMeshShader = VK_FALSE;
+        meshShaderFeats.primitiveFragmentShadingRateMeshShader = VK_FALSE;
+        meshShaderFeats.pNext = (void *)devInfoNext;
+        devInfoNext = &meshShaderFeats;
       }
     }
   }
@@ -344,6 +433,14 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       getPhysProperties2(&descBufProps);
     }
 
+    bool meshShader = hasExt(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+    if(meshShader)
+    {
+      getPhysFeatures2(&meshShaderFeats);
+      if(!meshShaderFeats.meshShader)
+        meshShader = false;
+    }
+
     bool draw_indirect_count = false;
     if(devVersion >= VK_MAKE_VERSION(1, 2, 0))
     {
@@ -360,6 +457,8 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       TEST_LOG("Running tests with nested secondaries");
     if(descBuffer)
       TEST_LOG("Running tests with descriptor buffer");
+    if(meshShader)
+      TEST_LOG("Running tests with mesh shaders");
 
     vkh::RenderPassCreator renderPassCreateInfo;
     renderPassCreateInfo.attachments.push_back(vkh::AttachmentDescription(
@@ -367,7 +466,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT));
     renderPassCreateInfo.addSubpass({VkAttachmentReference({0, VK_IMAGE_LAYOUT_GENERAL})},
                                     VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED);
-    VkRenderPass renderPass = createRenderPass(renderPassCreateInfo);
+    VkRenderPass renderPass = mainWindow->rp;
     setName(renderPass, "Main Render Pass");
 
     VkPipelineLayout noDescSetPipeLayout = createPipelineLayout(vkh::PipelineLayoutCreateInfo());
@@ -432,6 +531,29 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       pipeCreateInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
       descBuffPipe = createGraphicsPipeline(pipeCreateInfo);
       setName(descBuffPipe, "Descriptor Buffer Pipeline");
+    }
+
+    VkPipelineLayout meshShaderLayout = createPipelineLayout(
+        vkh::PipelineLayoutCreateInfo({}, {vkh::PushConstantRange(VK_SHADER_STAGE_ALL, 0, 8)}));
+
+    VkPipeline meshShaderPipe = VK_NULL_HANDLE;
+    if(meshShader)
+    {
+      vkh::GraphicsPipelineCreateInfo meshShaderPipeCreateInfo;
+
+      meshShaderPipeCreateInfo.layout = meshShaderLayout;
+      meshShaderPipeCreateInfo.renderPass = renderPass;
+      meshShaderPipeCreateInfo.stages = {
+          CompileShaderModule(simple_mesh, ShaderLang::glsl, ShaderStage::mesh, "main", {},
+                              SPIRVTarget::vulkan12),
+          CompileShaderModule(simple_mesh_pixel, ShaderLang::glsl, ShaderStage::frag, "main"),
+      };
+
+      VkGraphicsPipelineCreateInfo *vkMeshShaderPipeCreateInfo = meshShaderPipeCreateInfo;
+      vkMeshShaderPipeCreateInfo->pVertexInputState = NULL;
+      vkMeshShaderPipeCreateInfo->pInputAssemblyState = NULL;
+
+      meshShaderPipe = createGraphicsPipeline(vkMeshShaderPipeCreateInfo);
     }
 
     VkDescriptorSetLayout compDescSetLayout =
@@ -667,7 +789,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
                                             {vkh::DescriptorBufferInfo(compBufOut.buffer)}),
                 });
 
-    sqSize = float(screenHeight) / 5.0f;
+    sqSize = float(screenHeight) / 6.0f;
 
     using uvec4 = uint32_t[4];
 
@@ -708,7 +830,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
           {vkh::BufferMemoryBarrier(VK_ACCESS_NONE, VK_ACCESS_NONE, barrier2Buffer.buffer)});
       vkEndCommandBuffer(barrierSecCmd);
 
-      VkCommandBuffer secCmdBuffers[2];
+      VkCommandBuffer secCmdBuffers[3];
       for(size_t i = 0; i < 2; i++)
       {
         VkCommandBuffer secCmd = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
@@ -739,6 +861,15 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
 
         vkEndCommandBuffer(secCmd);
         secCmdBuffers[i] = secCmd;
+      }
+      {
+        VkCommandBuffer emptySecCmd = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+        vkBeginCommandBuffer(emptySecCmd, vkh::CommandBufferBeginInfo(
+                                              VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT |
+                                                  VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
+                                              vkh::CommandBufferInheritanceInfo(renderPass, 0)));
+        vkEndCommandBuffer(emptySecCmd);
+        secCmdBuffers[2] = emptySecCmd;
       }
 
       VkCommandBuffer nestedCmd = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
@@ -869,9 +1000,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
       // Graphics
       pushMarker(cmd, "Graphics");
       {
-        vkCmdBeginRenderPass(
-            cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-            VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(cmd, mainWindow->beginRP(), VK_SUBPASS_CONTENTS_INLINE);
 
         // No Descriptor Set Usage
         pushMarker(cmd, "No Descriptor Set");
@@ -918,10 +1047,9 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         // Secondary Command Buffer
         pushMarker(cmd, "Secondary Command Buffer");
         {
-          vkCmdBeginRenderPass(
-              cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-              VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-          vkCmdExecuteCommands(cmd, 2, secCmdBuffers);
+          vkCmdBeginRenderPass(cmd, mainWindow->beginRP(),
+                               VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+          vkCmdExecuteCommands(cmd, 3, secCmdBuffers);
           vkCmdEndRenderPass(cmd);
         }
         popMarker(cmd);
@@ -976,9 +1104,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
           uint32_t countDraws = 4;
           uint32_t strideDraw = sizeof(uvec4);
 
-          vkCmdBeginRenderPass(
-              cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-              VK_SUBPASS_CONTENTS_INLINE);
+          vkCmdBeginRenderPass(cmd, mainWindow->beginRP(), VK_SUBPASS_CONTENTS_INLINE);
 
           vkCmdSetScissor(cmd, 0, 1, &mainWindow->scissor);
           vkh::cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, descSetPipeLayout, 0,
@@ -986,6 +1112,11 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
           vkh::cmdBindVertexBuffers(cmd, 0, {vb.buffer}, {0});
           vkCmdBindIndexBuffer(cmd, ib.buffer, 0, VK_INDEX_TYPE_UINT32);
           vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, descSetPipe);
+
+          setMarker(cmd, "DrawIndirect: Zero");
+          vkCmdSetViewport(cmd, 0, 1, &viewPort);
+          vkCmdDrawIndirect(cmd, indirectData.buffer, offset, 0, strideDraw);
+          NextTest();
 
           setMarker(cmd, "DrawIndirect: Single");
           vkCmdSetViewport(cmd, 0, 1, &viewPort);
@@ -1005,6 +1136,12 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
           vkCmdDrawIndexedIndirect(cmd, indirectData.buffer, offset, countDrawIndexed,
                                    strideDrawIndexed);
           NextTest();
+
+          setMarker(cmd, "DrawIndexedIndirect : Zero");
+          vkCmdSetViewport(cmd, 0, 1, &viewPort);
+          vkCmdDrawIndexedIndirect(cmd, indirectData.buffer, offset, 0, strideDrawIndexed);
+          NextTest();
+
           vkCmdEndRenderPass(cmd);
           vkh::cmdPipelineBarrier(
               cmd, {},
@@ -1071,9 +1208,8 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
 
           vkCmdExecuteCommands(cmd, 1, &indirectCompSecCmd);
 
-          vkCmdBeginRenderPass(
-              cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-              VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+          vkCmdBeginRenderPass(cmd, mainWindow->beginRP(),
+                               VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
           VkCommandBuffer indirectDrawSecCmd = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
           {
@@ -1130,9 +1266,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         uint32_t countDraw = 4;
         uint32_t strideDraw = sizeof(uvec4);
 
-        vkCmdBeginRenderPass(
-            cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-            VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(cmd, mainWindow->beginRP(), VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdSetScissor(cmd, 0, 1, &mainWindow->scissor);
         vkh::cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, descSetPipeLayout, 0,
@@ -1241,9 +1375,8 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         vkCmdBindIndexBuffer(cmd, ib.buffer, 0, VK_INDEX_TYPE_UINT32);
 
         setMarker(cmd, "Draw");
-        vkCmdBeginRenderPass(
-            cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-            VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+        vkCmdBeginRenderPass(cmd, mainWindow->beginRP(),
+                             VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
         vkCmdExecuteCommands(cmd, 1, &nestedCmd);
         vkCmdEndRenderPass(cmd);
 
@@ -1308,9 +1441,7 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         VkDeviceSize descBuffSetOffset = 0;
 
         setMarker(cmd, "Draw");
-        vkCmdBeginRenderPass(
-            cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
-            VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(cmd, mainWindow->beginRP(), VK_SUBPASS_CONTENTS_INLINE);
         vkCmdSetDescriptorBufferOffsetsEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, descBuffPipeLayout,
                                            0, 1, &descBuffSetIndex, &descBuffSetOffset);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, descBuffPipe);
@@ -1336,6 +1467,60 @@ RD_TEST(VK_Resource_Usage, VulkanGraphicsTest)
         popMarker(cmd);
         cmds.push_back(backupDescBufCmd);
         cmds.push_back(restoreDescBufCmd);
+      }
+
+      // Mesh Shaders
+      if(meshShader)
+      {
+        pushMarker(cmd, "Mesh Shaders");
+        vkCmdSetScissor(cmd, 0, 1, &mainWindow->scissor);
+        vkCmdBeginRenderPass(cmd, mainWindow->beginRP(), VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshShaderPipe);
+
+        setMarker(cmd, "Draw Mesh");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksEXT(cmd, 3, 1, 1);
+        NextTest();
+
+        setMarker(cmd, "Draw Mesh Indirect");
+        uint32_t stride = sizeof(uvec4);
+        size_t drawOffset = stride * 11;
+
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectEXT(cmd, indirectData.buffer, drawOffset, 2, stride);
+        NextTest();
+
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectEXT(cmd, indirectData.buffer, drawOffset, 0, stride);
+        NextTest();
+
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectEXT(cmd, indirectData.buffer, drawOffset, 1, stride);
+        NextTest();
+
+        size_t countOffset = stride * 13;
+        size_t countZeroOffset = countOffset + sizeof(uint32_t);
+
+        setMarker(cmd, "Draw Mesh Indirect Count(20:1)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectCountEXT(cmd, indirectData.buffer, drawOffset,
+                                           indirectData.buffer, countOffset, 20, stride);
+        NextTest();
+
+        setMarker(cmd, "Draw Mesh Indirect Count(0:0)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectCountEXT(cmd, indirectData.buffer, drawOffset,
+                                           indirectData.buffer, countOffset, 0, stride);
+        NextTest();
+
+        setMarker(cmd, "Draw Mesh Indirect Count(10:0)");
+        vkCmdSetViewport(cmd, 0, 1, &viewPort);
+        vkCmdDrawMeshTasksIndirectCountEXT(cmd, indirectData.buffer, drawOffset,
+                                           indirectData.buffer, countZeroOffset, 10, stride);
+        NextTest();
+
+        vkCmdEndRenderPass(cmd);
+        popMarker(cmd);
       }
 
       FinishUsingBackbuffer(cmd, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);

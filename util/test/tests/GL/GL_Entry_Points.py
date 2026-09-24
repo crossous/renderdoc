@@ -19,7 +19,7 @@ class GL_Entry_Points(rdtest.TestCase):
             marker: rd.ActionDescription = self.find_action(test)
             if marker is None:
                 raise rdtest.TestFailureException('Failed to find action {}'.format(test))
-            action: rd.ActionDescription = marker.next
+            action: rd.ActionDescription = marker.nextAction
 
             calls = []
 

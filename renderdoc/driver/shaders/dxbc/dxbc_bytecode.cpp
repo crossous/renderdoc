@@ -624,6 +624,15 @@ rdcstr Program::GetDebugStatus()
   // otherwise we need to check that no unsupported vendor extensions are used
   DecodeProgram();
 
+  for(const Declaration &decl : m_Declarations)
+  {
+    if(decl.operand.type == TYPE_CONSTANT_BUFFER && decl.operand.indices.size() == 3 &&
+       decl.operand.indices[2].index == 0xffffffff)
+    {
+      return "Unsupported unbounded ConstantBuffer array";
+    }
+  }
+
   for(const Operation &op : m_Instructions)
   {
     if(op.operation >= OPCODE_VENDOR_FIRST)

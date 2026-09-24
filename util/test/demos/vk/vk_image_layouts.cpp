@@ -65,8 +65,9 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
 
     vb.upload(DefaultTri);
 
-    vkh::ImageCreateInfo preinitInfo(4, 4, 0, VK_FORMAT_R8G8B8A8_UNORM,
-                                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    vkh::ImageCreateInfo preinitInfo(
+        4, 4, 0, VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     preinitInfo.tiling = VK_IMAGE_TILING_LINEAR;
     preinitInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 
@@ -77,15 +78,11 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
     vkCreateImage(device, preinitInfo, NULL, &unboundImg);
     setName(unboundImg, "Unbound image");
 
+    VkImage preinitImg = VK_NULL_HANDLE;
+    VkDeviceMemory preinitMem = VK_NULL_HANDLE;
+
     while(Running())
     {
-      VkImage preinitImg = VK_NULL_HANDLE;
-      VkDeviceMemory preinitMem = VK_NULL_HANDLE;
-
-      vkCreateImage(device, preinitInfo, NULL, &preinitImg);
-
-      setName(preinitImg, "Image:Preinitialised");
-
       AllocatedImage undefImg(
           this,
           vkh::ImageCreateInfo(4, 4, 0, VK_FORMAT_R8G8B8A8_UNORM,
@@ -93,36 +90,6 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
           VmaAllocationCreateInfo({0, VMA_MEMORY_USAGE_GPU_ONLY}));
 
       setName(undefImg.image, "Image:Undefined");
-
-      {
-        VkMemoryRequirements mrq;
-        vkGetImageMemoryRequirements(device, preinitImg, &mrq);
-
-        VkMemoryAllocateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        info.allocationSize = mrq.size;
-        info.memoryTypeIndex = 100;
-
-        for(uint32_t i = 0; i < props->memoryTypeCount; i++)
-        {
-          if(mrq.memoryTypeBits & (1 << i) &&
-             (props->memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
-          {
-            info.memoryTypeIndex = i;
-            break;
-          }
-        }
-
-        TEST_ASSERT(info.memoryTypeIndex != 100, "Couldn't find compatible memory type");
-
-        vkAllocateMemory(device, &info, NULL, &preinitMem);
-        vkBindImageMemory(device, preinitImg, preinitMem, 0);
-
-        void *data = NULL;
-        vkMapMemory(device, preinitMem, 0, mrq.size, 0, &data);
-        memset(data, 0x40, (size_t)mrq.size);
-        vkUnmapMemory(device, preinitMem);
-      }
 
       VkCommandBuffer cmd = GetCommandBuffer();
 
@@ -148,27 +115,31 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
                            vkh::ClearColorValue(0.2f, 0.2f, 0.2f, 1.0f), 1,
                            vkh::ImageSubresourceRange());
 
-      // the manual images are transitioned into general for copying, from pre-initialised and
-      // undefined
-      vkh::cmdPipelineBarrier(
-          cmd, {
-                   vkh::ImageMemoryBarrier(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                                           VK_IMAGE_LAYOUT_PREINITIALIZED,
-                                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, preinitImg),
-                   vkh::ImageMemoryBarrier(0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, undefImg.image),
-               });
+      if(preinitImg != VK_NULL_HANDLE)
+      {
+        // the manual images are transitioned into general for copying, from pre-initialised and
+        // undefined
+        vkh::cmdPipelineBarrier(
+            cmd,
+            {
+                vkh::ImageMemoryBarrier(VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                        VK_IMAGE_LAYOUT_PREINITIALIZED,
+                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, preinitImg),
+                vkh::ImageMemoryBarrier(0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, undefImg.image),
+            });
 
-      VkImageCopy region = {
-          {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-          {0, 0, 0},
-          {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-          {0, 0, 0},
-          {4, 4, 1},
-      };
+        VkImageCopy region = {
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {0, 0, 0},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {0, 0, 0},
+            {4, 4, 1},
+        };
 
-      vkCmdCopyImage(cmd, preinitImg, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, undefImg.image,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        vkCmdCopyImage(cmd, preinitImg, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, undefImg.image,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+      }
 
       vkCmdBeginRenderPass(
           cmd, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
@@ -182,13 +153,26 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
 
       vkCmdEndRenderPass(cmd);
 
+      if(preinitImg != VK_NULL_HANDLE)
+      {
+        vkh::cmdPipelineBarrier(
+            cmd, {
+                     vkh::ImageMemoryBarrier(
+                         VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, preinitImg),
+                 });
+
+        setMarker(cmd, "Preinit clear");
+        vkCmdClearColorImage(cmd, preinitImg, VK_IMAGE_LAYOUT_GENERAL,
+                             vkh::ClearColorValue(0.8f, 0.8f, 0.8f, 1.0f), 1,
+                             vkh::ImageSubresourceRange());
+      }
+
       FinishUsingBackbuffer(cmd, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
 
       vkEndCommandBuffer(cmd);
 
       Submit(0, 1, {cmd});
-
-      Present();
 
       vkDeviceWaitIdle(device);
 
@@ -196,7 +180,51 @@ RD_TEST(VK_Image_Layouts, VulkanGraphicsTest)
       vkFreeMemory(device, preinitMem, NULL);
 
       undefImg.free();
+
+      {
+        VkMemoryRequirements mrq;
+        vkCreateImage(device, preinitInfo, NULL, &preinitImg);
+        vkGetImageMemoryRequirements(device, preinitImg, &mrq);
+        vkDestroyImage(device, preinitImg, NULL);
+
+        VkMemoryAllocateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        info.allocationSize = mrq.size;
+        info.memoryTypeIndex = 100;
+
+        for(uint32_t i = 0; i < props->memoryTypeCount; i++)
+        {
+          if(mrq.memoryTypeBits & (1 << i) &&
+             (props->memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
+          {
+            info.memoryTypeIndex = i;
+            break;
+          }
+        }
+
+        TEST_ASSERT(info.memoryTypeIndex != 100, "Couldn't find compatible memory type");
+
+        vkAllocateMemory(device, &info, NULL, &preinitMem);
+
+        void *data = NULL;
+        vkMapMemory(device, preinitMem, 0, mrq.size, 0, &data);
+        memset(data, 0x40, (size_t)mrq.size);
+        vkUnmapMemory(device, preinitMem);
+      }
+
+      Present();
+
+      // make preinit image for next frame so the write must be preserved
+
+      vkCreateImage(device, preinitInfo, NULL, &preinitImg);
+      vkBindImageMemory(device, preinitImg, preinitMem, 0);
+
+      setName(preinitImg, "Image:Preinitialised");
     }
+
+    vkDestroyImage(device, unboundImg, NULL);
+    vkDestroyImage(device, preinitImg, NULL);
+    vkFreeMemory(device, preinitMem, NULL);
 
     return 0;
   }

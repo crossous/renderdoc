@@ -70,7 +70,7 @@ void WrappedOpenGL::ShaderData::ProcessSPIRVCompilation(WrappedOpenGL &drv, Reso
 {
   reflection->resourceId = id;
 
-  rdcarray<SpecConstant> specInfo;
+  specInfo.clear();
   for(size_t i = 0; i < specInfo.size(); i++)
   {
     specInfo.push_back(SpecConstant(pConstantIndex[i], pConstantValue[i], 4));
@@ -329,8 +329,6 @@ void WrappedOpenGL::ShaderData::ProcessCompilation(WrappedOpenGL &drv, ResourceI
           reflection->debugInfo.debugStatus = spvReflection.debugInfo.debugStatus;
           reflection->debugInfo.sourceDebugInformation =
               spvReflection.debugInfo.sourceDebugInformation;
-          if(reflection->debugInfo.sourceDebugInformation)
-            reflection->debugInfo.compileFlags.flags.push_back({"preferSourceDebug", "1"});
 
           if(HasExt[ARB_shader_storage_buffer_object])
           {

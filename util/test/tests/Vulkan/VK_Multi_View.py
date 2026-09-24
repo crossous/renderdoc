@@ -17,7 +17,7 @@ class VK_Multi_View(rdtest.TestCase):
             label = self.find_action(test_name)
             if label is None:
                 continue
-            action = label.next
+            action = label.nextAction
             self.controller.SetFrameEvent(action.eventId, True)
 
             pipe: rd.PipeState = self.controller.GetPipelineState()
@@ -53,7 +53,7 @@ class VK_Multi_View(rdtest.TestCase):
             label = self.find_action(test_name)
             if label is None:
                 continue
-            action = label.next
+            action = label.nextAction
             self.controller.SetFrameEvent(action.eventId, True)
 
             pipe: rd.PipeState = self.controller.GetPipelineState()

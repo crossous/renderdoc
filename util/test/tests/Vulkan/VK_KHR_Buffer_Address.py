@@ -15,7 +15,7 @@ class VK_KHR_Buffer_Address(rdtest.TestCase):
         for test_name in ["Draw 1", "Draw 2", "Draw 3", "Draw 4"]:
             rdtest.log.print("Test {}".format(test_name))
             action: rd.ActionDescription = self.find_action(test_name)
-            action = action.next
+            action = action.nextAction
             self.controller.SetFrameEvent(action.eventId, True)
             pipe: rd.PipeState = self.controller.GetPipelineState()
 

@@ -481,6 +481,60 @@ static const char *dxOpFunctionNames[] = {
 "dx.op.sampleCmpBias",
 "dx.op.startVertexLocation",
 "dx.op.startInstanceLocation",
+"dx.op.allocateRayQuery2",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.hitObject_TraceRay",
+"dx.op.hitObject_FromRayQuery",
+"dx.op.hitObject_FromRayQueryWithAttrs",
+"dx.op.hitObject_MakeMiss",
+"dx.op.hitObject_MakeNop",
+"dx.op.hitObject_Invoke",
+"dx.op.maybeReorderThread",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateVector",
+"dx.op.hitObject_StateVector",
+"dx.op.hitObject_StateVector",
+"dx.op.hitObject_StateVector",
+"dx.op.hitObject_StateMatrix",
+"dx.op.hitObject_StateMatrix",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_StateScalar",
+"dx.op.hitObject_SetShaderTableIndex",
+"dx.op.hitObject_LoadLocalRootTableConstant",
+"dx.op.hitObject_Attributes",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.reserved",
+"dx.op.rawBufferVectorLoad",
+"dx.op.rawBufferVectorStore",
+"dx.op.matVecMul",
+"dx.op.matVecMulAdd",
+"dx.op.outerProductAccumulate",
+"dx.op.vectorAccumulate",
+"dx.op.vectorReduce",
+"dx.op.vectorReduce",
+"dx.op.dot",
 };
 
 static const char *dxcOpNames[] = {
@@ -742,6 +796,60 @@ static const char *dxcOpNames[] = {
 "SampleCmpBias(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,compareValue,bias,clamp)",
 "StartVertexLocation()",
 "StartInstanceLocation()",
+"AllocateRayQuery2(constRayFlags,constRayQueryFlags)",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"HitObject_TraceRay(accelerationStructure,rayFlags,instanceInclusionMask,rayContributionToHitGroupIndex,multiplierForGeometryContributionToHitGroupIndex,missShaderIndex,Origin_X,Origin_Y,Origin_Z,TMin,Direction_X,Direction_Y,Direction_Z,TMax,payload)",
+"HitObject_FromRayQuery(rayQueryHandle)",
+"HitObject_FromRayQueryWithAttrs(rayQueryHandle,HitKind,CommittedAttribs))",
+"HitObject_MakeMiss(RayFlags,MissShaderIndex,Origin_X,Origin_Y,Origin_Z,TMin,Direction_X,Direction_Y,Direction_Z,TMax)",
+"HitObject_MakeNop()",
+"HitObject_Invoke(hitObject,payload)",
+"MaybeReorderThread(hitObject,coherenceHint,numCoherenceHintBitsFromLSB)",
+"HitObject_IsMiss(hitObject)",
+"HitObject_IsHit(hitObject)",
+"HitObject_IsNop(hitObject)",
+"HitObject_RayFlags(hitObject)",
+"HitObject_RayTMin(hitObject)",
+"HitObject_RayTCurrent(hitObject)",
+"HitObject_WorldRayOrigin(hitObject,component)",
+"HitObject_WorldRayDirection(hitObject,component)",
+"HitObject_ObjectRayOrigin(hitObject,component)",
+"HitObject_ObjectRayDirection(hitObject,component)",
+"HitObject_ObjectToWorld3x4(hitObject,row,col)",
+"HitObject_WorldToObject3x4(hitObject,row,col)",
+"HitObject_GeometryIndex(hitObject)",
+"HitObject_InstanceIndex(hitObject)",
+"HitObject_InstanceID(hitObject)",
+"HitObject_PrimitiveIndex(hitObject)",
+"HitObject_HitKind(hitObject)",
+"HitObject_ShaderTableIndex(hitObject)",
+"HitObject_SetShaderTableIndex(hitObject,shaderTableIndex)",
+"HitObject_LoadLocalRootTableConstant(hitObject,offset)",
+"HitObject_Attributes(hitObject,attributes)",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"Reserved()",
+"RawBufferVectorLoad(buf,index,elementOffset,alignment)",
+"RawBufferVectorStore(uav,index,elementOffset,value0,alignment)",
+"MatVecMul(inputVector,isInputUnsigned,inputInterpretation,matrixBuffer,matrixOffset,matrixIntepretation,matrixM,matrixK,matrixLayout,matrixTranspose,matrixStride,isOutputUnsigned)",
+"MatVecMulAdd(inputVector,isInputUnsigned,inputInterpretation,matrixBuffer,matrixOffset,matrixIntepretation,matrixM,matrixK,matrixLayout,matrixTranspose,matrixStride,biasBuffer,biasOffset,biasIntepretation,isOutputUnsigned)",
+"OuterProductAccumulate(inputVector1,inputVector2,matrixBuffer,matrixOffset,matrixIntepretation,matrixLayout,matrixStride)",
+"VectorAccumulate(inputVector,arrayBuffer,arrayOffset)",
+"VectorReduceAnd(a)",
+"VectorReduceOr(a)",
+"FDot(a,b)",
 };
 
 static const char *funcNameSigs[] = {
@@ -1950,6 +2058,9 @@ void Program::MakeDXCDisassemblyString()
   const bool dxcStyleFormatting = true;
   const char dxilIdentifier = Program::GetDXILIdentifier(dxcStyleFormatting);
 
+  RDCCOMPILE_ASSERT(ARRAY_COUNT(dxcOpNames) == (size_t)DXOp::NumOpCodes,
+                    "dxcOpNames array is not correct!");
+
   m_Disassembly.clear();
 #if DISABLED(DXC_COMPATIBLE_DISASM)
   m_Disassembly += StringFormat::Fmt("; %s Shader, compiled under SM%u.%u\n\n",
@@ -3022,6 +3133,9 @@ void Program::MakeRDDisassemblyString(const DXBC::Reflection *reflection)
 {
   const bool dxcStyleFormatting = m_DXCStyle;
   const char dxilIdentifier = Program::GetDXILIdentifier(dxcStyleFormatting);
+
+  RDCCOMPILE_ASSERT(ARRAY_COUNT(dxOpFunctionNames) == (size_t)DXOp::NumOpCodes,
+                    "dxOpFunctionNames array is not correct!");
 
   m_Disassembly.clear();
   m_DisassemblyInstructionLine = 1;
@@ -5894,7 +6008,13 @@ static void floatAppendToString(const Type *t, const ShaderValue &val, uint32_t 
 #endif
   }
 
-  double d = t->bitWidth == 64 ? val.f64v[i] : val.f32v[i];
+  double d;
+  if(t->bitWidth == 64)
+    d = val.f64v[i];
+  else if(t->bitWidth == 16)
+    d = (float)val.f16v[i];
+  else
+    d = val.f32v[i];
 
   // NaNs/infs are printed as hex to ensure we don't lose bits
   if(RDCISFINITE(d))
@@ -5923,6 +6043,8 @@ static void floatAppendToString(const Type *t, const ShaderValue &val, uint32_t 
     {
       if(t->bitWidth == 64)
         ret += StringFormat::Fmt("%#g", val.f64v[i]);
+      else if(t->bitWidth == 16)
+        ret += StringFormat::Fmt("%#g", (float)val.f16v[i]);
       else
         ret += StringFormat::Fmt("%#g", val.f32v[i]);
       return;

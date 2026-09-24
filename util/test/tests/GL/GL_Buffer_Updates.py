@@ -26,7 +26,7 @@ class GL_Buffer_Updates(rdtest.TestCase):
 
                 self.check_pixel_value(tex, x, y, [0.0, 1.0, 0.0, 1.0])
 
-            action = action.next
+            action = action.nextAction
 
         rdtest.log.success("Draws are all green")
 

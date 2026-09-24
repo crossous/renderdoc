@@ -141,4 +141,4 @@ class VK_Spec_Constants(rdtest.TestCase):
 
             rdtest.log.success("Draw with {} colors picked value is as expected".format(num_colors))
 
-            action = action.next
+            action = action.nextAction

@@ -32,6 +32,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollBar>
 #include <QVBoxLayout>
 #include <QWidget>
 #include "Code/QRDUtils.h"
@@ -60,7 +61,7 @@ MiniQtHelper::~MiniQtHelper()
   });
 }
 
-void MiniQtHelper::InvokeOntoUIThread(std::function<void()> callback)
+void MiniQtHelper::InvokeOntoUIThread(UIInvokeCallback callback)
 {
   GUIInvoke::call(m_Ctx.GetMainWindow()->Widget(), callback);
 }
@@ -364,6 +365,28 @@ void MiniQtHelper::SetWidgetText(QWidget *widget, const rdcstr &text)
   }
 }
 
+void MiniQtHelper::AppendText(QWidget *widget, const rdcstr &text)
+{
+#define APPEND_TEXT(TextWidget)                         \
+  {                                                     \
+    TextWidget *w = qobject_cast<TextWidget *>(widget); \
+    if(w)                                               \
+    {                                                   \
+      ScrollToBottom(widget);                           \
+      w->moveCursor(QTextCursor::End);                  \
+      w->insertPlainText(text);                         \
+      return;                                           \
+    }                                                   \
+  }
+
+  APPEND_TEXT(RDTextEdit);
+  APPEND_TEXT(QTextEdit);
+
+  rdcstr t = GetWidgetText(widget);
+  t += text;
+  SetWidgetText(widget, t);
+}
+
 rdcstr MiniQtHelper::GetWidgetText(QWidget *widget)
 {
   if(!widget)
@@ -412,16 +435,42 @@ rdcstr MiniQtHelper::GetWidgetText(QWidget *widget)
   return widget->windowTitle();
 }
 
+void MiniQtHelper::ScrollToTop(QWidget *widget)
+{
+  if(!widget)
+    return;
+
+  QAbstractScrollArea *w = qobject_cast<QAbstractScrollArea *>(widget);
+  if(w)
+    w->verticalScrollBar()->setSliderPosition(w->verticalScrollBar()->minimum());
+}
+
+void MiniQtHelper::ScrollToBottom(QWidget *widget)
+{
+  if(!widget)
+    return;
+
+  QAbstractScrollArea *w = qobject_cast<QAbstractScrollArea *>(widget);
+  if(w)
+    w->verticalScrollBar()->setSliderPosition(w->verticalScrollBar()->maximum());
+}
+
 void MiniQtHelper::SetWidgetFont(QWidget *widget, const rdcstr &font, int32_t fontSize, bool bold,
                                  bool italic)
 {
   if(!widget)
     return;
 
+  QString fontFamily = font;
+  if(font == "_default")
+    fontFamily = Formatter::PreferredFont().family();
+  if(font == "_fixed")
+    fontFamily = Formatter::FixedFont().family();
+
   QFont f = widget->font();
 
-  if(!font.empty())
-    f.setFamily(font);
+  if(!fontFamily.isEmpty())
+    f.setFamily(fontFamily);
   if(fontSize != 0)
     f.setPointSize(fontSize);
   f.setBold(bold);

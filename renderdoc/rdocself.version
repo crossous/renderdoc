@@ -21,7 +21,6 @@
                 RENDERDOC_GetAPI;
                 RDOCSELF_AllocArrayMem;
                 RDOCSELF_FreeArrayMem;
-                RDOCSELF_GetDefaultCaptureOptions;
                 RDOCSELF_NeedVulkanLayerRegistration;
                 RDOCSELF_UpdateVulkanLayerRegistration;
                 RDOCSELF_ExecuteAndInject;

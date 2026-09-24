@@ -18,7 +18,7 @@ The Program section of the dialog prompts for the executable to be launched, the
 
 .. figure:: ../imgs/Screenshots/CapturePathCmdline.png
 
-  Program Capture: Configuring and launching an exe directly from RenderDoc.
+  Program Capture: Configuring and launching an executable directly from RenderDoc.
 
 The :guilabel:`...` buttons next to the executable path and working directory can be used to browse through the file system. If you are working in :doc:`a remote context <../how/how_network_capture_replay>` then the file and directory browser will be replaced by one that browses in the file system of the remote context. By default if the working directory box is left empty then the directory containing the executable will be used as the working directory.
 
@@ -156,7 +156,7 @@ This option is slightly different from the others in that it doesn't change anyt
 
 This option allows you to queue up a precise capture of a given frame number after the program has started.
 
-Queueing up a capture beginning at frame 0 has a special meaning: Frames are defined as the period between two presents of a window. Frame 0 is defined as starting at initialisation and ending at the first presentation.
+Queuing up a capture beginning at frame 0 has a special meaning: Frames are defined as the period between two presents of a window. Frame 0 is defined as starting at initialisation and ending at the first presentation.
 
 The definition of 'initialisation' varies by API, since it can be hard to clearly define initialisation time cleanly:
 
@@ -191,17 +191,17 @@ Global Process Hook
 
 To expose this option you have to enable it in :doc:`the settings <settings_window>`, to prevent it being used accidentally.
 
-When you've entered a path, or filename, in the executable text at the top of the window, this option will then insert a global hook that causes **every** new process created to load a very small shim dll.
+When you've entered a path, or filename, in the executable text at the top of the window, this option will then insert a global hook that causes **every** new process created to load a very small shim DLL.
 
-The shim dll will load, create a thread that checks to see if the process matches the path or filename specified, and then unload. If the process matches it will also inject RenderDoc and capturing will continue as normal. At this point you should *first disable the global hook*, then you can use the 'Attach to running instance' menu option to continue as normal.
+The shim DLL will load, create a thread that checks to see if the process matches the path or filename specified, and then unload. If the process matches it will also inject RenderDoc and capturing will continue as normal. At this point you should *first disable the global hook*, then you can use the 'Attach to running instance' menu option to continue as normal.
 
-RenderDoc implements this behaviour by modifying the `AppInit_DLLs <http://support2.microsoft.com/kb/197571>`_ registry key to reference RenderDoc's dlls. This is not a particularly safe method but it's the only reliable method to do what we want. The shim dll is deliberately made as small and thin as possible, referencing only ``kernel32.dll``, to minimise any risks.
+RenderDoc implements this behaviour by modifying the `AppInit_DLLs <http://support2.microsoft.com/kb/197571>`_ registry key to reference RenderDoc's DLLs. This is not a particularly safe method but it's the only reliable method to do what we want. The shim DLL is deliberately made as small and thin as possible, referencing only ``kernel32.dll``, to minimise any risks.
 
 .. note::
 
   If you have 'secure boot' enabled in Windows, the AppInit_DLLs registry key will not work. To use the global process hook you must disable secure boot.
 
-If RenderDoc crashes or something otherwise goes wrong while these registry keys are modified, the shim dll will continue to be injected into every process which is certainly not desirable. Should anything go wrong, RenderDoc writes a ``.reg`` file that restores the registry to its previous state in ``%TEMP%``.
+If RenderDoc crashes or something otherwise goes wrong while these registry keys are modified, the shim DLL will continue to be injected into every process which is certainly not desirable. Should anything go wrong, RenderDoc writes a ``.reg`` file that restores the registry to its previous state in ``%TEMP%``.
 
 Again, **this method should be a last resort**. Given the risks you should always try to capture directly in some way before trying this.
 

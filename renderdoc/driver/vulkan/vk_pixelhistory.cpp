@@ -1937,7 +1937,8 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
       : VulkanPixelHistoryCallback(vk, shaderCache, callbackInfo, VK_NULL_HANDLE),
         m_Events(events),
         m_EventFlags(eventFlags),
-        multipleSubpassWarningPrinted(false)
+        multipleSubpassWarningPrinted(false),
+        nestedSecondaryWarningPrinted(false)
   {
   }
 
@@ -2145,6 +2146,16 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
       return;
     }
 
+    if(!m_pDriver->IsCmdPrimary())
+    {
+      if(!nestedSecondaryWarningPrinted)
+      {
+        RDCWARN("Nested secondary command buffers are not supported for pixel history.");
+        nestedSecondaryWarningPrinted = true;
+      }
+      return;
+    }
+
     if(m_pDriver->GetCmdRenderState().ActiveRenderPass())
     {
       m_pDriver->GetCmdRenderState().EndRenderPass(cmd);
@@ -2174,7 +2185,7 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
                       VkCommandBuffer cmd)
   {
     uint32_t eventId = 0;
-    if(m_Events.size() == 0)
+    if((m_Events.size() == 0) || !m_pDriver->IsCmdPrimary())
       return;
     for(int32_t i = (int32_t)m_Events.size() - 1; i >= 0; i--)
     {
@@ -2308,7 +2319,7 @@ struct VulkanColorAndStencilCallback : public VulkanPixelHistoryCallback
   void AliasEvent(uint32_t primary, uint32_t alias)
   {
     RDCWARN(
-        "Alised events are not supported, results might be inaccurate. Primary event id: %u, "
+        "Aliased events are not supported, results might be inaccurate. Primary event id: %u, "
         "alias: %u.",
         primary, alias);
   }
@@ -2502,6 +2513,7 @@ private:
   // Key is event ID, and value is an index of where the event data is stored.
   std::map<uint32_t, size_t> m_EventIndices;
   bool multipleSubpassWarningPrinted;
+  bool nestedSecondaryWarningPrinted;
   std::map<uint32_t, VkFormat> m_DepthFormats;
 };
 

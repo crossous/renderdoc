@@ -116,7 +116,7 @@ The left and right arrows go into and out of hierarchy levels. When within a lev
 
 .. note::
 
-	This window supports copy and paste, so simply select the entries and ctrl-c to copy to the clipboard
+	This window supports copy and paste, so simply select the entries and :kbd:`Ctrl-C` to copy to the clipboard
 
 Bookmarks
 ---------

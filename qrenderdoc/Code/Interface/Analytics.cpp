@@ -549,7 +549,7 @@ void Analytics::DocumentReport()
   }
 }
 
-void Analytics::Prompt(ICaptureContext &ctx, PersistantConfig &config)
+void Analytics::Prompt(ICaptureContext &ctx, PersistentConfig &config)
 {
   if(analyticsState == AnalyticsState::Disabled)
   {
@@ -623,7 +623,7 @@ void Disable()
 {
 }
 
-void Prompt(ICaptureContext &ctx, PersistantConfig &config)
+void Prompt(ICaptureContext &ctx, PersistentConfig &config)
 {
 }
 

@@ -539,7 +539,7 @@ struct BufferConfiguration
   uint32_t numRows = 0, unclampedNumRows = 0;
   uint32_t pagingOffset = 0;
 
-  Packing::Rules packing;
+  PackingRules packing;
   ShaderConstant fixedVars;
   rdcarray<ShaderVariable> evalVars;
   uint32_t repeatStride = 1;
@@ -970,7 +970,7 @@ public:
   {
     if(section < totalColumnCount && orientation == Qt::Horizontal)
     {
-      if(role == Qt::DisplayRole || role == columnGroupRole)
+      if(role == Qt::DisplayRole || role == Qt::ToolTipRole || role == columnGroupRole)
       {
         if(section == 0)
         {
@@ -984,7 +984,7 @@ public:
         {
           const ShaderConstant &el = elementForColumn(section);
 
-          if(el.type.columns == 1 || role == columnGroupRole)
+          if(el.type.columns == 1 || role == Qt::ToolTipRole || role == columnGroupRole)
             return el.name;
 
           QChar comps[] = {QLatin1Char('x'), QLatin1Char('y'), QLatin1Char('z'), QLatin1Char('w')};
@@ -2947,6 +2947,10 @@ void BufferViewer::SetupMeshView()
   ui->out1Table->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
   ui->out2Table->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
 
+  ui->inTable->horizontalHeader()->setTextElideMode(Qt::ElideMiddle);
+  ui->out1Table->horizontalHeader()->setTextElideMode(Qt::ElideMiddle);
+  ui->out2Table->horizontalHeader()->setTextElideMode(Qt::ElideMiddle);
+
   ui->inTable->setPinnedColumns(2);
   ui->out1Table->setPinnedColumns(2);
   ui->out2Table->setPinnedColumns(2);
@@ -3500,7 +3504,7 @@ void BufferViewer::OnEventChanged(uint32_t eventId)
             reflection->constantBlocks[m_CBufferSlot.slot].variables;
 
         if(IsD3D(m_Ctx.APIProps().pipelineType))
-          bufdata->inConfig.packing = Packing::D3DCB;
+          bufdata->inConfig.packing = PackingRules::D3DCB();
         else
           bufdata->inConfig.packing = BufferFormatter::EstimatePackingRules(
               reflection->resourceId, bufdata->inConfig.fixedVars.type.members);
@@ -4248,7 +4252,7 @@ void BufferViewer::UI_AddTaskPayloads(RDTreeWidgetItem *root, size_t baseOffset,
       noarray.type.elements = 1;
 
       // calculate the tight scalar-packed advance, so we can detect padding
-      uint32_t elSize = BufferFormatter::GetVarAdvance(Packing::Scalar, noarray);
+      uint32_t elSize = BufferFormatter::GetVarAdvance(PackingRules::Scalar(), noarray);
 
       for(uint32_t e = 0; e < v.members.size(); e++)
       {
@@ -4285,7 +4289,7 @@ void BufferViewer::UI_AddTaskPayloads(RDTreeWidgetItem *root, size_t baseOffset,
     }
 
     // advance by the tight scalar-packed advance, so we can detect padding
-    offset += BufferFormatter::GetVarAdvance(Packing::Scalar, c);
+    offset += BufferFormatter::GetVarAdvance(PackingRules::Scalar(), c);
   }
 }
 
@@ -4374,7 +4378,7 @@ void BufferViewer::UI_AddFixedVariables(RDTreeWidgetItem *root, uint32_t baseOff
       noarray.type.elements = 1;
 
       // calculate the tight scalar-packed advance, so we can detect padding
-      uint32_t elSize = BufferFormatter::GetVarAdvance(Packing::Scalar, noarray);
+      uint32_t elSize = BufferFormatter::GetVarAdvance(PackingRules::Scalar(), noarray);
 
       for(uint32_t e = 0; e < v.members.size(); e++)
       {
@@ -4435,7 +4439,7 @@ void BufferViewer::UI_AddFixedVariables(RDTreeWidgetItem *root, uint32_t baseOff
     }
 
     // advance by the tight scalar-packed advance, so we can detect padding
-    offset += BufferFormatter::GetVarAdvance(Packing::Scalar, c);
+    offset += BufferFormatter::GetVarAdvance(PackingRules::Scalar(), c);
   }
 }
 
@@ -5288,6 +5292,9 @@ void BufferViewer::ScrollToRow(int32_t row, MeshDataStage stage)
     return;
   }
 
+  if(!m_MeshView)
+    stage = MeshDataStage::VSIn;
+
   ScrollToRow(tableForStage(stage), row);
 
   if(m_MeshView)
@@ -5299,6 +5306,9 @@ void BufferViewer::ScrollToRow(int32_t row, MeshDataStage stage)
 
 void BufferViewer::ScrollToColumn(int32_t column, MeshDataStage stage)
 {
+  if(!m_MeshView)
+    stage = MeshDataStage::VSIn;
+
   ScrollToColumn(tableForStage(stage), column);
 
   m_Scroll[(int)stage].setX(column);
@@ -5318,25 +5328,25 @@ bool BufferViewer::eventFilter(QObject *watched, QEvent *event)
 
         QString tooltip;
 
-        Packing::Rules pack = m_ModelIn->getConfig().packing;
+        PackingRules pack = m_ModelIn->getConfig().packing;
 
         if(tag.valid && tag.padding)
         {
           tooltip = tr("%1 bytes of padding. Packing rules in effect:\n\n")
                         .arg(Formatter::HumanFormat(tag.byteSize, Formatter::OffsetSize));
 
-          if(pack == Packing::D3DCB)
+          if(pack == PackingRules::D3DCB())
             tooltip += tr("Standard D3D constant buffer packing.\n\n");
-          else if(pack == Packing::std140)
+          else if(pack == PackingRules::STD140())
             tooltip += tr("Standard std140 buffer packing.\n\n");
-          else if(pack == Packing::std430)
+          else if(pack == PackingRules::STD430())
             tooltip += tr("Standard std430 buffer packing.\n\n");
-          else if(pack == Packing::C)
+          else if(pack == PackingRules::C())
             tooltip += tr("Standard C / D3D UAV packing.\n\n");
-          else if(pack == Packing::Scalar)
+          else if(pack == PackingRules::Scalar())
             tooltip += tr("Scalar packing.\n\n");
 
-          if(pack.vector_align_component)
+          if(pack.vectorAlignComponent)
             tooltip +=
                 tr("- Vectors are only aligned to their component (float4 to 4-byte boundary)\n");
           else
@@ -5344,18 +5354,18 @@ bool BufferViewer::eventFilter(QObject *watched, QEvent *event)
                 tr("- 3- and 4-wide vectors must be aligned to a 4-wide boundary\n"
                    "  (vec3 and vec4 to 16-byte boundary)\n");
 
-          if(pack.tight_arrays)
+          if(pack.tightArrays)
             tooltip += tr("- Arrays are tightly packed to each element\n");
           else
             tooltip += tr("- Arrays have a stride of a 16 bytes\n");
 
-          if(pack.trailing_overlap)
+          if(pack.trailingOverlap)
             tooltip += tr("- Variables can overlap the trailing padding in arrays or structs.\n");
           else
             tooltip +=
                 tr("- Variables must not overlap the trailing padding in arrays or structs.\n");
 
-          if(pack.vector_straddle_16b)
+          if(pack.vectorStraddle16b)
             tooltip += tr("- Vectors can straddle 16-byte boundaries.\n");
           else
             tooltip += tr("- Vectors must not straddle 16-byte boundaries.\n");
@@ -6149,7 +6159,8 @@ void BufferViewer::on_setFormat_toggled(bool checked)
 
   if(IsD3D(m_Ctx.APIProps().pipelineType))
     ui->formatSpecifier->setAutoFormat(BufferFormatter::DeclareStruct(
-        Packing::D3DCB, reflection->resourceId, reflection->constantBlocks[m_CBufferSlot.slot].name,
+        PackingRules::D3DCB(), reflection->resourceId,
+        reflection->constantBlocks[m_CBufferSlot.slot].name,
         reflection->constantBlocks[m_CBufferSlot.slot].variables, 0));
   else
     ui->formatSpecifier->setAutoFormat(BufferFormatter::DeclareStruct(

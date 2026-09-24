@@ -175,24 +175,6 @@ float RENDERDOC_CC GetCaptureOptionF32(RENDERDOC_CaptureOption opt)
   return -FLT_MAX;
 }
 
-CaptureOptions::CaptureOptions()
-{
-  // since we're reading from all bytes even padding etc, memset to 0
-  RDCEraseEl(*this);
-  allowVSync = true;
-  allowFullscreen = true;
-  apiValidation = false;
-  captureCallstacks = false;
-  captureCallstacksOnlyActions = false;
-  delayForDebugger = 0;
-  verifyBufferAccess = false;
-  hookIntoChildren = false;
-  refAllResources = false;
-  captureAllCmdLists = false;
-  debugOutputMute = true;
-  softMemoryLimit = 0;
-}
-
 #if ENABLED(ENABLE_UNIT_TESTS)
 
 #undef None

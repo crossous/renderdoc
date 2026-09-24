@@ -6,11 +6,14 @@ class VK_Parameter_Zoo(rdtest.TestCase):
     demos_test_name = 'VK_Parameter_Zoo'
 
     def check_capture(self):
+        if not self.validate_eventids(self.controller):
+            raise rdtest.TestFailureException("Event IDs are not valid")
+
         action = self.find_action("Color Draw")
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -25,7 +28,7 @@ class VK_Parameter_Zoo(rdtest.TestCase):
         # Find the action that contains resource references
         action = self.find_action("References")
         self.check(action is not None)
-        action = action.next
+        action = action.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         vkpipe: rd.VKState = self.controller.GetVulkanPipelineState()
@@ -116,7 +119,7 @@ class VK_Parameter_Zoo(rdtest.TestCase):
         if descriptor_update_template and push_descriptor:
             action = self.find_action("PushTemplReferences")
             self.check(action is not None)
-            action = action.next
+            action = action.nextAction
             self.controller.SetFrameEvent(action.eventId, False)
 
             vkpipe: rd.VKState = self.controller.GetVulkanPipelineState()
@@ -171,7 +174,7 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
             self.check(action is not None)
 
-            action = action.next
+            action = action.nextAction
 
             self.controller.SetFrameEvent(action.eventId, False)
 
@@ -231,7 +234,7 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
             rdtest.log.print(f"Checking {action.customName}")
 
-            self.controller.SetFrameEvent(action.next.eventId, False)
+            self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
             self.check_triangle(fore=[1.0, 0.0, 1.0, 1.0])
 
@@ -272,7 +275,7 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -299,30 +302,34 @@ class VK_Parameter_Zoo(rdtest.TestCase):
 
         action = self.find_action("before_empty")
         action = self.get_action(action.eventId + 1)
-        self.check("vkQueueSubmit" in action.GetName(sdfile))
         a = action.GetName(sdfile)
-        action = self.get_action(action.eventId + 1)
-        self.check("vkQueueSubmit" in action.GetName(sdfile))
+        # vkQueueSubmit with two submits each with zero command buffers
+        self.check("vkQueueSubmit(" in action.GetName(sdfile))
         self.check("No Command Buffers" in action.GetName(sdfile))
         action = self.get_action(action.eventId + 1)
-        self.check("vkQueueSubmit2" in action.GetName(sdfile))
+        self.check("vkQueueSubmit(" in action.GetName(sdfile))
         self.check("No Command Buffers" in action.GetName(sdfile))
-        self.check(a != action.GetName(sdfile))
+        # vkQueueSubmit with zero submits 
+        action = self.get_action(action.eventId + 1)
+        self.check("vkQueueSubmit()" in action.GetName(sdfile))
+        self.check("No Submit" in action.GetName(sdfile))
 
         action = self.get_action(action.eventId + 1)
         if "after_empty" not in action.GetName(sdfile):
-            self.check("vkQueueSubmit2" in action.GetName(sdfile))
-            a = action.GetName(sdfile)
-            action = self.get_action(action.eventId + 1)
-            self.check("vkQueueSubmit2" in action.GetName(sdfile))
+            # vkQueueSubmit2 with one submit with zero command buffers
+            self.check("vkQueueSubmit2(" in action.GetName(sdfile))
             self.check("No Command Buffers" in action.GetName(sdfile))
             self.check(a != action.GetName(sdfile))
+            # vkQueueSubmit with zero submits 
+            action = self.get_action(action.eventId + 1)
+            self.check("vkQueueSubmit2()" in action.GetName(sdfile))
+            self.check("No Submit" in action.GetName(sdfile))
 
         rdtest.log.success("Empty queue submits are as expected")
 
         action = self.find_action("Dynamic Array Draw")
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 

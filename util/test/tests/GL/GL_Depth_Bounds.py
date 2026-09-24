@@ -8,7 +8,7 @@ class GL_Depth_Bounds(rdtest.TestCase):
     demos_test_name = 'GL_Depth_Bounds'
 
     def check_capture(self):
-        eid = self.find_action("Test").next.eventId
+        eid = self.find_action("Test").nextAction.eventId
         self.controller.SetFrameEvent(eid, False)
 
         glpipe = self.controller.GetGLPipelineState()

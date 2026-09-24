@@ -12,7 +12,7 @@ class GL_Queries_In_Use(rdtest.TestCase):
 
         tex_details = self.get_texture(last_action.copyDestination)
 
-        action = self.find_action("XFB Draw").next
+        action = self.find_action("XFB Draw").nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -49,7 +49,7 @@ class GL_Queries_In_Use(rdtest.TestCase):
 
         results = self.controller.FetchCounters([rd.GPUCounter.RasterizedPrimitives, rd.GPUCounter.VSInvocations, rd.GPUCounter.FSInvocations])
 
-        action = self.find_action("Counters Draw").next
+        action = self.find_action("Counters Draw").nextAction
 
         results = [r for r in results if r.eventId == action.eventId]
 

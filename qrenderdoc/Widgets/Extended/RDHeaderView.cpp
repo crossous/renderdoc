@@ -30,6 +30,7 @@
 #include <QPixmap>
 #include <QPointer>
 #include <QScrollBar>
+#include <QToolTip>
 #include <QTreeView>
 #include "Code/QRDUtils.h"
 
@@ -862,6 +863,28 @@ void RDHeaderView::paintEvent(QPaintEvent *e)
         QRect(accumRect.right() + 1, 0, e->rect().right() - accumRect.right(), viewport()->height());
     style()->drawControl(QStyle::CE_HeaderEmptyArea, &opt, &painter, this);
   }
+}
+
+bool RDHeaderView::viewportEvent(QEvent *e)
+{
+  if(e->type() == QEvent::ToolTip)
+  {
+    QHelpEvent *h = (QHelpEvent *)e;
+    int section = logicalIndexAt(h->pos());
+    if(section >= 0)
+    {
+      QAbstractItemModel *m = this->model();
+
+      QVariant tooltip = m->headerData(section, orientation(), Qt::ToolTipRole);
+      if(tooltip.isValid())
+      {
+        QToolTip::showText(h->globalPos(), tooltip.toString(), this);
+        return true;
+      }
+    }
+  }
+
+  return QHeaderView::viewportEvent(e);
 }
 
 void RDHeaderView::paintSection(QPainter *painter, const QRect &rect, int section) const

@@ -1497,17 +1497,30 @@ bool WrappedID3D12Device::Serialise_DynamicDescriptorWrite(SerialiserType &ser,
   return true;
 }
 
-void WrappedID3D12Device::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc,
-                                                   D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+HRESULT WrappedID3D12Device::CreateConstantBufferView(bool tryCall,
+                                                      const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc,
+                                                      D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(hr = m_pDevice15->TryCreateConstantBufferView(pDesc, Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(m_pDevice->CreateConstantBufferView(pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(m_pDevice->CreateConstantBufferView(pDesc, Unwrap(DestDescriptor)));
 
   // assume descriptors are volatile
   if(capframe)
@@ -1535,22 +1548,36 @@ void WrappedID3D12Device::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_V
   }
 
   GetWrapped(DestDescriptor)->Init(pDesc);
+
+  return hr;
 }
 
-void WrappedID3D12Device::CreateShaderResourceView(ID3D12Resource *pResource,
-                                                   const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
-                                                   D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+HRESULT WrappedID3D12Device::CreateShaderResourceView(bool tryCall, ID3D12Resource *pResource,
+                                                      const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                                                      D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(hr = m_pDevice15->TryCreateShaderResourceView(Unwrap(pResource), pDesc,
+                                                                      Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(
+        m_pDevice->CreateShaderResourceView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(
-      m_pDevice->CreateShaderResourceView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
-
   // assume descriptors are volatile
   if(capframe)
   {
@@ -1583,23 +1610,38 @@ void WrappedID3D12Device::CreateShaderResourceView(ID3D12Resource *pResource,
        pDesc->ViewDimension == D3D12_SRV_DIMENSION_TEXTURECUBEARRAY)
       m_Cubemaps.insert(GetResID(pResource));
   }
+
+  return hr;
 }
 
-void WrappedID3D12Device::CreateUnorderedAccessView(ID3D12Resource *pResource,
-                                                    ID3D12Resource *pCounterResource,
-                                                    const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc,
-                                                    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+HRESULT WrappedID3D12Device::CreateUnorderedAccessView(bool tryCall, ID3D12Resource *pResource,
+                                                       ID3D12Resource *pCounterResource,
+                                                       const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc,
+                                                       D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(
+        hr = m_pDevice15->TryCreateUnorderedAccessView(Unwrap(pResource), Unwrap(pCounterResource),
+                                                       pDesc, Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(m_pDevice->CreateUnorderedAccessView(
+        Unwrap(pResource), Unwrap(pCounterResource), pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(m_pDevice->CreateUnorderedAccessView(
-      Unwrap(pResource), Unwrap(pCounterResource), pDesc, Unwrap(DestDescriptor)));
-
   // assume descriptors are volatile
   if(capframe)
   {
@@ -1628,22 +1670,36 @@ void WrappedID3D12Device::CreateUnorderedAccessView(ID3D12Resource *pResource,
   }
 
   GetWrapped(DestDescriptor)->Init(pResource, pCounterResource, pDesc);
+
+  return hr;
 }
 
-void WrappedID3D12Device::CreateRenderTargetView(ID3D12Resource *pResource,
-                                                 const D3D12_RENDER_TARGET_VIEW_DESC *pDesc,
-                                                 D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+HRESULT WrappedID3D12Device::CreateRenderTargetView(bool tryCall, ID3D12Resource *pResource,
+                                                    const D3D12_RENDER_TARGET_VIEW_DESC *pDesc,
+                                                    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(hr = m_pDevice15->TryCreateRenderTargetView(Unwrap(pResource), pDesc,
+                                                                    Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(
+        m_pDevice->CreateRenderTargetView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(
-      m_pDevice->CreateRenderTargetView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
-
   // assume descriptors are volatile
   if(capframe)
   {
@@ -1669,22 +1725,36 @@ void WrappedID3D12Device::CreateRenderTargetView(ID3D12Resource *pResource,
   }
 
   GetWrapped(DestDescriptor)->Init(pResource, pDesc);
+
+  return hr;
 }
 
-void WrappedID3D12Device::CreateDepthStencilView(ID3D12Resource *pResource,
-                                                 const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc,
-                                                 D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+HRESULT WrappedID3D12Device::CreateDepthStencilView(bool tryCall, ID3D12Resource *pResource,
+                                                    const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc,
+                                                    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(hr = m_pDevice15->TryCreateDepthStencilView(Unwrap(pResource), pDesc,
+                                                                    Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(
+        m_pDevice->CreateDepthStencilView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(
-      m_pDevice->CreateDepthStencilView(Unwrap(pResource), pDesc, Unwrap(DestDescriptor)));
-
   // assume descriptors are volatile
   if(capframe)
   {
@@ -1705,6 +1775,70 @@ void WrappedID3D12Device::CreateDepthStencilView(ID3D12Resource *pResource,
   }
 
   GetWrapped(DestDescriptor)->Init(pResource, pDesc);
+
+  return hr;
+}
+
+// 'real' calls that forward onto internal helpers above that either try or don't
+
+void STDMETHODCALLTYPE WrappedID3D12Device::CreateConstantBufferView(
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  CreateConstantBufferView(false, pDesc, DestDescriptor);
+}
+void STDMETHODCALLTYPE WrappedID3D12Device::CreateShaderResourceView(
+    ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  CreateShaderResourceView(false, pResource, pDesc, DestDescriptor);
+}
+void STDMETHODCALLTYPE WrappedID3D12Device::CreateUnorderedAccessView(
+    ID3D12Resource *pResource, ID3D12Resource *pCounterResource,
+    const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  CreateUnorderedAccessView(false, pResource, pCounterResource, pDesc, DestDescriptor);
+}
+void STDMETHODCALLTYPE WrappedID3D12Device::CreateRenderTargetView(
+    ID3D12Resource *pResource, const D3D12_RENDER_TARGET_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  CreateRenderTargetView(false, pResource, pDesc, DestDescriptor);
+}
+void STDMETHODCALLTYPE WrappedID3D12Device::CreateDepthStencilView(
+    ID3D12Resource *pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  CreateDepthStencilView(false, pResource, pDesc, DestDescriptor);
+}
+
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateConstantBufferView(
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateConstantBufferView(true, pDesc, DestDescriptor);
+}
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateShaderResourceView(
+    ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateShaderResourceView(true, pResource, pDesc, DestDescriptor);
+}
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateUnorderedAccessView(
+    ID3D12Resource *pResource, ID3D12Resource *pCounterResource,
+    const D3D12_UNORDERED_ACCESS_VIEW_DESC *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateUnorderedAccessView(true, pResource, pCounterResource, pDesc, DestDescriptor);
+}
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateRenderTargetView(
+    ID3D12Resource *pResource, const D3D12_RENDER_TARGET_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateRenderTargetView(true, pResource, pDesc, DestDescriptor);
+}
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateDepthStencilView(
+    ID3D12Resource *pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC *pDesc,
+    D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateDepthStencilView(true, pResource, pDesc, DestDescriptor);
 }
 
 void WrappedID3D12Device::CreateSampler(const D3D12_SAMPLER_DESC *pDesc,
@@ -2507,10 +2641,10 @@ HRESULT WrappedID3D12Device::CheckFeatureSupport(D3D12_FEATURE Feature, void *pF
       return E_INVALIDARG;
 
     if(dolog)
-      RDCLOG("Clamping shader model from 0x%x to 6.7", model->HighestShaderModel);
+      RDCLOG("Clamping shader model from 0x%x to 6.9", model->HighestShaderModel);
 
     // clamp SM to what we support
-    model->HighestShaderModel = RDCMIN(model->HighestShaderModel, D3D_SHADER_MODEL_6_7);
+    model->HighestShaderModel = RDCMIN(model->HighestShaderModel, D3D_SHADER_MODEL_6_9);
 
     return S_OK;
   }

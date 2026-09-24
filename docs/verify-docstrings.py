@@ -29,6 +29,12 @@ sys.path.insert(0, os.path.abspath(binpath + 'Release/pymodules'))
 os.environ["PATH"] = os.path.abspath(binpath + 'Development/') + os.pathsep + os.environ["PATH"]
 os.environ["PATH"] = os.path.abspath(binpath + 'Release/') + os.pathsep + os.environ["PATH"]
 
+if sys.platform == 'win32' and sys.version_info[1] >= 8:
+    for sub in ['Release', 'Development']:
+        path = os.path.abspath(binpath + sub)
+        if os.path.exists(path):
+            os.add_dll_directory(path)
+
 # path to module libraries for linux
 sys.path.insert(0, os.path.abspath('../build/lib'))
 
@@ -69,12 +75,12 @@ if args.debug_mismatches is not None and os.path.isdir(args.debug_mismatches):
             print("Removing {} in debug mismatches folder".format(f))
         os.unlink(f)
 
-def make_c_type(ret: str, pattern: bool, typelist: List[str]):
+def make_c_typeval(ret: str, pattern: bool, typelist: List[str]):
     orig_type = ret
 
     # strip namespace
     if ret[0:10] == 'renderdoc.':
-        ret = ret[10:]
+        ret = ret[10:].replace('.', '::')
 
     # Handle pipelines that are renamed
     if ret == 'D3D11State':
@@ -88,6 +94,12 @@ def make_c_type(ret: str, pattern: bool, typelist: List[str]):
 
     if ret in ['bool', 'void']:
         pass
+    elif ret == 'None':
+        ret = 'NULL'
+    elif ret == 'True':
+        ret = 'true'
+    elif ret == 'False':
+        ret = 'false'
     elif ret == 'str':
         ret = '(const )?rdc(inflexible)?str ?[&*]?' if pattern else 'rdcstr'
     elif ret == 'int':
@@ -101,14 +113,14 @@ def make_c_type(ret: str, pattern: bool, typelist: List[str]):
     elif ret == 'Tuple[str,str]': # special case
         ret = 'rdcstrpair'
     elif ret[0:9] == 'Callable[':
-        ret = '(std::function<void\(\)>|[A-Za-z_]+Callback)' if pattern else 'std::function/NamedCallback'
+        ret = r'(std::function<void\(\)>|[A-Za-z_]+Callback)' if pattern else 'std::function/NamedCallback'
     elif ret[0:5] == 'List[':
-        inner = make_c_type(ret[5:-1], pattern, typelist)
+        inner = make_c_typeval(ret[5:-1], pattern, typelist)
         ret = '(const )?rdcarray<{}> ?[&*]?'.format(inner) if pattern else 'rdcarray<{}>'.format(inner)
     elif ret[0:6] == 'Tuple[':
-        inners = [make_c_type(i.strip(), pattern, typelist) for i in ret[6:-1].split(',')]
+        inners = [make_c_typeval(i.strip(), pattern, typelist) for i in ret[6:-1].split(',')]
         if pattern:
-            inner = ',\s*'.join(inners)
+            inner = r',\s*'.join(inners)
         else:
             inner = ', '.join(inners)
 
@@ -131,7 +143,7 @@ def make_c_type(ret: str, pattern: bool, typelist: List[str]):
     return ret
 
 RTYPE_PATTERN = re.compile(r":rtype: (.*)")
-PARAM_PATTERN = re.compile(r":param ([^:]*) ([^: ]*):")
+PARAM_PATTERN = re.compile(r":param ([^:=]*) ([^: =]+)(\s*=[^:]*)?:")
 TYPE_PATTERN = re.compile(r":type: (.*)")
 DATA_PATTERN = re.compile(r"\.\. data:: (.*)")
 
@@ -151,12 +163,23 @@ def check_function(parent_name, objname, obj, source, global_func, typelist):
     params = PARAM_PATTERN.findall(docstring)
 
     funcargs = ['', '']
+    default_val = ''
     for p in params:
         if len(funcargs[0]) > 0:
-            funcargs[0] += ',\s*'
+            funcargs[0] += r',\s*'
             funcargs[1] += ', '
-        funcargs[0] += make_c_type(p[0], True, typelist) + ' ?' + p[1] + "(\s*=[^,]*)?"
-        funcargs[1] += make_c_type(p[0], False, typelist) + ' ' + p[1]
+
+        default_val = p[2].lstrip()
+        if len(default_val) > 0 and default_val[0] == '=':
+            default_val = make_c_typeval(default_val[1:].strip(), False, typelist)
+            default_val = default_val.replace('(', '\\(').replace(')', '\\)')
+
+        funcargs[0] += make_c_typeval(p[0], True, typelist) + ' ?' + p[1]
+        funcargs[1] += make_c_typeval(p[0], False, typelist) + ' ' + p[1]
+
+        if default_val != "":
+            funcargs[0] += f"\\s*=\\s*{default_val}"
+            funcargs[1] += f" = {default_val}"
 
     result = RTYPE_PATTERN.search(docstring)
     if result is not None:
@@ -166,22 +189,22 @@ def check_function(parent_name, objname, obj, source, global_func, typelist):
 
     global_pattern = ''
     if global_func:
-        global_pattern = '(RENDERDOC_CC\s*RENDERDOC_)?'
+        global_pattern = r'(RENDERDOC_CC\s*RENDERDOC_)?'
 
-    pattern = '(?s){} ?{}{}\(\s*{}\)'.format(make_c_type(ret, True, typelist), global_pattern, objname, funcargs[0])
-    clean = '{} {}({})'.format(make_c_type(ret, False, typelist), objname, funcargs[1])
+    pattern = r'(?s){} ?{}{}\(\s*{}\)'.format(make_c_typeval(ret, True, typelist), global_pattern, objname, funcargs[0])
+    clean = '{} {}({})'.format(make_c_typeval(ret, False, typelist), objname, funcargs[1])
 
     match = re.search(pattern, source, re.MULTILINE | re.DOTALL)
 
     pattern2 = None
     # global functions returning strings can't return an rdcstr, they have to return const char *
     if match is None and ret == 'str':
-        pattern2 = '(?s)const char \*{}{}\(\s*{}\)'.format(global_pattern, objname, funcargs[0])
+        pattern2 = r'(?s)const char \*{}{}\(\s*{}\)'.format(global_pattern, objname, funcargs[0])
         match = re.search(pattern2, source, re.MULTILINE | re.DOTALL)
 
     if match is None:
         count += 1
-        print("Error {:3} in {}: {}".format(count, parent_name, clean))
+        print("Error {:3} in {}: {} couldn't be found in C++ headers.\nCould be wrong types or missing default values. Try --debug-mismatches mismatches/".format(count, parent_name, clean))
         if args.debug_mismatches is not None and os.path.isdir(args.debug_mismatches):
             with open(os.path.join(os.path.abspath(args.debug_mismatches), '{:03}-{}.{}.txt'.format(count, parent_name, objname)), 'w') as file:
                 file.write("# Failed to find matching declaration for {}.{}\n".format(parent_name, objname))
@@ -210,10 +233,10 @@ def check_used_types(objname, module, used_types):
                 break
 
             # Allow some types that are opaque
-            if parent == rd and t in ['ANativeWindow', 'NSView', 'CALayer', 'wl_display', 'wl_surface', 'HWND', 'xcb_connection_t', 'xcb_window_t', 'Display', 'Drawable']:
+            if parent is rd and t in ['ANativeWindow', 'NSView', 'CALayer', 'wl_display', 'wl_surface', 'HWND', 'xcb_connection_t', 'xcb_window_t', 'Display', 'Drawable']:
                 break
 
-            if parent == qrd and t in ['QWidget']:
+            if parent is qrd and t in ['QWidget']:
                 break
 
             idx = t.find('.')
@@ -240,11 +263,18 @@ for mod_name in check_mods:
     if args.verbose:
         print("===== Checks for {} =====".format(mod_name))
     for objname in dir(mod):
-        if re.search('__|SWIG|ResourceId_Null|rdcarray_of|Structured.*List', objname):
+        if re.search('__|SWIG|rdcarray_of|Structured.*List', objname):
             continue
 
+        if "_" in objname:
+            segments = objname.split("_")
+            if hasattr(mod, segments[0]) and inspect.isclass(
+                getattr(mod, segments[0])
+            ):
+                continue
+
         # skip some functions that have special bindings and won't be easily found
-        if objname in ['CreateRemoteServerConnection', 'DumpObject', 'GetDefaultCaptureOptions', 'GetSupportedDeviceProtocols']:
+        if objname in ['CreateRemoteServerConnection', 'DumpObject', 'GetSupportedDeviceProtocols']:
             if args.verbose:
                 print("Skipping {}".format(objname))
             continue
@@ -269,8 +299,8 @@ for mod_name in check_mods:
                 print("Checking class {}".format(qualname))
 
             # Grab the source to just this class to search in
-            source = re.search('(struct|class|union) I?' + objname + '(\n|\s*:[^A-Za-z][\s:a-zA-Z]*\n)\{.*?^}', headers, re.MULTILINE | re.DOTALL)
-            
+            source = re.search('(struct|class|union) I?' + objname + r'(\n|\s*:[^A-Za-z][\s:a-zA-Z]*\n)\{.*?^}', headers, re.MULTILINE | re.DOTALL)
+
             namespace = None
 
             if source is None and objname[0:2] in ['VK', 'GL']:
@@ -288,13 +318,19 @@ for mod_name in check_mods:
                 namespace = namespace.group(0)
 
             if source is None and namespace is not None:
-                source = re.search('(struct|class|union) I?' + objname + '[^{]*\{.*?^}', namespace, re.MULTILINE | re.DOTALL)
-                
+                source = re.search('(struct|class|union) I?' + objname + r'[^{]*\{.*?^}', namespace, re.MULTILINE | re.DOTALL)
+
             source = source.group(0)
 
             instance = None
+            copyable = False
             try:
                 instance = obj()
+                try:
+                    dupe_instance = obj(instance)
+                    copyable = True
+                except NotImplementedError:
+                    pass
             except TypeError:
                 pass
 
@@ -305,6 +341,29 @@ for mod_name in check_mods:
                 instance = obj("")
 
             instance_warned = False
+
+            # for types that we can create, we expect by default to
+            # see a default constructor and a copy constructor,
+            # unless we see a note that the type is not copyable
+            if instance is not None:
+                lines = docstring.strip().splitlines()
+                if lines[0].strip() != f"{obj.__name__}()":
+                    count += 1
+                    print(
+                        f"Error {count:3}: {obj.__name__} can be created, "
+                        "expect default constructor as first real line of its docstring."
+                    )
+                elif (
+                    copyable
+                    and lines[1].strip() != f"{obj.__name__}(other: {obj.__name__})"
+                ):
+                    count += 1
+                    print(
+                        f"Error {count:3}: {obj.__name__} can be copied, "
+                        "expect copy constructor as second entry in its docstring:\n"
+                        f"Actual   > {lines[1]}\n"
+                        f"Expected > {obj.__name__}(other: {obj.__name__})"
+                    )
 
             for member_name in obj.__dict__.keys():
                 if '__' in member_name or member_name in ['this', 'thisown']:
@@ -329,7 +388,7 @@ for mod_name in check_mods:
                         print("Skipping {}.{}".format(objname, member_name))
                     continue
 
-                if callable(member):
+                if callable(member) or inspect.ismethoddescriptor(member):
                     used_types = []
 
                     check_function(qualname, member_name, member, source, False, used_types)
@@ -343,14 +402,14 @@ for mod_name in check_mods:
                     if type(value).__module__ != mod_name:
                         type_name = type(value).__module__ + '.' + type_name
 
-                    type_name = re.sub('(.*)rdcarray_of_(.*)', 'List[\\1\\2]', type_name)
-                    type_name = re.sub('(renderdoc\.)?u?int[163264]{2}_t', 'int', type_name)
-                    type_name = re.sub('(renderdoc\.)?rdcstr', 'str', type_name)
-                    type_name = re.sub('Pipe_', '', type_name)
-                    type_name = re.sub('StructuredBufferList', 'List[bytes]', type_name)
-                    type_name = re.sub('StructuredObjectList', 'List[SDObject]', type_name)
-                    type_name = re.sub('StructuredChunkList', 'List[SDChunk]', type_name)
-                    type_name = re.sub('^builtins.', '', type_name)
+                    type_name = re.sub(r'(.*)rdcarray_of_(.*)', 'List[\\1\\2]', type_name)
+                    type_name = re.sub(r'(renderdoc\.)?u?int[163264]{2}_t', 'int', type_name)
+                    type_name = re.sub(r'(renderdoc\.)?rdcstr', 'str', type_name)
+                    type_name = re.sub(r'Pipe_', '', type_name)
+                    type_name = re.sub(r'StructuredBufferList', 'List[bytes]', type_name)
+                    type_name = re.sub(r'StructuredObjectList', 'List[SDObject]', type_name)
+                    type_name = re.sub(r'StructuredChunkList', 'List[SDChunk]', type_name)
+                    type_name = re.sub(r'^builtins.', '', type_name)
 
                     if 'importlib._bootstrap' in type_name:
                         type_name = re.sub('^importlib._bootstrap.', '', type_name)
@@ -385,7 +444,7 @@ for mod_name in check_mods:
                         count += 1
                         print("Error {:3}: {}.{} is missing :type: declaration, should be {}".format(count, qualname, member_name, type_name))
                     else:
-                        type_decl = re.sub('Tuple\[.*\]', 'tuple', type_decl)
+                        type_decl = re.sub(r'Tuple\[.*\]', 'tuple', type_decl)
                         if type_decl != type_name:
                             count += 1
                             print("Error {:3}: {}.{} has wrong :type: declaration {}, should be {}".format(count, qualname, member_name, type_decl, type_name))

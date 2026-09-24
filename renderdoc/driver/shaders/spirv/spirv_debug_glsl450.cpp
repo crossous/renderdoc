@@ -1242,7 +1242,7 @@ ShaderVariable GPUOp(ThreadState &state, uint32_t instruction, const rdcarray<Id
   if(op == rdcspv::GLSLstd450::Length || op == rdcspv::GLSLstd450::Distance)
     ret.columns = 1;
 
-  state.QueueMathOp(op, paramVars, ret);
+  state.QueueMathOp(rdcspv::Op::ExtInst, op, paramVars, ret);
 
   return ret;
 }

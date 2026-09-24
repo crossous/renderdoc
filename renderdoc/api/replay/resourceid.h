@@ -41,7 +41,11 @@ ResourceId GetNewUniqueID();
 // between two textures allocated in the same memory (after the first is freed)
 //
 // it's a struct around a uint64_t to aid in template selection
-DOCUMENT(R"(This is an opaque identifier that uniquely locates a resource.
+DOCUMENT(R"(
+ResourceId()
+ResourceId(other: ResourceId)
+
+This is an opaque identifier that uniquely locates a resource.
 
 .. note::
   These IDs do not overlap ever - textures, buffers, shaders and samplers will all have unique IDs

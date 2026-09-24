@@ -69,7 +69,7 @@ class Mesh_Zoo():
     def check_capture(self, capture_filename: str, controller: rd.ReplayController):
         self.controller = controller
 
-        self.controller.SetFrameEvent(self.find_action("Quad").next.eventId, False)
+        self.controller.SetFrameEvent(self.find_action("Quad").nextAction.eventId, False)
 
         self.out: rd.ReplayOutput = self.controller.CreateOutput(rd.CreateHeadlessWindowingData(200, 200),
                                                             rd.ReplayOutputType.Mesh)
@@ -348,7 +348,7 @@ class Mesh_Zoo():
 
         rdtest.log.success("Both instance picking is as expected")
 
-        self.controller.SetFrameEvent(self.find_action("Points").next.eventId, False)
+        self.controller.SetFrameEvent(self.find_action("Points").nextAction.eventId, False)
 
         # Only one instance, just check we can see the points
         self.cfg.curInstance = 0
@@ -378,7 +378,7 @@ class Mesh_Zoo():
 
         rdtest.log.success("Point solid and lit rendering works as expected")
 
-        self.controller.SetFrameEvent(self.find_action("Lines").next.eventId, False)
+        self.controller.SetFrameEvent(self.find_action("Lines").nextAction.eventId, False)
 
         self.cache_output()
         self.cfg.visualisationMode = rd.Visualisation.Lit
@@ -386,7 +386,7 @@ class Mesh_Zoo():
 
         rdtest.log.success("Lines solid and lit rendering works as expected")
 
-        self.controller.SetFrameEvent(self.find_action("Stride 0").next.eventId, False)
+        self.controller.SetFrameEvent(self.find_action("Stride 0").nextAction.eventId, False)
 
         self.cfg.position = self.controller.GetPostVSData(0, 0, self.cfg.type)
         self.cfg.position.nearPlane = 1.0
@@ -401,7 +401,7 @@ class Mesh_Zoo():
         self.check_vertex(105, 65, (rd.ReplayOutput.NoResult, rd.ReplayOutput.NoResult))
         self.check_vertex(115, 135, (rd.ReplayOutput.NoResult, rd.ReplayOutput.NoResult))
 
-        self.controller.SetFrameEvent(self.find_action("Empty").next.eventId, False)
+        self.controller.SetFrameEvent(self.find_action("Empty").nextAction.eventId, False)
 
         self.cfg.position = self.controller.GetPostVSData(0, 0, self.cfg.type)
         self.cfg.position.nearPlane = 1.0

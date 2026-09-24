@@ -125,7 +125,7 @@ class VK_Vertex_Attr_Zoo(rdtest.TestCase):
         rdtest.log.success("Triangle picked value is as expected")
 
         # Step to the next action with awkward struct/array outputs
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         ref = {
             0: {

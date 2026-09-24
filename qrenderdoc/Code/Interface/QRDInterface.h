@@ -92,13 +92,22 @@ struct ICaptureContext;
 
 #include "Analytics.h"
 #include "Extensions.h"
-#include "PersistantConfig.h"
+#include "Helpers.h"
+#include "PersistentConfig.h"
 #include "RemoteHost.h"
 
-DOCUMENT("Contains all of the settings that control how to capture an executable.");
+DOCUMENT(R"(
+CaptureSettings()
+CaptureSettings(other: CaptureSettings)
+
+Contains all of the settings that control how to capture an executable.
+)");
 struct CaptureSettings
 {
+  DOCUMENT("");
   CaptureSettings();
+  CaptureSettings(const CaptureSettings &) = default;
+  CaptureSettings &operator=(const CaptureSettings &) = default;
 
   VARIANT_CAST(CaptureSettings);
 
@@ -156,6 +165,68 @@ struct CaptureSettings
 
 DECLARE_REFLECTION_STRUCT(CaptureSettings);
 
+DOCUMENT(R"(
+ConnectedTempCapture()
+ConnectedTempCapture(other: ConnectedTempCapture)
+
+The details of a capture that has been made on a connection but may not
+have been saved to disk or local.
+)");
+struct ConnectedTempCapture
+{
+  DOCUMENT("");
+  ConnectedTempCapture() = default;
+  ConnectedTempCapture(const ConnectedTempCapture &) = default;
+  ConnectedTempCapture &operator=(const ConnectedTempCapture &) = default;
+
+  bool operator==(const ConnectedTempCapture &o) const
+  {
+    return captureID == o.captureID && frameNumber == o.frameNumber && timestamp == o.timestamp &&
+           api == o.api;
+  }
+  bool operator!=(const ConnectedTempCapture &o) const { return !(*this == o); }
+  bool operator<(const ConnectedTempCapture &o) const
+  {
+    if(!(captureID == o.captureID))
+      return captureID < o.captureID;
+    if(!(frameNumber == o.frameNumber))
+      return frameNumber < o.frameNumber;
+    if(!(timestamp == o.timestamp))
+      return timestamp < o.timestamp;
+    if(!(api == o.api))
+      return api < o.api;
+    return false;
+  }
+
+  DOCUMENT(R"(The ID of the capture, which is arbitrary. IDs are unique for the capture within
+a given connection, but two connections may have the same ID.
+
+:type: int
+)");
+  uint32_t captureID;
+
+  DOCUMENT(R"(The name of the API used for this capture.
+
+:type: str
+)");
+  rdcstr api;
+
+  DOCUMENT(R"(The timestamp when the capture completed.
+
+:type: datetime
+)");
+  rdcdatetime timestamp;
+
+  DOCUMENT(R"(The frame number which was captured. May be ``-1`` if the capture was made via the RenderDoc
+API.
+
+:type: int
+)");
+  int32_t frameNumber;
+};
+
+DECLARE_REFLECTION_STRUCT(ConnectedTempCapture);
+
 DOCUMENT(R"(The main parent window of the application.
 
 This window is retrieved by calling :meth:`CaptureContext.GetMainWindow`.
@@ -191,11 +262,11 @@ closest shortcut to a given action. The search goes from the widget with the foc
 chain of parents, with the first match being used. If no matches are found, then a 'global' default
 will be invoked, if it exists.
 
-:param str shortcut: The text string representing the shortcut, e.g. 'Ctrl+S'.
+:param str shortcut: The text string representing the shortcut, e.g. :kbd:`Ctrl+S`.
 :param QWidget widget: A handle to the widget to use as the context for this shortcut, or ``None``
   for a global shortcut. Note that if an existing global shortcut exists the new one will not be
   registered.
-:param ShortcutCallback callback: The function to callback when the shortcut is hit.
+:param Callable[[QWidget], None] callback: The function to callback when the shortcut is hit.
   Callback function signature must match :func:`ShortcutCallback`.
 )");
   virtual void RegisterShortcut(const rdcstr &shortcut, QWidget *widget,
@@ -206,7 +277,7 @@ will be invoked, if it exists.
 
 See the documentation for :meth:`RegisterShortcut` for what these shortcuts are for.
 
-:param str shortcut: The text string representing the shortcut, e.g. 'Ctrl+S'. To unregister all
+:param str shortcut: The text string representing the shortcut, e.g. :kbd:`Ctrl+S`. To unregister all
   shortcuts for a particular widget, you can pass an empty string here. In this case,
   :paramref:`UnregisterShortcut.widget` must not be ``None``.
 :param QWidget widget: A handle to the widget used as the context for the shortcut, or ``None``
@@ -219,6 +290,17 @@ See the documentation for :meth:`RegisterShortcut` for what these shortcuts are 
 This may not be possible on all OSs, so the function is not guaranteed to succeed.
 )");
   virtual void BringToFront() = 0;
+
+  DOCUMENT(R"(Prompt the user to close the currently open capture file. This will go through the
+normal workflow and ask the user to save any unsaved capture.
+
+If no capture is open, this function returns True immediately.
+
+:return: True if no capture was open, or if it was successfully closed. False if the capture is
+  still open due to user interactions.
+:rtype: bool
+)");
+  virtual bool PromptCloseCapture() = 0;
 
 protected:
   IMainWindow() = default;
@@ -272,10 +354,10 @@ This window is retrieved by calling :meth:`CaptureContext.GetEventBrowser`.
   text inside the filter's parameter list up to where the cursor is. The callback should return a
   list of identifiers used for auto-completion.
 
-  The list does not have to be pre-filtered for matches to the :paramref:`params`, that is provided
-  to allow different autocompletion at different stages (e.g. if there are no parameters, you can
-  autocomplete a property, if a property is already present you can autocomplete valid values for
-  it)
+  The list does not have to be pre-filtered for matches to the :paramref:`AutoCompleteCallback.params`,
+  that is provided to allow different autocompletion at different stages (e.g. if there are no
+  parameters, you can autocomplete a property, if a property is already present you can
+  autocomplete valid values for it)
 
   :param CaptureContext context: The current capture context.
   :param str filter: The name of the filter function.
@@ -370,14 +452,14 @@ expression.
 :param str description: The description of the filter function. This should explain the available
   parameters (if applicable) and what the filter does. It will be used for documenting to users
   what each filter means.
-:param EventFilterCallback filter: The callback to call for each candidate event to perform
-  filtering.
+:param Callable[[CaptureContext,str,str,int,renderdoc.SDChunk,renderdoc.ActionDescription,str], bool] filter: The
+  callback to call for each candidate event to perform filtering.
   Callback function signature must match :func:`EventFilterCallback`.
-:param FilterParseCallback parser: The callback to call when the parsing the parameters and checking
-  for any errors. This can be ``None`` if no pre-parsing is required.
+:param Callable[[CaptureContext,str,str], str] parser: The callback to call when the parsing the
+  parameters and checking for any errors. This can be ``None`` if no pre-parsing is required.
   Callback function signature must match :func:`FilterParseCallback`.
-:param AutoCompleteCallback completer: The callback to call when trying to provide autocomplete
-  suggestions. This can be ``None`` if no completion is desired/applicable.
+:param Callable[[CaptureContext,str,str], List[str]] completer: The callback to call when trying
+  to provide autocomplete suggestions. This can be ``None`` if no completion is desired/applicable.
   Callback function signature must match :func:`AutoCompleteCallback`.
 :return: Whether or not the registration was successful.
 :rtype: bool
@@ -683,13 +765,13 @@ DOCUMENT(R"(Specifies a type of followed resource for the :class:`TextureViewer`
 .. data:: ReadWrite
 
   The index specifies a resource within the given shader's
-  :data:`read-write resources <~renderdoc.ShaderReflection.readWriteResources>`. The array element
+  :data:`~renderdoc.ShaderReflection.readWriteResources`. The array element
   then specifies the index within that resource's array, if applicable.
 
 .. data:: ReadOnly
 
   The index specifies a resource within the given shader's
-  :data:`read-only resources <~renderdoc.ShaderReflection.readOnlyResources>`. The array element
+  :data:`~renderdoc.ShaderReflection.readOnlyResources`. The array element
   then specifies the index within that resource's array, if applicable.
 
 .. data:: OutputDepthResolve
@@ -798,6 +880,13 @@ If no location is currently selected or there is no current texture, this will r
 )");
   virtual bool IsZoomAutoFit() = 0;
 
+  DOCUMENT(R"(Return the currently configured texture display structure.
+
+:return: The current texture display.
+:rtype: renderdoc.TextureDisplay
+)");
+  virtual TextureDisplay GetTextureDisplay() = 0;
+
   DOCUMENT(R"(Return the current zoom level, whether manually set or auto-calculated.
 
 :return: The current zoom level, with 100% being represented as 1.0.
@@ -810,7 +899,7 @@ If no location is currently selected or there is no current texture, this will r
 :param bool autofit: ``True`` if the zoom level should be auto-calculated continuously to
   automatically fit the texture completely in view.
 :param float zoom: The zoom level as a percentage, with 100% being 1.0. Ignored if
-  :paramref:`autofit` is ``True``.
+  :paramref:`SetZoomLevel.autofit` is ``True``.
 )");
   virtual void SetZoomLevel(bool autofit, float zoom) = 0;
 
@@ -837,6 +926,13 @@ etc.
 :rtype: int
 )");
   virtual uint32_t GetChannelVisibilityBits() = 0;
+
+  DOCUMENT(R"(Return which channels are currently displayed, as a four-component tuple.
+
+:return: The current channel visibility per component.
+:rtype: Tuple[bool,bool,bool,bool]
+)");
+  virtual rdcfixedarray<bool, 4> GetChannelVisibility() = 0;
 
   DOCUMENT(R"(Set the visibility of each channel.
 
@@ -876,14 +972,16 @@ QWidget.
   DOCUMENT(R"(Scroll to the given row in the given stage's data.
 
 :param int row: the row to scroll to.
-:param renderdoc.MeshDataStage stage: The stage of the geometry pipeline to scroll within.
+:param renderdoc.MeshDataStage stage=renderdoc.MeshDataStage.VSIn: **Optional parameter**. The stage of the
+  geometry pipeline to scroll within. Ignored for non-mesh buffer viewers.
 )");
   virtual void ScrollToRow(int32_t row, MeshDataStage stage = MeshDataStage::VSIn) = 0;
 
   DOCUMENT(R"(Scroll to the given column in the given stage's data.
 
 :param int column: the column to scroll to.
-:param renderdoc.MeshDataStage stage: The stage of the geometry pipeline to scroll within.
+:param renderdoc.MeshDataStage stage=renderdoc.MeshDataStage.VSIn: **Optional parameter**. The stage of the
+  geometry pipeline to scroll within. Ignored for non-mesh buffer viewers.
 )");
   virtual void ScrollToColumn(int32_t column, MeshDataStage stage = MeshDataStage::VSIn) = 0;
 
@@ -962,6 +1060,215 @@ protected:
 
 DECLARE_REFLECTION_STRUCT(IResourceInspector);
 
+DOCUMENT(R"(A capture connection window.
+
+When a program is successfully launched by :class:`CaptureDialog` and a connection is made,
+this window can be used to access the details of that connection and any captures that have
+been made.
+
+.. function:: ClosedCallback(connection)
+
+  Not a member function - the signature for any ``ClosedCallback`` callbacks.
+
+  Called whenever a capture connection is closed.
+
+  :param CaptureConnection connection: The connection window. Invalid to use after the callback
+     has returned.
+)");
+struct ICaptureConnection
+{
+  typedef std::function<void(ICaptureConnection *)> ClosedCallback;
+
+  DOCUMENT(R"(Retrieves the PySide2 QWidget for this :class:`CaptureConnection` if PySide2 is available, or otherwise
+returns a unique opaque pointer that can be passed back to any RenderDoc functions expecting a
+QWidget.
+
+:return: Return the widget handle, either a PySide2 handle or an opaque handle.
+:rtype: QWidget
+)");
+  virtual QWidget *Widget() = 0;
+
+  DOCUMENT(R"(Register a callback to be called when the connection window is closed for any reason.
+
+Because capture connections can self-close when a program exits with no captures having been made, it can
+be useful to get a callback to notify you that the connection is no longer legal to use.
+
+This callback happens on the UI thread.
+
+:param Callable[[CaptureConnection], None] method: The function to callback when closed.
+  Callback function signature must match :func:`ClosedCallback`.
+)");
+  virtual void RegisterClosedCallback(ClosedCallback method) = 0;
+
+  DOCUMENT(R"(Checks whether or not the connection is still active. If a program exits the connection
+will no longer be active.
+
+Note that there is an inherent race here - the connection could drop immediately after returning.
+
+:return: ``True`` if the window is set up for injecting.
+:rtype: bool
+)");
+  virtual bool IsConnected() = 0;
+
+  DOCUMENT(R"(Normally connection windows will self-close if the program exits and there are no captures
+made. This behaviour can be disabled by calling this function at which point the window will not close
+itself automatically.
+)");
+  virtual void PreventAutoClose() = 0;
+
+  DOCUMENT(R"(Lists the names of APIs that have been used in the program. These APIs may not all
+be actively in use, as APIs are not removed from this list once they have been observed.
+
+Note that some APIs may be listed here that RenderDoc does not support, but does recognise. You
+should not assume that these names will match those in the :class:`~renderdoc.GraphicsAPI` enum.
+
+:return: The set of API names that have been used in the program.
+:rtype: List[str]
+)");
+  virtual rdcarray<rdcstr> GetAPIs() = 0;
+
+  DOCUMENT(R"(Asks the connected program to take captures beginning at a certain frame
+number.
+
+If the frame number has already passed when the request is received, no capture is made.
+
+:param int frameNumber: The first frame number to capture.
+:param int numFrames: How many frames to capture including the first. If set to 0, nothing
+  is captured.
+)");
+  virtual void QueueCapture(int32_t frameNumber, int32_t numFrames) = 0;
+
+  DOCUMENT(R"(Asks the connected program to take a capture after a certain number
+of seconds have passed, possibly 0 seconds to immediately capture. This has no effect
+if the connection is inactive and does not guarantee that the program will still be
+connected in the future - if the connection is lost no capture is made.
+
+While a delayed capture is waiting to be triggered, requests to trigger another delayed
+capture will be ignored. Only one can be active at once. If you need more complex or
+overlapping delayed captures you should do this yourself manually and call this function
+when each one is due.
+
+:param float secondsDelay: How many seconds to wait before triggering a capture.
+:param int numFrames: How many frames to capture including the first. If set to 0, nothing
+  is captured.
+)");
+  virtual void TimedCapture(float secondsDelay, int32_t numFrames) = 0;
+
+  DOCUMENT(R"(Cycles which window is active on the connected device. Has no effect if there are
+not multiple windows or if the connection is inactive.
+)");
+  virtual void CycleActiveWindow() = 0;
+
+  DOCUMENT(R"(Gets the name of the program connected to. Usually the name of the
+executable for the process.
+
+:return: The connection target.
+:rtype: str
+)");
+  virtual rdcstr Target() = 0;
+
+  DOCUMENT(R"(Gets the raw hostname for the connected target. This can be used elsewhere
+as a true hostname. For displaying to the user, prefer :meth:`FriendlyHostname`.
+
+:return: The raw hostname of the target this connection is to.
+:rtype: str
+)");
+  virtual rdcstr Hostname() = 0;
+
+  DOCUMENT(R"(Gets the user friendly hostname for the connected target. This may not be
+a true hostname but is suitable for displaying to users particularly for platforms where
+the raw hostname is not necessarily user-friendly and there may be a more descriptive name
+available.
+
+:return: The friendly hostname of the target this connection is to.
+:rtype: str
+)");
+  virtual rdcstr FriendlyHostname() = 0;
+
+  DOCUMENT(R"(Closes the connection to the target program. Normally there will be
+a prompt to the user to ask them whether they would like to save any unsaved
+captures to prevent data loss. If they choose to cancel, the connection may not
+be closed.
+
+This prompt can be overridden with the parameter, at which point all unsaved captures
+will be deleted. You should ensure the user understands that this will happen.
+
+:param bool discardUnsaved: Whether to discard unsaved captures without prompting.
+)");
+  virtual void Close(bool discardUnsaved) = 0;
+
+  DOCUMENT(R"(Lists the captures that are known to have been made on this connection. Note
+that this reflects the UI and so the user is free to delete captures at any point, which
+will be reflected by them being removed from this list.
+
+Each :class:`capture <ConnectedTempCapture>` has an ID that is used to refer to it, note
+that this ID is not globally unique and is only unique within this connection.
+
+:return: The currently known captures on this connection.
+:rtype: List[ConnectedTempCapture]
+)");
+  virtual rdcarray<ConnectedTempCapture> GetCaptures() = 0;
+
+  DOCUMENT(R"(Open the given capture, referred to by ID, in the UI for analysis. If the
+capture is remote, an appropriate remote host connection is required.
+
+This will prompt the user for closing any currently open capture and if the user
+chooses not to close the current capture the loading will be stopped.
+
+:param int ID: The ID of the capture to open.
+)");
+  virtual void OpenCapture(uint32_t ID) = 0;
+
+  DOCUMENT(R"(Delete the given capture, referred to by ID. If the
+capture is remote, an appropriate remote host connection is required.
+
+Normally deleting a capture will prompt the user to prevent data loss, but this can be
+overridden with the argument.
+
+:param int ID: The ID of the capture to delete.
+:param bool promptForSave: ``True`` if the user should be prompted as normal to save the
+  capture.
+)");
+  virtual void DeleteCapture(uint32_t ID, bool promptForSave) = 0;
+
+  DOCUMENT(R"(Save the given capture to disk, referred to by ID. If the
+capture is remote, an appropriate remote host connection is required.
+
+If the filename is omitted the user will be prompted to choose a file and the capture
+will only be saved if they select a filename.
+
+:param int ID: The ID of the capture to delete.
+:param str filename="": **Optional parameter**. The filename to save to on the local disk,
+  if omitted the user will be prompted to choose a filename.
+)");
+  virtual void SaveCapture(uint32_t ID, rdcstr filename = "") = 0;
+
+  DOCUMENT(R"(Lists the PIDs of child processes that are known to still be running.
+
+:return: The PIDs of each child process running under the connected program.
+:rtype: List[int]
+)");
+  virtual rdcarray<uint32_t> GetChildProcesses() = 0;
+
+  DOCUMENT(R"(Connected to a given child process and return a connection window.
+
+The connection window will automatically be shown if the connection is successfully made.
+
+If the PID is unrecognised, no connection will be made.
+
+:param int pid: The PID of the child to connect to.
+:return: The connection window if successful, or ``None`` if no connection was made.
+:rtype: CaptureConnection
+)");
+  virtual ICaptureConnection *ConnectToChild(uint32_t pid) = 0;
+
+protected:
+  ICaptureConnection() = default;
+  ~ICaptureConnection() = default;
+};
+
+DECLARE_REFLECTION_STRUCT(ICaptureConnection);
+
 DOCUMENT(R"(The executable capture window.
 
 This window is retrieved by calling :meth:`CaptureContext.GetCaptureDialog`.
@@ -1026,8 +1333,12 @@ QWidget.
 )");
   virtual CaptureSettings Settings() = 0;
 
-  DOCUMENT("Launches a capture of the current executable.");
-  virtual void TriggerCapture() = 0;
+  DOCUMENT(R"(Launches a capture of the current executable.
+
+:return: The connection window if successful, or ``None`` if no connection was made.
+:rtype: CaptureConnection
+)");
+  virtual ICaptureConnection *Launch() = 0;
 
   DOCUMENT(R"(Loads settings from a file and applies them. See :meth:`SetSettings`.
 
@@ -1228,13 +1539,19 @@ QWidget.
 )");
   virtual QWidget *Widget() = 0;
 
-  DOCUMENT(R"(Sets the current script in the python shell to the given string.
+  DOCUMENT(R"(Checks if there are unsaved changes to python scripts, and prompts the user about whether to
+discard them or not.
 
-:param str script: The text of the script to set.
+If it is OK to close the window (either because there are no unsaved changes, they were saved after a prompt,
+or the user chose to discard them then this function returns ``True``.
+
+:return: Whether or not it is OK to close without losing changes.
+:rtype: bool
 )");
-  virtual void SetScriptText(rdcstr script) = 0;
+  virtual bool CheckUnsavedChanges() = 0;
 
-  DOCUMENT(R"(Sets the current script in the python shell to the contents of the given file.
+  DOCUMENT(R"(Loads the given file and creates a new tab with the script contents. No tab is
+created if the file fails to load
 
 :param str filename: The filename of the script to load.
 :return: Whether or not the script was successfully loaded.
@@ -1242,7 +1559,14 @@ QWidget.
 )");
   virtual bool LoadScriptFromFilename(rdcstr filename) = 0;
 
-  DOCUMENT(R"(Returns the current script text.
+  DOCUMENT(R"(Creates a new script editor with a given name and text contents.
+
+:param str name: The name to give the editor, does not have to be a filename.
+:param str text: The contents to start with in the editor, can be blank.
+)");
+  virtual void CreateNewScriptEditor(rdcstr name, rdcstr text) = 0;
+
+  DOCUMENT(R"(Returns the text of the currently focussed script editor.
 
 :return: The current script text.
 :rtype: str
@@ -1252,6 +1576,62 @@ QWidget.
   DOCUMENT(R"(Runs the current script in the python shell.
 )");
   virtual void RunScript() = 0;
+
+  DOCUMENT(R"(Tries to launch a python debugger to attach to the current process, in the context
+of a given extension.
+
+Returns immediately if a debugger is already connected, or is not supported.
+
+If the extension name is not a loaded extension, no debugger will be launched.
+
+.. note::
+  The extension name is only used if a new debugger instance is launched, it will target that
+  particular extension's source location. An attached python debugger can debug all python code
+  in the instance.
+
+:param str extensionName: The package name of the extension to use as context for launching a
+  debugger program.
+)");
+  virtual void AttachDebugger(const rdcstr &extensionName) = 0;
+
+  DOCUMENT(R"(Sets the filter on the output panel to only show output from the given extension.
+
+If the extension does not exist or is not loaded, no change will be made to the output filter.
+
+:param str extensionName: The package name of the extension to show output from.
+)");
+  virtual void SetExtensionOutputFilter(const rdcstr &extensionName) = 0;
+
+  DOCUMENT(R"(Sets the filter on the output panel to only show output from scripts run.
+
+This will hide any output from extensions that are loaded, and only show output that comes from the script
+run from inside the python window.
+)");
+  virtual void SetScriptOutputFilter() = 0;
+
+  DOCUMENT(R"(Sets the filter on the output panel to show output from all python sources.
+
+This will show output from the running script, as well as any extensions that are loaded.
+)");
+  virtual void RemoveOutputFilter() = 0;
+
+  DOCUMENT(R"(Raises the output panel.
+
+This will ensure the panel showing the output from running python code is visible.
+)");
+  virtual void ShowOutput() = 0;
+
+  DOCUMENT(R"(Raises the REPL panel.
+
+This will ensure the panel with the interactive REPL is visible.
+)");
+  virtual void ShowREPL() = 0;
+
+  DOCUMENT(R"(Raises the help panel.
+
+This will ensure the panel showing the help browser is visible.
+)");
+  virtual void ShowHelp() = 0;
 
 protected:
   IPythonShell() = default;
@@ -1322,8 +1702,8 @@ QWidget.
 
   DOCUMENT(R"(Toggles a breakpoint at a given instruction.
 
-:param int instruction: The instruction to toggle breakpoint at. If this is ``-1`` the nearest
-  instruction after the current caret position is used.
+:param int instruction=-1: **Optional parameter**. The instruction to toggle breakpoint at.
+  If this is ``-1`` the nearest instruction after the current caret position is used.
 )");
   virtual void ToggleBreakpointOnInstruction(int32_t instruction = -1) = 0;
 
@@ -1463,7 +1843,11 @@ protected:
 
 DECLARE_REFLECTION_STRUCT(IPixelHistoryView);
 
-DOCUMENT("An interface implemented by any object wanting to be notified of capture events.");
+DOCUMENT(R"(
+CaptureViewer()
+
+An interface implemented by any object wanting to be notified of capture events.
+)");
 struct ICaptureViewer
 {
   DOCUMENT("Called whenever a capture is opened.");
@@ -1509,9 +1893,9 @@ in UI side structures. This manager controls and serialises access to the underl
 
 This manager is retrieved by calling :meth:`CaptureContext.Replay`.
 
-.. function:: InvokeCallback(controller)
+.. function:: ReplayInvokeCallback(controller)
 
-  Not a member function - the signature for any ``InvokeCallback`` callbacks.
+  Not a member function - the signature for any ``ReplayInvokeCallback`` callbacks.
 
   :param renderdoc.ReplayController controller: The controller to access. Must not be cached or
     used after the callback returns.
@@ -1525,7 +1909,7 @@ This manager is retrieved by calling :meth:`CaptureContext.Replay`.
 )");
 struct IReplayManager
 {
-  typedef std::function<void(IReplayController *)> InvokeCallback;
+  typedef std::function<void(IReplayController *)> ReplayInvokeCallback;
   typedef std::function<void(const rdcstr &, const rdcarray<PathEntry> &)> DirectoryBrowseCallback;
 
   DOCUMENT(R"(Delete a capture file, whether local or remote.
@@ -1617,7 +2001,8 @@ blocking fashion on the current thread.
 
 :param bool synchronous: If a capture is open, then ``True`` will use :meth:`BlockInvoke` to call
   the callback. Otherwise if ``False`` then :meth:`AsyncInvoke` will be used.
-:param DirectoryBrowseCallback callback: The function to callback on the replay thread.
+:param Callable[[str, List[renderdoc.PathEntry]], None] callback: The function to callback on the
+  replay thread.
   Callback function signature must match :func:`DirectoryBrowseCallback`.
 )");
   virtual void GetHomeFolder(bool synchronous, DirectoryBrowseCallback callback) = 0;
@@ -1630,7 +2015,8 @@ blocking fashion on the current thread.
 :param str path: The path to query the contents of.
 :param bool synchronous: If a capture is open, then ``True`` will use :meth:`BlockInvoke` to call
   the callback. Otherwise if ``False`` then :meth:`AsyncInvoke` will be used.
-:param DirectoryBrowseCallback callback: The function to callback on the replay thread.
+:param Callable[[str, List[renderdoc.PathEntry]], None] callback: The function to callback on the
+  replay thread.
   Callback function signature must match :func:`DirectoryBrowseCallback`.
 )");
   virtual void ListFolder(const rdcstr &path, bool synchronous, DirectoryBrowseCallback callback) = 0;
@@ -1664,38 +2050,44 @@ This can be used to identify if a command is long-running to display a progress 
 )");
   virtual float GetCurrentProcessingTime() = 0;
 
-  DOCUMENT(R"(Make a tagged non-blocking invoke call onto the replay thread.
+  DOCUMENT(R"(Make a non-blocking invoke call onto the replay thread.
 
-This tagged function is for cases when we might send a request - e.g. to pick a vertex or pixel -
-and want to pre-empt it with a new request before the first has returned. Either because some
+The callback can optionally have a tag provided.
+
+Tags are for cases when we might send a request - e.g. to pick a vertex or pixel -
+and want to preempt it with a new request before the first has returned. Either because some
 other work is taking a while or because we're sending requests faster than they can be
 processed.
 
-The manager processes only the request on the top of the queue, so when a new tagged invoke
-comes in, we remove any other requests in the queue before it that have the same tag.
+If a tag is present the manager processes only the request on the top of the queue, so when a
+new tagged invoke comes in, we remove any other requests in the queue before it that have the same tag.
 
-:param str tag: The tag to identify this callback.
-:param InvokeCallback method: The function to callback on the replay thread.
-  Callback function signature must match :func:`InvokeCallback`.
+If no tag is present, the callback will be processed as normal.
+
+:param Callable[[renderdoc.ReplayController], None] method: The function to callback on the replay thread.
+  Callback function signature must match :func:`ReplayInvokeCallback`.
+:param str tag="": **Optional parameter**. The tag to identify this callback.
 )");
-  virtual void AsyncInvoke(const rdcstr &tag, InvokeCallback method) = 0;
+  virtual void AsyncInvoke(ReplayInvokeCallback method, rdcstr tag = "") = 0;
 
-  DOCUMENT(R"(Make a non-blocking invoke call onto the replay thread.
-
-:param InvokeCallback method: The function to callback on the replay thread.
-  Callback function signature must match :func:`InvokeCallback`.
-)");
-  virtual void AsyncInvoke(InvokeCallback method) = 0;
+#if !defined(SWIG) && !defined(SWIG_GENERATED)
+  // it is convenient for us to have the tag first so a lambda is the last parameter, but this
+  // doesn't fit the python overloads so it's not exposed to swig
+  void AsyncInvoke(const rdcstr &tag, ReplayInvokeCallback method)
+  {
+    return AsyncInvoke(method, tag);
+  }
+#endif
 
   // This is an ugly hack, but we leave BlockInvoke as the last method, so that when the class is
   // extended and the wrapper around BlockInvoke to release the python GIL happens, it picks up the
   // same docstring.
   DOCUMENT(R"(Make a blocking invoke call onto the replay thread.
 
-:param InvokeCallback method: The function to callback on the replay thread.
-  Callback function signature must match :func:`InvokeCallback`.
+:param Callable[[renderdoc.ReplayController], None] method: The function to callback on the replay thread.
+  Callback function signature must match :func:`ReplayInvokeCallback`.
 )");
-  virtual void BlockInvoke(InvokeCallback method) = 0;
+  virtual void BlockInvoke(ReplayInvokeCallback method) = 0;
 
 protected:
   IReplayManager() = default;
@@ -1844,7 +2236,13 @@ enum class CaptureModifications : uint32_t
 
 BITMASK_OPERATORS(CaptureModifications);
 
-DOCUMENT("A description of a bookmark on an event");
+DOCUMENT(R"(
+EventBookmark()
+EventBookmark(other: EventBookmark)
+EventBookmark(eventId: int)
+
+A description of a bookmark on an event
+)");
 struct EventBookmark
 {
   DOCUMENT(R"(The :data:`eventId <renderdoc.APIEvent.eventId>` at which this bookmark is placed.
@@ -1861,6 +2259,7 @@ struct EventBookmark
 
   DOCUMENT("");
   EventBookmark() = default;
+  EventBookmark(const EventBookmark &) = default;
   EventBookmark(uint32_t e) : eventId(e) {}
   bool operator==(const EventBookmark &o) const { return eventId == o.eventId; }
   bool operator!=(const EventBookmark &o) const { return eventId != o.eventId; }
@@ -1900,7 +2299,11 @@ protected:
 
 DECLARE_REFLECTION_STRUCT(IRGPInterop);
 
-DOCUMENT("The capture context that the python script is running in.")
+DOCUMENT(R"(
+The capture context that the python script is running in.
+
+Available as a ``pyrenderdoc`` global variable in any python scripts run from RenderDoc's UI.
+)")
 struct ICaptureContext
 {
   DOCUMENT(R"(Retrieve the absolute path where a given temporary capture should be stored.
@@ -1944,6 +2347,31 @@ time.
   DOCUMENT("Close the currently open capture file.");
   virtual void CloseCapture() = 0;
 
+  //////////////////////////////////////////////////////////////
+  DOCUMENT(R"(Returns a blocking version of :class:`renderdoc.ReplayController`, which provides the
+same interface but will block for all calls and run them on the correct replay thread. This is
+provided only as a convenience to avoid calling :meth:`Replay` to obtain the
+:class:`ReplayManager` and use that to directly invoke asynchronously or synchronously onto the
+replay thread.
+
+This function will return ``None`` if no :class:`renderdoc.ReplayController` is available, for
+example if there is no capture loaded.
+
+The returned object *must not* be used if the capture is closed for any reason. It is strongly
+recommended that you do not cache this object and use it only in local areas of code when needed.
+
+.. warning::
+  Care should be taken to ensure that this object is not confused with any other controller that is
+  non-blocking.
+
+:return: A blocking version of the :class:`renderdoc.ReplayController`.
+:rtype: renderdoc.ReplayController
+)");
+  //////////////////////////////////////////////////////////////
+  // This function is implemented only for python! it will return NULL unconditionally
+  // in C++. You should use Replay() to get IReplayManager and call BlockInvoke()
+  virtual IReplayController *GetBlockingController() = 0;
+
   DOCUMENT(R"(Imports a capture file from a non-native format, via conversion to temporary rdc.
 
 This converts the file to a specified temporary .rdc and loads it, closing any existing capture.
@@ -1976,7 +2404,7 @@ The capture must be available locally, if it's not this function will fail.
   :meth:`CaptureViewer.OnSelectedEventChanged` for more information.
 :param int eventId: The new current :data:`eventId <renderdoc.APIEvent.eventId>`. See
   :meth:`CaptureViewer.OnEventChanged` for more information.
-:param bool force: Optional parameter, if ``True`` then the replay will 'move' even if it is moving
+:param bool force=False: **Optional parameter**. if ``True`` then the replay will 'move' even if it is moving
   to the same :data:`eventId <renderdoc.APIEvent.eventId>` as it's currently on.
 )");
   virtual void SetEventID(const rdcarray<ICaptureViewer *> &exclude, uint32_t selectedEventId,
@@ -2006,7 +2434,7 @@ been made.
   DOCUMENT(R"(Register that a resource has replaced, so that the UI can be updated to reflect the
 change.
 
-This should be called at the same time as :meth:`ReplayController.ReplaceResource`.
+This should be called at the same time as :meth:`~renderdoc.ReplayController.ReplaceResource`.
 
 :param renderdoc.ResourceId from: The id of the resource being replaced.
 :param renderdoc.ResourceId to: The id of the resource replacing it.
@@ -2016,9 +2444,9 @@ This should be called at the same time as :meth:`ReplayController.ReplaceResourc
   DOCUMENT(R"(Register that a replacement has been removed, so that the UI can be updated to reflect
 the change.
 
-This should be called at the same time as :meth:`ReplayController.RemoveReplacement`.
+This should be called at the same time as :meth:`~renderdoc.ReplayController.RemoveReplacement`.
 
-See :meth:`ReplaceResource`.
+See :meth:`RegisterReplacement`.
 
 :param renderdoc.ResourceId id: The id of the original resource that was previously replaced.
 )");
@@ -2110,14 +2538,14 @@ the UI which aren't reflected in the capture file on disk.
 :return: The frame information.
 :rtype: renderdoc.FrameDescription
 )");
-  virtual const FrameDescription &FrameInfo() = 0;
+  virtual FrameDescription FrameInfo() = 0;
 
   DOCUMENT(R"(Retrieve the :class:`~renderdoc.APIProperties` for the currently loaded capture.
 
 :return: The API properties.
 :rtype: renderdoc.APIProperties
 )");
-  virtual const APIProperties &APIProps() = 0;
+  virtual APIProperties APIProps() = 0;
 
   DOCUMENT(R"(Retrieve the list of :class:`~renderdoc.ShaderEncoding` that are available for
 building target shaders for the currently loaded capture. See
@@ -2435,8 +2863,8 @@ combination with :meth:`DebugMessages` and :meth:`AddMessages` to filter the cur
 
 Examples of fields are:
 
-* 'comments' for generic comments to be displayed in a text field
-* 'hwinfo' for a plaintext summary of the hardware and driver configuration of the system.
+* ``comments`` for generic comments to be displayed in a text field
+* ``hwinfo`` for a plaintext summary of the hardware and driver configuration of the system.
 
 :param str key: The name of the notes field to retrieve.
 :return: The contents, or an empty string if the field doesn't exist.
@@ -2511,6 +2939,21 @@ by calling :meth:`EmbedDependentFiles`.
 )");
   virtual void RemoveDependentFiles() = 0;
 
+  DOCUMENT(R"(Invoke a callback on the UI thread. All widget accesses must come from the UI thread,
+so if work has been done on the render thread then this function can be used to asynchronously and
+safely go back to the UI thread.
+
+This function is safe to call on the UI thread, but it will synchronously call the callback
+immediately before returning.
+
+.. note::
+  No parameters are provided to the callback, it is assumed that the callback will maintain its own
+  context as needed.
+
+:param Callable[[], None] callback: The callback to invoke on the UI thread.
+)");
+  virtual void InvokeOntoUIThread(std::function<void()> callback) = 0;
+
   DOCUMENT(R"(Registers a delayed callback to be called after a certain number of milliseconds
 on the UI thread.
 
@@ -2582,7 +3025,7 @@ on the UI thread.
 )");
   virtual IDebugMessageView *GetDebugMessageView() = 0;
 
-  DOCUMENT(R"(Retrieve the current singleton :class:`LogView`.
+  DOCUMENT(R"(Retrieve the current singleton :class:`DiagnosticLogView`.
 
 :return: The current window, which is created (but not shown) it there wasn't one open.
 :rtype: DiagnosticLogView
@@ -2788,12 +3231,13 @@ place if needed.
 :param renderdoc.KnownShaderTool knownTool: The preferred tool to use to compile, if known.
 :param renderdoc.ShaderEncoding shaderEncoding: The encoding of the input files.
 :param renderdoc.ShaderCompileFlags flags: The flags originally used to compile the shader.
-:param ShaderViewer.SaveCallback saveCallback: The callback function to call when a save/update is
-  triggered.
-  Callback function signature must match :func:`ShaderViewer.SaveCallback`.
-:param ShaderViewer.RevertCallback revertCallback: The callback function to call when the shader
-  is to be reverted - either by user request or because the shader viewer was closed.
-  Callback function signature must match :func:`ShaderViewer.RevertCallback`.
+:param Callable[[CaptureContext,ShaderViewer,renderdoc.ResourceId,renderdoc.ShaderStage,renderdoc.ShaderEncoding,renderdoc.ShaderCompileFlags, str, bytes], None] saveCallback: The
+  callback function to call when a save/update is triggered.
+  Callback function signature must match :func:`SaveCallback`.
+:param Callable[[CaptureContext, ShaderViewer, renderdoc.ResourceId], None] revertCallback: The
+  callback function to call when the shader is to be reverted - either by user request or because
+  the shader viewer was closed.
+  Callback function signature must match :func:`RevertCallback`.
 :return: The new :class:`ShaderViewer` window opened but not shown for editing.
 :rtype: ShaderViewer
 )");
@@ -2869,7 +3313,7 @@ This function should not be used to view the entirety of a descriptor store - in
 :param int byteOffset: The offset in bytes to the start of the buffer data to show.
 :param int byteSize: The number of bytes in the buffer to show.
 :param renderdoc.ResourceId id: The ID of the buffer to fetch data from.
-:param str format: Optionally a HLSL/GLSL style formatting string.
+:param str format="": **Optional parameter**. A HLSL/GLSL style formatting string.
 :return: The new :class:`BufferViewer` window opened, but not shown.
 :rtype: BufferViewer
 )");
@@ -2881,7 +3325,7 @@ bytes.
 
 :param renderdoc.ResourceId id: The ID of the texture itself.
 :param renderdoc.Subresource sub: The subresource within this texture to use.
-:param str format: Optionally a HLSL/GLSL style formatting string.
+:param str format="": **Optional parameter**. A HLSL/GLSL style formatting string.
 :return: The new :class:`BufferViewer` window opened, but not shown.
 :rtype: BufferViewer
 )");
@@ -2948,7 +3392,7 @@ currently docked.
 :param DockReference ref: The location to add the new window, possibly relative to ``refWindow``.
 :param QWidget refWindow: The window to refer to if the new window is being added relative, or can
   be ``None`` if the new location is absolute.
-:param float percentage: Optionally the percentage to split the area. If omitted, a 50% split is
+:param float percentage=0.5: **Optional parameter**. The percentage to split the area. If omitted, a 50% split is
   used.
 )");
   virtual void AddDockWindow(QWidget *newWindow, DockReference ref, QWidget *refWindow,
@@ -3004,12 +3448,12 @@ capture's API.
 )");
   virtual const PipeState &CurPipelineState() = 0;
 
-  DOCUMENT(R"(Retrieve the current persistant config.
+  DOCUMENT(R"(Retrieve the current persistent config.
 
-:return: The current persistant config manager.
-:rtype: PersistantConfig
+:return: The current persistent config manager.
+:rtype: PersistentConfig
 )");
-  virtual PersistantConfig &Config() = 0;
+  virtual PersistentConfig &Config() = 0;
 
   DOCUMENT(R"(Retrieve the manager for extensions.
 
@@ -3020,7 +3464,7 @@ capture's API.
 
 protected:
   ICaptureContext() = default;
-  ~ICaptureContext() = default;
+  virtual ~ICaptureContext() = default;
 };
 
 DECLARE_REFLECTION_STRUCT(ICaptureContext);

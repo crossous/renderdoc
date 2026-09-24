@@ -31,7 +31,7 @@ Injecting into a Process
 
 It is possible to inject to an already running process as long as it hasn't yet initialised a graphics API. By selecting :guilabel:`File` → :guilabel:`Inject to Process`, the capture dialog will modify to list the running processes rather than asking for an executable and command line parameters.
 
-This can be useful if launching your application from a single exe is non-trivial and it's easier to inject into the process after it has been launched.
+This can be useful if launching your application from a single executable file is non-trivial and it's easier to inject into the process after it has been launched.
 
 .. figure:: ../imgs/Screenshots/Injecting.png
 

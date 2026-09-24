@@ -526,10 +526,14 @@ void SanitiseOldImageLayout(VkImageLayout &layout)
   // we can't transition to PREINITIALIZED, so instead use GENERAL. This allows host access so we
   // can still replay maps of the image's memory. In theory we can still transition from
   // PREINITIALIZED on replay, but consider that we need to be able to reset layouts and suddenly we
-  // have a problem transitioning from PREINITIALIZED more than once - so for that reason we
-  // instantly promote any images that are PREINITIALIZED to GENERAL at the start of the frame
-  // capture, and from then on treat it as the same
+  // have a problem transitioning from PREINITIALIZED more than once.
+  // We lose the PREINITIALIZED layout when initial contents are first applied, and from then on
+  // play pretend and leave it in GENERAL.
   if(layout == VK_IMAGE_LAYOUT_PREINITIALIZED)
+    layout = VK_IMAGE_LAYOUT_GENERAL;
+
+  // same applies to ZERO_INITIALIZED
+  if(layout == VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT)
     layout = VK_IMAGE_LAYOUT_GENERAL;
 }
 
@@ -1039,6 +1043,8 @@ rdcstr HumanDriverName(VkDriverId driverId)
     case VK_DRIVER_ID_MESA_HONEYKRISP: return "Mesa Honeykrisp";
     case VK_DRIVER_ID_VULKAN_SC_EMULATION_ON_VULKAN: return "Vulkan SC Emulation on Vulkan";
     case VK_DRIVER_ID_MESA_KOSMICKRISP: return "Mesa Kosmickrisp";
+    case VK_DRIVER_ID_MESA_GFXSTREAM: return "Mesa gfxstream";
+    case VK_DRIVER_ID_APE_SOFT: return "Ape Vulkan ICD";
     case VK_DRIVER_ID_MAX_ENUM: break;
   }
 

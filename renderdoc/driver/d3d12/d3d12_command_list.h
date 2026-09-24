@@ -227,11 +227,11 @@ public:
   D3D12ResourceRecord *GetResourceRecord() { return m_ListRecord; }
   D3D12ResourceRecord *GetCreationRecord() { return m_CreationRecord; }
 
-  void FinaliseExecuteIndirectEvents(BakedCmdListInfo &info, BakedCmdListInfo::ExecuteData &exec);
-  void SaveExecuteIndirectParameters(ID3D12GraphicsCommandListX *list,
-                                     ID3D12CommandSignature *pCommandSignature, UINT MaxCommandCount,
-                                     ID3D12Resource *pArgumentBuffer, UINT64 ArgumentBufferOffset,
-                                     ID3D12Resource *pCountBuffer, UINT64 CountBufferOffset);
+  void FinaliseExecuteIndirectEvents(BakedCmdListInfo &info, size_t nodeIdx);
+  D3D12ExecuteData SaveExecuteIndirectParameters(
+      ID3D12GraphicsCommandListX *list, ID3D12CommandSignature *pCommandSignature,
+      UINT MaxCommandCount, ID3D12Resource *pArgumentBuffer, UINT64 ArgumentBufferOffset,
+      ID3D12Resource *pCountBuffer, UINT64 CountBufferOffset);
   void ResetAndRecordExecuteIndirectStates(ID3D12GraphicsCommandListX *list, uint32_t baseEventID,
                                            uint32_t execCount,
                                            ID3D12CommandSignature *pCommandSignature,

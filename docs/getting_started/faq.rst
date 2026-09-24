@@ -47,7 +47,7 @@ In particular I'm used to working with people who have strong NDA protection ove
 How can I associate RenderDoc's file extensions with the program?
 -----------------------------------------------------------------
 
-On Windows if you installed RenderDoc via the msi installer, the option is available there to associate RenderDoc's file extensions with the program.
+On Windows if you installed RenderDoc via the ``msi`` installer, the option is available there to associate RenderDoc's file extensions with the program.
 
 On linux the binary tarball comes with files to place under ``/usr/share`` to associate RenderDoc with files. This obviously also requires ``qrenderdoc`` to be available in your ``PATH``.
 
@@ -125,7 +125,7 @@ For other textures it's more difficult - for starters they may actually contain 
 
 Nothing is actually wrong here except perhaps that when visualising linear data it is often more convenient to "over-correct" such that the data is perceptually linear. A good example to use is a normal map: The classic deep blue of (127,127,255) flat normals is technically incorrect as everyone is used to visualising these textures in programs that display the data as if it were sRGB (which is the convention for normal images that do not represent vectors).
 
-You can override this behaviour on any texture that isn't listed as explicitly sRGB with the gamma (γ) button - toggle this off and the over-correction will be disabled.
+You can override this behaviour on any texture that isn't listed as explicitly sRGB with the gamma (``γ``) button - toggle this off and the over-correction will be disabled.
 
 RenderDoc makes my bug go away! Or causes new artifacts that weren't there
 --------------------------------------------------------------------------

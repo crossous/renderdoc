@@ -1663,7 +1663,7 @@ DXBC::Reflection *Program::BuildReflection()
       }
     }
     if(!Files.empty())
-      m_CompileFlags.flags.push_back({"preferSourceDebug", "1"});
+      m_SourceInfo = true;
   }
 
   if(dx.source.args && dx.source.args->children.size() == 1)
@@ -1875,7 +1875,7 @@ rdcstr Program::GetDebugStatus()
               case DXOp::TextureGatherRaw:
                 // Gather raw elements from 4 texels with no type conversions (SRV type is constrained)
 
-              // SM 6.8 : when SM6.8 is supporting by RenderDoc
+              // SM 6.8
               case DXOp::StartVertexLocation:
                 // SV_BaseVertexLocation
                 // BaseVertexLocation from DrawIndexedInstanced or StartVertexLocation from DrawInstanced
@@ -1884,6 +1884,10 @@ rdcstr Program::GetDebugStatus()
                 // StartInstanceLocation from Draw*Instanced
               case DXOp::BarrierByMemoryType:
               case DXOp::BarrierByMemoryHandle:
+
+              // SM 6.9 - could be used with normal vectors
+              case DXOp::RawBufferVectorLoad:
+              case DXOp::RawBufferVectorStore:
 
               // No plans to implement
 
@@ -1911,6 +1915,11 @@ rdcstr Program::GetDebugStatus()
               case DXOp::TempRegStore:
               case DXOp::MinPrecXRegLoad:
               case DXOp::MinPrecXRegStore:
+
+              // long vectors
+              case DXOp::VectorReduceAnd:
+              case DXOp::VectorReduceOr:
+              case DXOp::FDot:
 
               // Mesh Shaders
               case DXOp::SetMeshOutputCounts:
@@ -2005,6 +2014,35 @@ rdcstr Program::GetDebugStatus()
               case DXOp::RayQuery_CandidateInstanceContributionToHitGroupIndex:
               case DXOp::RayQuery_CommittedInstanceContributionToHitGroupIndex:
               case DXOp::GeometryIndex:
+              case DXOp::AllocateRayQuery2:
+              case DXOp::HitObject_TraceRay:
+              case DXOp::HitObject_FromRayQuery:
+              case DXOp::HitObject_FromRayQueryWithAttrs:
+              case DXOp::HitObject_MakeMiss:
+              case DXOp::HitObject_MakeNop:
+              case DXOp::HitObject_Invoke:
+              case DXOp::MaybeReorderThread:
+              case DXOp::HitObject_IsMiss:
+              case DXOp::HitObject_IsHit:
+              case DXOp::HitObject_IsNop:
+              case DXOp::HitObject_RayFlags:
+              case DXOp::HitObject_RayTMin:
+              case DXOp::HitObject_RayTCurrent:
+              case DXOp::HitObject_WorldRayOrigin:
+              case DXOp::HitObject_WorldRayDirection:
+              case DXOp::HitObject_ObjectRayOrigin:
+              case DXOp::HitObject_ObjectRayDirection:
+              case DXOp::HitObject_ObjectToWorld3x4:
+              case DXOp::HitObject_WorldToObject3x4:
+              case DXOp::HitObject_GeometryIndex:
+              case DXOp::HitObject_InstanceIndex:
+              case DXOp::HitObject_InstanceID:
+              case DXOp::HitObject_PrimitiveIndex:
+              case DXOp::HitObject_HitKind:
+              case DXOp::HitObject_ShaderTableIndex:
+              case DXOp::HitObject_SetShaderTableIndex:
+              case DXOp::HitObject_LoadLocalRootTableConstant:
+              case DXOp::HitObject_Attributes:
 
               // Workgraphs
               case DXOp::AllocateNodeOutputRecords:
@@ -2048,6 +2086,34 @@ rdcstr Program::GetDebugStatus()
           break;
         }
         default: break;
+      }
+    }
+  }
+
+  // Check the reflection for unbounded CBV resources
+  DXMeta dx(m_NamedMeta);
+  if(dx.resources)
+  {
+    RDCASSERTEQUAL(dx.resources->children.size(), 1);
+
+    const Metadata *resList = dx.resources->children[0];
+    RDCASSERTEQUAL(resList->children.size(), 4);
+
+    const Metadata *CBVs = resList->children[2];
+    if(CBVs)
+    {
+      for(const Metadata *r : CBVs->children)
+      {
+        uint32_t bindCount = getival<uint32_t>(r->children[(size_t)ResField::RegCount]);
+        if(bindCount == UINT32_MAX)
+        {
+          const rdcstr &name = r->children[(size_t)ResField::Name]->str;
+          uint32_t space = getival<uint32_t>(r->children[(size_t)ResField::Space]);
+          uint32_t regBase = getival<uint32_t>(r->children[(size_t)ResField::RegBase]);
+          return StringFormat::Fmt(
+              "Unsupported unbounded ConstantBuffer array '%s' Space:%d Register:%d", name.c_str(),
+              space, regBase);
+        }
       }
     }
   }

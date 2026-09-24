@@ -575,7 +575,15 @@ void DoSerialise(SerialiserType &ser, D3D11_RENDER_TARGET_BLEND_DESC &el)
   SERIALISE_MEMBER(SrcBlendAlpha);
   SERIALISE_MEMBER(DestBlendAlpha);
   SERIALISE_MEMBER(BlendOpAlpha);
-  SERIALISE_MEMBER_TYPED(D3D11_COLOR_WRITE_ENABLE, RenderTargetWriteMask);
+
+  // D3D11_COLOR_WRITE_ENABLE is 4 bytes but RenderTargetWriteMask is 1 byte,
+  // so we can't use SERIALISE_MEMBER_TYPED() directly - it will read padding
+  // serialising it like this will be backwards compatible (we always serialised a
+  // D3D11_COLOR_WRITE_ENABLE) but newly serialised captures will not include garbage bytes
+  D3D11_COLOR_WRITE_ENABLE mask = (D3D11_COLOR_WRITE_ENABLE)el.RenderTargetWriteMask;
+  SERIALISE_ELEMENT(mask).Named("RenderTargetWriteMask"_lit);
+  if(ser.IsReading())
+    el.RenderTargetWriteMask = mask & 0xff;
 }
 
 template <class SerialiserType>
@@ -591,7 +599,15 @@ void DoSerialise(SerialiserType &ser, D3D11_RENDER_TARGET_BLEND_DESC1 &el)
   SERIALISE_MEMBER(DestBlendAlpha);
   SERIALISE_MEMBER(BlendOpAlpha);
   SERIALISE_MEMBER(LogicOp);
-  SERIALISE_MEMBER_TYPED(D3D11_COLOR_WRITE_ENABLE, RenderTargetWriteMask);
+
+  // D3D11_COLOR_WRITE_ENABLE is 4 bytes but RenderTargetWriteMask is 1 byte,
+  // so we can't use SERIALISE_MEMBER_TYPED() directly - it will read padding
+  // serialising it like this will be backwards compatible (we always serialised a
+  // D3D11_COLOR_WRITE_ENABLE) but newly serialised captures will not include garbage bytes
+  D3D11_COLOR_WRITE_ENABLE mask = (D3D11_COLOR_WRITE_ENABLE)el.RenderTargetWriteMask;
+  SERIALISE_ELEMENT(mask).Named("RenderTargetWriteMask"_lit);
+  if(ser.IsReading())
+    el.RenderTargetWriteMask = mask & 0xff;
 }
 
 template <class SerialiserType>

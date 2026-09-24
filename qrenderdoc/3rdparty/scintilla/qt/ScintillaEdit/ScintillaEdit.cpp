@@ -689,6 +689,22 @@ bool ScintillaEdit::autoCActive() {
     return send(SCI_AUTOCACTIVE, 0, 0);
 }
 
+sptr_t ScintillaEdit::autoCRectLeft() const {
+    return send(SCI_AUTOCGETRECTLEFT, 0, 0);
+}
+
+sptr_t ScintillaEdit::autoCRectRight() const {
+    return send(SCI_AUTOCGETRECTRIGHT, 0, 0);
+}
+
+sptr_t ScintillaEdit::autoCRectTop() const {
+    return send(SCI_AUTOCGETRECTTOP, 0, 0);
+}
+
+sptr_t ScintillaEdit::autoCRectBottom() const {
+    return send(SCI_AUTOCGETRECTBOTTOM, 0, 0);
+}
+
 sptr_t ScintillaEdit::autoCPosStart() {
     return send(SCI_AUTOCPOSSTART, 0, 0);
 }

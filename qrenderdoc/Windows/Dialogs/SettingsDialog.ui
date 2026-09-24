@@ -717,6 +717,152 @@ After interop is enabled you will need to reload any capture.</string>
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="pythonTab">
+      <attribute name="title">
+       <string>Python</string>
+      </attribute>
+      <layout class="QHBoxLayout" name="horizontalLayout_7">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="groupBox_11">
+         <property name="title">
+          <string>Python</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_10">
+          <item row="0" column="0">
+           <widget class="QLabel" name="Python_StubPathsLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Extra python stubs paths</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QPushButton" name="Python_StubPaths">
+            <property name="text">
+             <string>Python Stub Paths</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="Python_DebugEnabledLabel">
+            <property name="text">
+             <string>Enable python debugging (restart required)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QCheckBox" name="Python_DebugEnabled">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0" colspan="2">
+           <widget class="QLabel" name="Python_DebugPyDirLabel">
+            <property name="text">
+             <string>Location of custom debugpy module for debugging</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLineEdit" name="Python_DebugPyDir"/>
+          </item>
+          <item row="3" column="1">
+           <widget class="QPushButton" name="Python_DebugPyDirBrowse">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="Python_LaunchVSCodeLabel">
+            <property name="text">
+             <string>Launch VS Code for debugging</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QCheckBox" name="Python_LaunchVSCode">
+            <property name="toolTip">
+             <string>When debugging a python script or UI extension, launch new instance of VS Code.
+
+If disabled, debugging will do nothing and wait for a debugger connection.</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="2">
+           <widget class="QLabel" name="Python_VSCodePathLabel">
+            <property name="text">
+             <string>Location of VSCode 'code' executable</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0">
+           <widget class="QLineEdit" name="Python_VSCodePath"/>
+          </item>
+          <item row="6" column="1">
+           <widget class="QPushButton" name="Python_VSCodePathBrowse">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="0">
+           <widget class="QLabel" name="Python_PromptReloadUnchangedLabel">
+            <property name="text">
+             <string>Prompt for reload unmodified scripts with changes from disk</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="1">
+           <widget class="QCheckBox" name="Python_PromptReloadUnchanged">
+            <property name="toolTip">
+             <string>If a script open in the python editor has changes on disk but has not been modified in the UI,
+prompt when reloading from disk.</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0" colspan="2">
+           <spacer name="verticalSpacer_9">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>387</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
      <widget class="QWidget" name="replayTab">
       <attribute name="title">
        <string>Replay</string>

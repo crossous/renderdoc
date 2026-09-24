@@ -11,7 +11,7 @@ class D3D12_AMD_Shader_Extensions(rdtest.TestCase):
             action = self.find_action(pass_type + " Draw")
 
             if action is not None:
-                self.controller.SetFrameEvent(action.next.eventId, False)
+                self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
                 pipe = self.controller.GetPipelineState()
                 tex = pipe.GetOutputTargets()[0].resource
@@ -39,7 +39,7 @@ class D3D12_AMD_Shader_Extensions(rdtest.TestCase):
 
                 action = self.find_action(pass_type + " Dispatch")
 
-                self.controller.SetFrameEvent(action.next.eventId, False)
+                self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
                 # find the cpuMax and gpuMax actions
                 cpuMax = self.find_action(pass_type + " cpuMax")

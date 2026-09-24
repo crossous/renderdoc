@@ -160,13 +160,6 @@ int RDTweakedNativeStyle::styleHint(StyleHint stylehint, const QStyleOption *opt
 QIcon RDTweakedNativeStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption *opt,
                                          const QWidget *widget) const
 {
-  if(standardIcon == QStyle::SP_TitleBarCloseButton)
-  {
-    int sz = pixelMetric(QStyle::PM_SmallIconSize);
-
-    return QIcon(QPixmap(QSize(sz, sz)));
-  }
-
   return QProxyStyle::standardIcon(standardIcon, opt, widget);
 }
 

@@ -184,22 +184,9 @@ jobs:
         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
       shell: powershell
 
-      # try powershell command from https://github.com/actions/runner-images/issues/9873#issuecomment-2139288682
     - if: matrix.toolset == 'v140'
-      name: Install VC.140 components
-      run: |
-        Set-Location "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
-        $InstallPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
-        $componentsToRemove= @(
-        "Microsoft.VisualStudio.Component.VC.140"
-        "Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL"
-        )
-        [string]$workloadArgs = $componentsToRemove | ForEach-Object {" --add " +  $_}
-        $Arguments = ('/c', "vs_installer.exe", 'modify', '--installPath', "`"$InstallPath`"",$workloadArgs, '--quiet', '--norestart', '--nocache')
-        # should be run twice
-        $process = Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
-        $process = Start-Process -FilePath cmd.exe -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
-      shell: powershell
+      name: Install V140 toolset via VS2022
+      run: winget install Microsoft.VisualStudio.2022.Community --accept-source-agreements --accept-package-agreements --silent --override "--wait --quiet --add ProductLang En-us --add Microsoft.VisualStudio.Component.VC.140"
 
     - if: matrix.toolset == 'v140'
       name: Show installed toolsets
@@ -209,74 +196,6 @@ jobs:
         echo "--- VC140:"
         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
       shell: powershell
-
-#       # try install-vs-components python script
-#     - if: matrix.toolset == 'v140'
-#       name: Install missing Visual Studio components
-#       run: python .github/workflows/install-vs-components.py
-# 
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: |
-#         echo "--- All:"
-#         Get-VSSetupInstance -All
-#         echo "--- VC140:"
-#         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
-#       shell: powershell
-# 
-#       # try command from https://github.com/actions/runner-images/issues/9873#issuecomment-2833115951
-#     - if: matrix.toolset == 'v140'
-#       name: Install missing Visual Studio components
-#       run: |
-#         Set-Location "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
-#         $VsInstallPath = vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-#         [string]$ComponentsToAdd = @(
-#         "Microsoft.VisualStudio.Component.VC.14.29.16.11.ATL"
-#         "Microsoft.VisualStudio.Component.VC.140"
-#         ) | ForEach-Object {"--add $_"}
-#         $ArgumentList = ('modify', '--installPath', "`"$VsInstallPath`"", $ComponentsToAdd, '--quiet', '--norestart', '--nocache')
-#         echo "vs_installer.exe $($ArgumentList -join ' ')"
-#         # should be run twice for some reason
-#         Start-Process -FilePath vs_installer.exe -ArgumentList $ArgumentList -Wait -PassThru -WindowStyle Hidden
-#         Start-Process -FilePath vs_installer.exe -ArgumentList $ArgumentList -Wait -PassThru -WindowStyle Hidden
-#       shell: powershell
-# 
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: |
-#         echo "--- All:"
-#         Get-VSSetupInstance -All
-#         echo "--- VC140:"
-#         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
-#       shell: powershell
-# 
-#       # try winget
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: winget install --accept-package-agreements --accept-source-agreements Microsoft.BuildTools2015
-#     
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: |
-#         echo "--- All:"
-#         Get-VSSetupInstance -All
-#         echo "--- VC140:"
-#         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
-#       shell: powershell
-# 
-#       # try chocolatey
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: choco install visualcppbuildtools
-# 
-#     - if: matrix.toolset == 'v140'
-#       name: Show installed toolsets
-#       run: |
-#         echo "--- All:"
-#         Get-VSSetupInstance -All
-#         echo "--- VC140:"
-#         Get-VSSetupInstance -All | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.140
-#       shell: powershell
 
     - name: Download optional 3rdparty extras
       run: |

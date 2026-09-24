@@ -23,13 +23,12 @@
     <ProjectGuid>{EC8C6087-E99E-44B3-B8DC-3C9FE7907F47}</ProjectGuid>
     <RootNamespace>demos</RootNamespace>
     <ProjectName>demos</ProjectName>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
+  <Import Project="$(SolutionDir)\..\WindowsSDKTarget.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
@@ -40,6 +39,11 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <!-- WindowsSDKFix is relative to parent solution, replicate it here -->
+  <!-- <Import Project="$(SolutionDir)\..\WindowsSDKFix.props" /> -->
+  <PropertyGroup>
+    <IncludePath>$(SolutionDir)\..\sdkfix;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <PropertyGroup>
     <OutDir>$(SolutionDir)</OutDir>
     <IntDir>$(ProjectDir)obj\$(Platform)\$(Configuration)\</IntDir>
@@ -390,6 +394,7 @@
     <ClCompile Include="vk\vk_adv_cbuffer_zoo.cpp" />
     <ClCompile Include="vk\vk_secondary_cmdbuf.cpp" />
     <ClCompile Include="vk\vk_video_textures.cpp" />
+    <ClCompile Include="vk\vk_vrs.cpp" />
     <ClCompile Include="vk\vk_vs_max_desc_set.cpp" />
     <ClCompile Include="vk\vk_simple_triangle.cpp" />
     <ClCompile Include="vk\vk_test.cpp" />

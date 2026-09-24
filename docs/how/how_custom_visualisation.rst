@@ -329,7 +329,7 @@ GLSL
   #endif
 
 
-These resources are bound sparsely with the appropriate type for the current texture. With a couple of exceptions there will only be one texture bound at any one time. Different APIs have different texture type matching requirements, so e.g. OpenGL has separate bindings for array and non-array texures, which will be reflected in the different ``RD_TextureType`` return values.
+These resources are bound sparsely with the appropriate type for the current texture. With a couple of exceptions there will only be one texture bound at any one time. Different APIs have different texture type matching requirements, so e.g. OpenGL has separate bindings for array and non-array textures, which will be reflected in the different ``RD_TextureType`` return values.
 
 When a cubemap texture is bound, it is bound both to the 2D Array as well as the Cube Array. If a depth-stencil texture has both components, the relevant depth and stencil resources will both be bound at once.
 

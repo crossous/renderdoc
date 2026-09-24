@@ -10,7 +10,7 @@ class D3D12_Reflection_Zoo(rdtest.TestCase):
 
         self.check(action is not None)
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -33,7 +33,7 @@ class D3D12_Reflection_Zoo(rdtest.TestCase):
             rdtest.log.print("No SM6.0 DXIL action to test")
             return
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -53,7 +53,7 @@ class D3D12_Reflection_Zoo(rdtest.TestCase):
             rdtest.log.print("No SM6.7 DXIL action to test")
             return
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 

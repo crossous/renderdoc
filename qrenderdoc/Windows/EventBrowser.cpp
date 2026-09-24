@@ -162,7 +162,7 @@ struct EventBrowserPersistentStorage : public CustomPersistentStorage
   QList<QPair<QString, QString>> SavedFilters;
 };
 
-static EventBrowserPersistentStorage persistantStorage("EventBrowser");
+static EventBrowserPersistentStorage persistentStorage("EventBrowser");
 
 enum
 {
@@ -1555,7 +1555,7 @@ public:
     rdcarray<rdcstr> ret;
 
     if(cb)
-      ret = m_BuiltinFilters[filter].completer(&m_Ctx, filter, params);
+      ret = cb(&m_Ctx, filter, params);
 
     QStringList qret;
     for(const rdcstr &s : ret)
@@ -3938,7 +3938,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->filterExpression->enableCompletion();
   ui->filterExpression->setAcceptRichText(false);
 
-  ui->filterExpression->setText(persistantStorage.CurrentFilter);
+  ui->filterExpression->setText(persistentStorage.CurrentFilter);
 
   m_SavedCompleter = new QCompleter(this);
   m_SavedCompleter->setWidget(ui->filterExpression);
@@ -3951,9 +3951,9 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   QObject::connect(m_SavedCompleter, OverloadedSlot<const QModelIndex &>::of(&QCompleter::activated),
                    [this](const QModelIndex &idx) {
                      int i = idx.row();
-                     if(i >= 0 && i < persistantStorage.SavedFilters.count())
+                     if(i >= 0 && i < persistentStorage.SavedFilters.count())
                      {
-                       m_CurrentFilterText->setPlainText(persistantStorage.SavedFilters[i].second);
+                       m_CurrentFilterText->setPlainText(persistentStorage.SavedFilters[i].second);
 
                        QTextCursor c = m_CurrentFilterText->textCursor();
                        c.movePosition(QTextCursor::EndOfLine);
@@ -4179,8 +4179,8 @@ void EventBrowser::events_currentChanged(const QModelIndex &current, const QMode
   if(action && action->IsFakeMarker())
     action = &action->children.back();
 
-  ui->stepPrev->setEnabled(action && action->previous);
-  ui->stepNext->setEnabled(action && action->next);
+  ui->stepPrev->setEnabled(action && action->previousAction);
+  ui->stepNext->setEnabled(action && action->nextAction);
 
   // special case for the first action in the frame
   if(selectedEID == 0)
@@ -4365,7 +4365,7 @@ void EventBrowser::CreateFilterDialog()
     saveName.setPlaceholderText(tr("Name of filter"));
 
     RDListWidget filters;
-    for(const QPair<QString, QString> &f : persistantStorage.SavedFilters)
+    for(const QPair<QString, QString> &f : persistentStorage.SavedFilters)
       filters.addItem(f.first);
 
     QPushButton saveButton;
@@ -4407,9 +4407,9 @@ void EventBrowser::CreateFilterDialog()
                      [&saveButton](QListWidgetItem *) { saveButton.click(); });
 
     QObject::connect(&saveName, &RDLineEdit::textChanged, [&saveName, &filters]() {
-      for(int i = 0; i < persistantStorage.SavedFilters.count(); i++)
+      for(int i = 0; i < persistentStorage.SavedFilters.count(); i++)
       {
-        if(saveName.text().trimmed().toLower() == persistantStorage.SavedFilters[i].first.toLower())
+        if(saveName.text().trimmed().toLower() == persistentStorage.SavedFilters[i].first.toLower())
         {
           if(filters.currentRow() != i)
             filters.setCurrentRow(i);
@@ -4421,19 +4421,19 @@ void EventBrowser::CreateFilterDialog()
     });
 
     QObject::connect(&filters, &QListWidget::currentRowChanged, [&saveName](int row) {
-      if(row >= 0 && row < persistantStorage.SavedFilters.count())
-        saveName.setText(persistantStorage.SavedFilters[row].first);
+      if(row >= 0 && row < persistentStorage.SavedFilters.count())
+        saveName.setText(persistentStorage.SavedFilters[row].first);
     });
 
     QObject::connect(&saveButton, &QPushButton::clicked, [this, dialog, &saveName, &filters]() {
       QString n = saveName.text().trimmed();
       QString f = m_FilterSettings.Filter->toPlainText();
 
-      for(int i = 0; i < persistantStorage.SavedFilters.count(); i++)
+      for(int i = 0; i < persistentStorage.SavedFilters.count(); i++)
       {
-        if(n.toLower() == persistantStorage.SavedFilters[i].first.toLower())
+        if(n.toLower() == persistentStorage.SavedFilters[i].first.toLower())
         {
-          if(persistantStorage.SavedFilters[i].second.trimmed() == f.trimmed())
+          if(persistentStorage.SavedFilters[i].second.trimmed() == f.trimmed())
           {
             dialog->accept();
             return;
@@ -4442,8 +4442,8 @@ void EventBrowser::CreateFilterDialog()
           QMessageBox::StandardButton res = RDDialog::question(
               dialog, tr("Delete filter?"),
               tr("Are you sure you want to overwrite the %1 filter? From:\n\n%2\n\nTo:\n\n%3")
-                  .arg(persistantStorage.SavedFilters[i].first)
-                  .arg(persistantStorage.SavedFilters[i].second)
+                  .arg(persistentStorage.SavedFilters[i].first)
+                  .arg(persistentStorage.SavedFilters[i].second)
                   .arg(f),
               QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 
@@ -4451,12 +4451,12 @@ void EventBrowser::CreateFilterDialog()
             return;
 
           delete filters.takeItem(i);
-          persistantStorage.SavedFilters.erase(persistantStorage.SavedFilters.begin() + i);
+          persistentStorage.SavedFilters.erase(persistentStorage.SavedFilters.begin() + i);
           break;
         }
       }
 
-      persistantStorage.SavedFilters.insert(0, {n, f});
+      persistentStorage.SavedFilters.insert(0, {n, f});
 
       dialog->accept();
     });
@@ -4466,21 +4466,21 @@ void EventBrowser::CreateFilterDialog()
       if(!item)
         return;
 
-      for(int i = 0; i < persistantStorage.SavedFilters.count(); i++)
+      for(int i = 0; i < persistentStorage.SavedFilters.count(); i++)
       {
-        if(item->text().trimmed().toLower() == persistantStorage.SavedFilters[i].first.toLower())
+        if(item->text().trimmed().toLower() == persistentStorage.SavedFilters[i].first.toLower())
         {
           QMessageBox::StandardButton res =
               RDDialog::question(dialog, tr("Delete filter?"),
                                  tr("Are you sure you want to delete the %1 filter?\n\n%2")
-                                     .arg(persistantStorage.SavedFilters[i].first)
-                                     .arg(persistantStorage.SavedFilters[i].second),
+                                     .arg(persistentStorage.SavedFilters[i].first)
+                                     .arg(persistentStorage.SavedFilters[i].second),
                                  QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 
           if(res == QMessageBox::Yes)
           {
             delete filters.takeItem(i);
-            persistantStorage.SavedFilters.erase(persistantStorage.SavedFilters.begin() + i);
+            persistentStorage.SavedFilters.erase(persistentStorage.SavedFilters.begin() + i);
           }
 
           return;
@@ -4535,7 +4535,7 @@ void EventBrowser::CreateFilterDialog()
 
           if(res == QMessageBox::Yes)
           {
-            persistantStorage.SavedFilters = storedFilters.SavedFilters;
+            persistentStorage.SavedFilters = storedFilters.SavedFilters;
           }
         }
         else
@@ -4565,7 +4565,7 @@ void EventBrowser::CreateFilterDialog()
       if(f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
       {
         QVariant v;
-        persistantStorage.save(v);
+        persistentStorage.save(v);
 
         QVariantMap filters = v.toMap();
         SaveToJSON(filters, f, "rdocFilterSet", 1);
@@ -4583,7 +4583,7 @@ void EventBrowser::CreateFilterDialog()
 
   // disable export if there are no filters to export
   QObject::connect(importExportMenu, &QMenu::aboutToShow, [exportAction]() {
-    exportAction->setEnabled(!persistantStorage.SavedFilters.isEmpty());
+    exportAction->setEnabled(!persistentStorage.SavedFilters.isEmpty());
   });
 
   saveFilter->setMenu(importExportMenu);
@@ -4992,7 +4992,7 @@ void EventBrowser::filter_apply()
   ui->events->updateExpansion(m_EventsExpansion, keygen);
 
   QString expression = ui->filterExpression->toPlainText();
-  persistantStorage.CurrentFilter = expression;
+  persistentStorage.CurrentFilter = expression;
 
   rdcarray<EventFilter> filters;
   *m_ParseTrace = m_FilterModel->ParseExpressionToFilters(expression, filters);
@@ -5224,7 +5224,7 @@ void EventBrowser::ShowSavedFilterCompleter(RDTextEdit *filter)
 {
   QStringList strs;
 
-  for(QPair<QString, QString> &f : persistantStorage.SavedFilters)
+  for(QPair<QString, QString> &f : persistentStorage.SavedFilters)
     strs << f.first + lit(": ") + f.second;
 
   m_SavedCompletionModel->setStringList(strs);
@@ -5345,7 +5345,7 @@ void EventBrowser::on_stepNext_clicked()
   const ActionDescription *action = m_Ctx.CurAction();
 
   if(action)
-    action = action->next;
+    action = action->nextAction;
 
   // special case for the first 'virtual' action at EID 0
   if(m_Ctx.CurEvent() == 0)
@@ -5359,7 +5359,7 @@ void EventBrowser::on_stepNext_clicked()
 
     // if it failed, possibly the next action is filtered out. Step along the list until we find one
     // which isn't
-    action = action->next;
+    action = action->nextAction;
   }
 }
 
@@ -5371,7 +5371,7 @@ void EventBrowser::on_stepPrev_clicked()
   const ActionDescription *action = m_Ctx.CurAction();
 
   if(action)
-    action = action->previous;
+    action = action->previousAction;
 
   while(action)
   {
@@ -5381,7 +5381,7 @@ void EventBrowser::on_stepPrev_clicked()
 
     // if it failed, possibly the previous action is filtered out. Step along the list until we find
     // one which isn't
-    action = action->previous;
+    action = action->previousAction;
   }
 
   // special case for the first 'virtual' action at EID 0

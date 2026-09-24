@@ -328,6 +328,10 @@ void ARRAY_INSTANTIATION_CHECK_NAME(typeName)(typeName<innerType> *);
 %typemap(ret) typeName & { ARRAY_INSTANTIATION_CHECK_NAME(typeName)($1); }
 %typemap(ret) typeName   { ARRAY_INSTANTIATION_CHECK_NAME(typeName)(&$1); }
 
+%typemap(out) typeName const & {
+  $result = ConvertToPy(indirect($1));
+}
+
 %enddef
 
 %define NON_TEMPLATE_ARRAY_INSTANTIATE(typeName)

@@ -855,6 +855,9 @@ bool D3D12DebugManager::CreateShaderDebugResources()
     int smMinor = -1;
     for(smMinor = D3D_HIGHEST_SHADER_MODEL & 0xF; smMinor >= 0; smMinor--)
     {
+      if(!m_pDevice->GetOpts14().AdvancedTextureOpsSupported && smMinor >= 7)
+        continue;
+
       D3D_SHADER_MODEL smModel = (D3D_SHADER_MODEL)(smMajor << 4 | smMinor);
       D3D12_FEATURE_DATA_SHADER_MODEL smMaxSupport = {smModel};
       if(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &smMaxSupport,
@@ -862,6 +865,18 @@ bool D3D12DebugManager::CreateShaderDebugResources()
       {
         smMajor = smMaxSupport.HighestShaderModel >> 4;
         smMinor = smMaxSupport.HighestShaderModel & 0xF;
+
+        // make sure we can compile this SM version
+        ID3DBlob *testBlob = NULL;
+        if(m_pDevice->GetShaderCache()->GetShaderBlob(
+               "float4 main() : SV_Target0 { return 0.0f.xxxx; }", "main", 0, {},
+               StringFormat::Fmt("ps_%d_%d", smMajor, smMinor).c_str(), &testBlob) != "")
+        {
+          SAFE_RELEASE(testBlob);
+          continue;
+        }
+        SAFE_RELEASE(testBlob);
+
         break;
       }
     }
@@ -3558,4 +3573,21 @@ void AddDebugDescriptorsToRenderState(WrappedID3D12Device *pDevice, D3D12RenderS
 
   sig.sigelems[sigElem] =
       D3D12RenderState::SignatureElement(eRootTable, newHandle.heap, newHandle.index);
+}
+
+// Does a command signature modify root arguments i.e. setting root constants, updating bindings.
+bool DoesCommandSignatureModifyRootArgs(ID3D12CommandSignature *comSig)
+{
+  WrappedID3D12CommandSignature *rdComSig = (WrappedID3D12CommandSignature *)comSig;
+  for(D3D12_INDIRECT_ARGUMENT_DESC &arg : rdComSig->sig.arguments)
+  {
+    D3D12_INDIRECT_ARGUMENT_TYPE argType = arg.Type;
+    if(argType == D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT ||
+       argType == D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW ||
+       argType == D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW ||
+       argType == D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW ||
+       argType == D3D12_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT)
+      return true;
+  }
+  return false;
 }

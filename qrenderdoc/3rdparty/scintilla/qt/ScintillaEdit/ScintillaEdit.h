@@ -240,6 +240,10 @@ public:
 	sptr_t autoCMaxWidth() const;
 	void autoCSetMaxHeight(sptr_t rowCount);
 	sptr_t autoCMaxHeight() const;
+	sptr_t autoCRectLeft() const;
+	sptr_t autoCRectRight() const;
+	sptr_t autoCRectTop() const;
+	sptr_t autoCRectBottom() const;
 	void setIndent(sptr_t indentSize);
 	sptr_t indent() const;
 	void setUseTabs(bool useTabs);

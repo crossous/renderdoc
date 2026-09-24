@@ -158,6 +158,9 @@ class VulkanHook : LibraryHook
     Process::RegisterEnvironmentModification(
         EnvironmentModification(EnvMod::Set, EnvSep::NoSep, "DISABLE_VK_LAYER_GPUOpen_GRS", "1"));
 
+    Process::RegisterEnvironmentModification(
+        EnvironmentModification(EnvMod::Set, EnvSep::NoSep, "DISABLE_LAYER_NV_PRESENT_1", "1"));
+
     // fpsmon not only has a buggy layer but it also picks an absurdly generic disable environment
     // variable :(. Hopefully no other program picks this, or if it does then it's probably not a
     // bad thing to disable too
@@ -417,6 +420,9 @@ VK_LAYER_RENDERDOC_CaptureEnumerateInstanceExtensionProperties(
 #undef HookInitExtensionEXTtoKHR
 #define HookInitExtensionEXTtoKHR(func) (void)0;
 
+#undef HookInitPromotedExtensionEXTtoKHR
+#define HookInitPromotedExtensionEXTtoKHR(func) (void)0;
+
 // proc addr routines
 
 VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
@@ -529,6 +535,9 @@ VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr(VkInstance instance, const char *p
 #undef HookInitExtensionEXTtoKHR
 #define HookInitExtensionEXTtoKHR(func) (void)0;
 
+#undef HookInitPromotedExtensionEXTtoKHR
+#define HookInitPromotedExtensionEXTtoKHR(func) (void)0;
+
   HookInitVulkanDevice();
 
   HookInitVulkanDeviceExts();
@@ -609,6 +618,9 @@ VK_LAYER_RENDERDOC_Capture_layerGetPhysicalDeviceProcAddr(VkInstance instance, c
 
 #undef HookInitExtensionEXTtoKHR
 #define HookInitExtensionEXTtoKHR(func) (void)0;
+
+#undef HookInitPromotedExtensionEXTtoKHR
+#define HookInitPromotedExtensionEXTtoKHR(func) (void)0;
 
   HookInitVulkanInstanceExts();
   HookInitVulkanDeviceExts();

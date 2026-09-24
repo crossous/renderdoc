@@ -8,9 +8,9 @@ The data is known internally as *structured data* and it can be examined in memo
 In-capture access
 -----------------
 
-The structured data is available through the :doc:`python scripting <../window/python_shell>`. As an example, we look at one function call from a capture:
+The structured data is available through the :doc:`python scripting <../window/python_scripting>`. As an example, we look at one function call from a capture:
 
-First we obtain the :py:class:`APIEvent` that we want to examine, as the last event in an action's list of events and find the chunk index it refers to:
+First we obtain the :class:`~renderdoc.APIEvent` that we want to examine, as the last event in an action's list of events and find the chunk index it refers to:
 
    .. highlight:: python
    .. code:: python

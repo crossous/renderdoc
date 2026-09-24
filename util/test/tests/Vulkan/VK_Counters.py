@@ -20,7 +20,7 @@ class VK_Counters(rdtest.TestCase):
             descs[c] = self.controller.DescribeCounter(c)
 
         action = self.find_action("Draw")
-        durationAction = action.next
+        durationAction = action.nextAction
 
         # filter to only results from the draw
         results = [r for r in results if r.eventId == action.eventId or r.eventId == durationAction.eventId]

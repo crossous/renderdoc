@@ -32,7 +32,7 @@ DOCUMENT(R"(The types of several pre-defined and known sections. This allows con
 to recognise and understand the contents of the section.
 
 Note that sections above the highest value here may be encountered if they were written in a new
-version of RenderDoc that addes a new section type. They should be considered equal to
+version of RenderDoc that added a new section type. They should be considered equal to
 :data:`Unknown` by any processing.
 
 .. data:: Unknown
@@ -44,20 +44,20 @@ version of RenderDoc that addes a new section type. They should be considered eq
   This section contains the actual captured frame, in RenderDoc's internal chunked representation.
   The contents can be fetched as structured data with or without replaying the frame.
 
-  The name for this section will be "renderdoc/internal/framecapture".
+  The name for this section will be ``renderdoc/internal/framecapture``.
 
 .. data:: ResolveDatabase
 
   This section contains platform-specific data used to resolve callstacks.
 
-  The name for this section will be "renderdoc/internal/resolvedb".
+  The name for this section will be ``renderdoc/internal/resolvedb``.
 
 .. data:: Bookmarks
 
   This section contains a JSON document with bookmarks added to the capture to highlight important
   events.
 
-  The name for this section will be "renderdoc/ui/bookmarks".
+  The name for this section will be ``renderdoc/ui/bookmarks``.
 
 .. data:: Notes
 
@@ -65,57 +65,57 @@ version of RenderDoc that addes a new section type. They should be considered eq
   details about how the capture was obtained with repro steps in the original program, or with
   driver and machine info.
 
-  The name for this section will be "renderdoc/ui/notes".
+  The name for this section will be ``renderdoc/ui/notes``.
 
 .. data:: ResourceRenames
 
   This section contains a JSON document with custom names applied to resources in the UI, over and
   above any friendly names specified in the capture itself.
 
-  The name for this section will be "renderdoc/ui/resrenames".
+  The name for this section will be ``renderdoc/ui/resrenames``.
 
 .. data:: AMDRGPProfile
 
   This section contains a .rgp profile from AMD's RGP tool, which can be extracted and loaded.
 
-  The name for this section will be "amd/rgp/profile".
+  The name for this section will be ``amd/rgp/profile``.
 
 .. data:: ExtendedThumbnail
 
   This section contains a thumbnail in format other than JPEG. For example, when it needs to be
   lossless.
 
-  The name for this section will be "renderdoc/internal/exthumb".
+  The name for this section will be ``renderdoc/internal/exthumb``.
 
 .. data:: EmbeddedLogfile
 
   This section contains the log file at the time of capture, for debugging.
 
-  The name for this section will be "renderdoc/internal/logfile".
+  The name for this section will be ``renderdoc/internal/logfile``.
 
 .. data:: EditedShaders
 
   This section contains any edited shaders.
 
-  The name for this section will be "renderdoc/ui/edits".
+  The name for this section will be ``renderdoc/ui/edits``.
 
 .. data:: D3D12Core
 
   This section contains an internal copy of D3D12Core for replaying.
 
-  The name for this section will be "renderdoc/internal/d3d12core".
+  The name for this section will be ``renderdoc/internal/d3d12core``.
 
 .. data:: D3D12SDKLayers
 
   This section contains an internal copy of D3D12SDKLayers for replaying.
 
-  The name for this section will be "renderdoc/internal/d3d12sdklayers".
+  The name for this section will be ``renderdoc/internal/d3d12sdklayers``.
 
 .. data:: EmbeddedExternalFiles
 
   This section contains externally referenced files that have been embedded into the capture.
 
-  The name for this section will be "renderdoc/internal/embeddedexternalfiles".
+  The name for this section will be ``renderdoc/internal/embeddedexternalfiles``.
 )");
 enum class SectionType : uint32_t
 {
@@ -248,22 +248,22 @@ DOCUMENT(R"(Represents the base type of a shader variable in debugging or consta
 .. data:: ConstantBlock
 
   A reference to a constant block bound to the shader. Variables with this type are stored with
-  opaque contents and should be decoded with :meth:`ShaderVariable.GetBinding`.
+  opaque contents and should be decoded with :meth:`ShaderVariable.GetBindIndex`.
 
 .. data:: ReadOnlyResource
 
   A reference to a read only resource bound to the shader. Variables with this type are stored with
-  opaque contents and should be decoded with :meth:`ShaderVariable.GetBinding`.
+  opaque contents and should be decoded with :meth:`ShaderVariable.GetBindIndex`.
 
 .. data:: ReadWriteResource
 
   A reference to a read/write resource bound to the shader. Variables with this type are stored with
-  opaque contents and should be decoded with :meth:`ShaderVariable.GetBinding`.
+  opaque contents and should be decoded with :meth:`ShaderVariable.GetBindIndex`.
 
 .. data:: Sampler
 
   A reference to a sampler bound to the shader. Variables with this type are stored with opaque
-  contents and should be decoded with :meth:`ShaderVariable.GetBinding`.
+  contents and should be decoded with :meth:`ShaderVariable.GetBindIndex`.
 
 .. data:: Unknown
 
@@ -367,8 +367,8 @@ DOCUMENT(R"(Represents the component type of a channel in a texture or element i
 
 .. data:: Depth
 
-  An opaque value storing depth information, either :data:`floating point <float>` for 32-bit depth
-  values or else :data:`unsigned normalised <UNorm>` for other bit sizes.
+  An opaque value storing depth information, either :data:`Float` for 32-bit depth
+  values or else :data:`UNorm` for other bit sizes.
 
 .. data:: UNormSRGB
 
@@ -1094,7 +1094,7 @@ to apply to multiple related things - see :data:`ClipDistance`, :data:`CullDista
 
 .. data:: GroupIndex
 
-  An input in compute shaders giving a 3D index of this current workgroup amongst all workgroups,
+  An input in compute shaders giving a 3D index of this current workgroup among all workgroups,
   up to the dispatch size.
 
   The index is constant across all threads in the workgroup.
@@ -1136,7 +1136,7 @@ to apply to multiple related things - see :data:`ClipDistance`, :data:`CullDista
 .. data:: DomainLocation
 
   An input to the tessellation evaluation or domain shader, giving the normalised location on the
-  output patch where evaluation is occuring. E.g. for triangle output this is the barycentric
+  output patch where evaluation is occurring. E.g. for triangle output this is the barycentric
   co-ordinates of the output vertex.
 
 .. data:: IsFrontFace
@@ -1814,7 +1814,7 @@ or formats that don't have equal byte-multiple sizes for each channel.
 
 .. data:: PVRTC
 
-  PowerVR properitary texture compression format.
+  PowerVR proprietary texture compression format.
 
 .. data:: A8
 
@@ -2030,7 +2030,7 @@ DOCUMENT(R"(Identifies a shader encoding used to pass shader code to an API.
 .. data:: OpenGLSPIRV
 
   SPIR-V binary shader, as used by OpenGL. This format is technically not distinct from
-  :data:`VulkanSPIRV` but is considered unique here since it really *should* have been a different
+  :data:`SPIRV` but is considered unique here since it really *should* have been a different
   format, and introducing a separation allows better selection of tools automatically.
 
 .. data:: OpenGLSPIRVAsm
@@ -2080,32 +2080,32 @@ DOCUMENT(R"(Identifies a particular known tool used for shader processing.
 .. data:: SPIRV_Cross
 
   `SPIRV-Cross <https://github.com/KhronosGroup/SPIRV-Cross>`_
-   targetting normal Vulkan flavoured SPIR-V.
+   targeting normal Vulkan flavoured SPIR-V.
 
 .. data:: SPIRV_Cross_OpenGL
 
   `SPIRV-Cross <https://github.com/KhronosGroup/SPIRV-Cross>`_
-   targetting OpenGL extension flavoured SPIR-V.
+   targeting OpenGL extension flavoured SPIR-V.
 
 .. data:: spirv_dis
 
   `spirv-dis from SPIRV-Tools <https://github.com/KhronosGroup/SPIRV-Tools>`_
-   targetting normal Vulkan flavoured SPIR-V.
+   targeting normal Vulkan flavoured SPIR-V.
 
 .. data:: spirv_dis_OpenGL
 
   `spirv-dis from SPIRV-Tools <https://github.com/KhronosGroup/SPIRV-Tools>`_
-   targetting OpenGL extension flavoured SPIR-V.
+   targeting OpenGL extension flavoured SPIR-V.
 
 .. data:: glslangValidatorGLSL
 
   `glslang compiler (GLSL) <https://github.com/KhronosGroup/glslang>`_
-   targetting normal Vulkan flavoured SPIR-V.
+   targeting normal Vulkan flavoured SPIR-V.
 
 .. data:: glslangValidatorGLSL_OpenGL
 
   `glslang compiler (GLSL) <https://github.com/KhronosGroup/glslang>`_
-   targetting OpenGL extension flavoured SPIR-V.
+   targeting OpenGL extension flavoured SPIR-V.
 
 .. data:: glslangValidatorHLSL
 
@@ -2114,12 +2114,12 @@ DOCUMENT(R"(Identifies a particular known tool used for shader processing.
 .. data:: spirv_as
 
   `spirv-as from SPIRV-Tools <https://github.com/KhronosGroup/SPIRV-Tools>`_
-   targetting normal Vulkan flavoured SPIR-V.
+   targeting normal Vulkan flavoured SPIR-V.
 
 .. data:: spirv_as_OpenGL
 
   `spirv-as from SPIRV-Tools <https://github.com/KhronosGroup/SPIRV-Tools>`_
-   targetting OpenGL extension flavoured SPIR-V.
+   targeting OpenGL extension flavoured SPIR-V.
 
 .. data:: dxcSPIRV
 
@@ -2612,6 +2612,10 @@ DOCUMENT(R"(The stage in a pipeline where a shader runs
 .. data:: Callable
 
   A callable shader, called by shader code via index during ray processing.
+
+.. data:: Invalid
+
+  An invalid/unknown shader stage.
 )");
 enum class ShaderStage : uint8_t
 {
@@ -2644,6 +2648,7 @@ enum class ShaderStage : uint8_t
   Callable,
 
   Count,
+  Invalid = Count,
 };
 
 ITERABLE_OPERATORS(ShaderStage);
@@ -2824,7 +2829,7 @@ Note that a resource may be used for more than one thing in one event, see :clas
 
 .. data:: Unused
 
-  The resource is not being used.
+  The resource is not being tracked for usage at any event.
 
 .. data:: VertexBuffer
 
@@ -3237,6 +3242,32 @@ enum class CullMode : uint32_t
 };
 
 DECLARE_REFLECTION_ENUM(CullMode);
+
+DOCUMENT(R"(The mode for calculating the r least representable value in depth bias.
+
+.. data:: Default
+
+  The default calculation is used which may be vendor-specific and depends on the
+  format of the depth attachment. It may vary across different primitives at
+  different depths.
+
+.. data:: ForceUNorm
+
+  A forced calculation based purely on the bit-size of either the fixed point or
+  floating point mantissa representation in the attachment format.
+
+.. data:: One
+
+  A literal ``1.0`` value is used
+)");
+enum class DepthBiasMode : uint32_t
+{
+  Default = 0,
+  ForceUNorm,
+  One,
+};
+
+DECLARE_REFLECTION_ENUM(DepthBiasMode);
 
 DOCUMENT(R"(The conservative rasterization mode.
 
@@ -4489,7 +4520,7 @@ DOCUMENT(R"(Specifies a windowing system to use for creating an output window.
 
 .. data:: Xlib
 
-  The windowing data refers to an Xlib window. See :func:`CreateXLibWindowingData`.
+  The windowing data refers to an Xlib window. See :func:`CreateXlibWindowingData`.
 
 .. data:: XCB
 
@@ -4731,7 +4762,7 @@ enum class TextureCategory : uint32_t
 BITMASK_OPERATORS(TextureCategory);
 DECLARE_REFLECTION_ENUM(TextureCategory);
 
-DOCUMENT(R"(A set of flags for ``ShaderStage`` stages
+DOCUMENT(R"(A set of flags for :class:`ShaderStage` stages
 
 .. data:: Unknown
 
@@ -4856,7 +4887,7 @@ DOCUMENT(R"(For a shader stage mask that only covers one shader stage, return th
 
 .. note::
   If the shader stage mask covers multiple stages, only the first matching stage will be returned.
-  If the mask is empty, :data:`ShaderStage.Count` will be returned.
+  If the mask is empty, :data:`ShaderStage.Invalid` will be returned.
 
 :param ShaderStageMask stageMask: The shader stage mask.
 :return: The first shader stage covered by the mask.
@@ -4872,7 +4903,7 @@ constexpr inline ShaderStage FirstStageForMask(ShaderStageMask stageMask)
          : (stageMask & ShaderStageMask::Compute)  ? ShaderStage::Compute
          : (stageMask & ShaderStageMask::Task)     ? ShaderStage::Task
          : (stageMask & ShaderStageMask::Mesh)     ? ShaderStage::Mesh
-                                                   : ShaderStage::Count;
+                                                   : ShaderStage::Invalid;
 }
 
 DOCUMENT(R"(A set of flags for events that may occur while debugging a shader
@@ -4891,7 +4922,7 @@ DOCUMENT(R"(A set of flags for events that may occur while debugging a shader
 
 .. data:: DebugBreak
 
-  A debugbreak event was emitted.
+  A ``debugbreak()`` event was emitted.
 )");
 enum class ShaderEvents : uint32_t
 {

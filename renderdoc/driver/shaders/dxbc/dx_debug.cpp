@@ -964,7 +964,13 @@ void ExtractInputs(Inputs IN
 
   quadLaneIndex = (2u * (uint(debug_pixelPos.y) & 1u)) + (uint(debug_pixelPos.x) & 1u);
   derivValid = ddx(debug_pixelPos.x);
+
+#if __SHADER_TARGET_MINOR >= 6
+  // IsHelperLane() can fail when software emulated on MSAA, because it checks SV_Coverage != 0
   isHelper = IsHelperLane() ? 1 : 0;
+#else
+  isHelper = (coverage & (1u << sample)) == 0;
+#endif
 
   helperBallot = WaveActiveBallot(isHelper != 0);
 

@@ -112,7 +112,7 @@ class GL_Parameter_Zoo(rdtest.TestCase):
         action = self.find_action("NoScissor")
 
         self.check(action is not None)
-        action = action.next
+        action = action.nextAction
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
         tex = rd.TextureDisplay()

@@ -30,7 +30,13 @@
 #include "shader_types.h"
 #include "stringise.h"
 
-DOCUMENT("Information about a viewport.");
+DOCUMENT(R"(
+Viewport()
+Viewport(other: Viewport)
+Viewport(x: float, y: float, width: float, height: float, minDepth: float, maxDepth: float, enabled: bool)
+
+Information about a viewport.
+)");
 struct Viewport
 {
   DOCUMENT("");
@@ -103,7 +109,13 @@ struct Viewport
 
 DECLARE_REFLECTION_STRUCT(Viewport);
 
-DOCUMENT("Describes a single scissor region.");
+DOCUMENT(R"(
+Scissor()
+Scissor(other: Scissor)
+Scissor(x: int, y: int, width: int, height: int, enabled: bool)
+
+Describes a single scissor region.
+)");
 struct Scissor
 {
   DOCUMENT("");
@@ -161,7 +173,12 @@ struct Scissor
 
 DECLARE_REFLECTION_STRUCT(Scissor);
 
-DOCUMENT("Describes the details of a blend operation.");
+DOCUMENT(R"(
+BlendEquation()
+BlendEquation(other: BlendEquation)
+
+Describes the details of a blend operation.
+)");
 struct BlendEquation
 {
   DOCUMENT("");
@@ -202,7 +219,12 @@ struct BlendEquation
 
 DECLARE_REFLECTION_STRUCT(BlendEquation);
 
-DOCUMENT("Describes the blend configuration for a given output target.");
+DOCUMENT(R"(
+ColorBlend()
+ColorBlend(other: ColorBlend)
+
+Describes the blend configuration for a given output target.
+)");
 struct ColorBlend
 {
   DOCUMENT("");
@@ -270,7 +292,90 @@ struct ColorBlend
 
 DECLARE_REFLECTION_STRUCT(ColorBlend);
 
-DOCUMENT("Describes the details of a stencil operation.");
+DOCUMENT(R"(
+RasterState()
+RasterState(other: RasterState)
+
+Describes a common subset of rasterizing state.
+)");
+struct RasterState
+{
+  DOCUMENT("");
+  RasterState() = default;
+  RasterState(const RasterState &) = default;
+  RasterState &operator=(const RasterState &) = default;
+
+  DOCUMENT(R"(``True`` if counter-clockwise polygons are front-facing.
+``False`` if clockwise polygons are front-facing.
+
+:type: bool
+)");
+  bool frontCCW = false;
+
+  DOCUMENT(R"(The polygon :class:`FillMode`.
+
+:type: FillMode
+)");
+  FillMode fillMode = FillMode::Solid;
+
+  DOCUMENT(R"(The polygon :class:`CullMode`.
+
+:type: CullMode
+)");
+  CullMode cullMode = CullMode::NoCull;
+};
+
+DOCUMENT(R"(
+DepthTestState()
+DepthTestState(other: DepthTestState)
+
+Describes a common subset of depth testing state.
+)");
+struct DepthTestState
+{
+  DOCUMENT("");
+  DepthTestState() = default;
+  DepthTestState(const DepthTestState &) = default;
+  DepthTestState &operator=(const DepthTestState &) = default;
+
+  DOCUMENT(R"(``True`` if depth testing should be performed.
+
+:type: bool
+)");
+  bool depthEnable = false;
+  DOCUMENT(R"(The :class:`CompareFunction` to use for testing depth values.
+
+:type: CompareFunction
+)");
+  CompareFunction depthFunction = CompareFunction::AlwaysTrue;
+  DOCUMENT(R"(``True`` if depth values should be written to the depth target.
+
+:type: bool
+)");
+  bool depthWrites = false;
+  DOCUMENT(R"(``True`` if depth bounds tests should be applied.
+
+:type: bool
+)");
+  bool depthBounds = false;
+  DOCUMENT(R"(The near plane bounding value.
+
+:type: float
+)");
+  double minDepthBounds = 0.0;
+  DOCUMENT(R"(The far plane bounding value.
+
+:type: float
+)");
+  double maxDepthBounds = 0.0;
+};
+
+DOCUMENT(R"(
+StencilFace()
+StencilFace(other: StencilFace)
+
+Describes the details of a stencil operation.
+)");
 struct StencilFace
 {
   DOCUMENT("");
@@ -317,7 +422,12 @@ struct StencilFace
 
 DECLARE_REFLECTION_STRUCT(StencilFace);
 
-DOCUMENT("Information about a single vertex or index buffer binding.");
+DOCUMENT(R"(
+BoundVBuffer()
+BoundVBuffer(other: BoundVBuffer)
+
+Information about a single vertex or index buffer binding.
+)");
 struct BoundVBuffer
 {
   DOCUMENT("");
@@ -357,7 +467,7 @@ struct BoundVBuffer
 :type: int
 )");
   uint32_t byteStride = 0;
-  DOCUMENT(R"(The size of the buffer binding, or 0xFFFFFFFF if the whole buffer is bound.
+  DOCUMENT(R"(The size of the buffer binding, or ``0xFFFFFFFF`` if the whole buffer is bound.
 
 :type: int
 )");
@@ -366,7 +476,11 @@ struct BoundVBuffer
 
 DECLARE_REFLECTION_STRUCT(BoundVBuffer);
 
-DOCUMENT(R"(The contents of a descriptor. Not all contents will be valid depending on API and
+DOCUMENT(R"(
+Descriptor()
+Descriptor(other: Descriptor)
+
+The contents of a descriptor. Not all contents will be valid depending on API and
 descriptor type, others will be set to sensible defaults.
 
 For sampler descriptors, the sampler-specific data can be queried separately and returned as
@@ -498,7 +612,7 @@ descriptors with a secondary counter.
   uint32_t bufferStructCount = 0;
 
   DOCUMENT(R"(The byte size of a single element in the view. Either the byte size of
-:data:`viewFormat`, or the structured buffer element size, as appropriate.
+:data:`format`, or the structured buffer element size, as appropriate.
 
 :type: int
 )");
@@ -553,7 +667,11 @@ descriptor
 
 DECLARE_REFLECTION_STRUCT(Descriptor);
 
-DOCUMENT(R"(The contents of a sampler descriptor. Not all contents will be valid depending on API
+DOCUMENT(R"(
+SamplerDescriptor()
+SamplerDescriptor(other: SamplerDescriptor)
+
+The contents of a sampler descriptor. Not all contents will be valid depending on API
 and capabilities, others will be set to sensible defaults.
 
 For normal descriptors, the resource data should be queried and returned in :class:`Descriptor`.
@@ -770,7 +888,11 @@ this sampler.
 
 DECLARE_REFLECTION_STRUCT(SamplerDescriptor);
 
-DOCUMENT(R"(The details of a single accessed descriptor as fetched by a shader and which descriptor
+DOCUMENT(R"(
+DescriptorAccess()
+DescriptorAccess(other: DescriptorAccess)
+
+The details of a single accessed descriptor as fetched by a shader and which descriptor
 in the descriptor store was fetched.
 
 This may be a somewhat conservative access, reported as possible but not actually executed on the
@@ -892,7 +1014,11 @@ inline ShaderDirectAccess::ShaderDirectAccess(const DescriptorAccess &access)
 {
 }
 
-DOCUMENT(R"(In many cases there may be a logical location or fixed binding point for a particular
+DOCUMENT(R"(
+DescriptorLogicalLocation()
+DescriptorLogicalLocation(other: DescriptorLogicalLocation)
+
+In many cases there may be a logical location or fixed binding point for a particular
 descriptor which is not conveyed with a simple byte offset into a descriptor store.
 This is particularly true for any descriptor stores that are not equivalent to a buffer of bytes
 but actually have an API structure - for example D3D11 and GL with fixed binding points, or Vulkan
@@ -997,7 +1123,11 @@ first, and fall back to this name if no reflection information is available in t
 
 DECLARE_REFLECTION_STRUCT(DescriptorLogicalLocation);
 
-DOCUMENT(R"(Combined information about a single descriptor that has been used, both the information
+DOCUMENT(R"(
+UsedDescriptor()
+UsedDescriptor(other: UsedDescriptor)
+
+Combined information about a single descriptor that has been used, both the information
 about its access and its contents.
 
 This is a helper struct for the common pipeline state abstraction to trade off simplicity of access
@@ -1053,7 +1183,13 @@ For normal descriptors this is empty.
 
 DECLARE_REFLECTION_STRUCT(UsedDescriptor);
 
-DOCUMENT("Describes a 2-dimensional int offset");
+DOCUMENT(R"(
+Offset()
+Offset(other: Offset)
+Offset(x: int, y: int)
+
+Describes a 2-dimensional int offset
+)");
 struct Offset
 {
   DOCUMENT("");
@@ -1084,7 +1220,12 @@ struct Offset
 
 DECLARE_REFLECTION_STRUCT(Offset);
 
-DOCUMENT("Information about a vertex input attribute feeding the vertex shader.");
+DOCUMENT(R"(
+VertexInputAttribute()
+VertexInputAttribute(other: VertexInputAttribute)
+
+Information about a vertex input attribute feeding the vertex shader.
+)");
 struct VertexInputAttribute
 {
   DOCUMENT("");
@@ -1164,7 +1305,7 @@ from the vertex buffer before advancing to the next value.
 )");
   bool genericEnabled = false;
   DOCUMENT(R"(Only valid for attributes on OpenGL. If the attribute has been set up for integers to
-be converted to floats (glVertexAttribFormat with GL_INT) we store the format as integers. This is
+be converted to floats (``glVertexAttribFormat`` with ``GL_INT``) we store the format as integers. This is
 fine if the application has a float input in the shader it just means we display the raw integer
 instead of the casted float. However if the shader has an integer input this is invalid and it will
 read something undefined - possibly the int bits of the casted float.
@@ -1184,7 +1325,11 @@ be emulated.
 
 DECLARE_REFLECTION_STRUCT(VertexInputAttribute);
 
-DOCUMENT(R"(A task or mesh message's location.
+DOCUMENT(R"(
+ShaderMeshMessageLocation()
+ShaderMeshMessageLocation(other: ShaderMeshMessageLocation)
+
+A task or mesh message's location.
 
 .. data:: NotUsed
 
@@ -1246,7 +1391,12 @@ struct ShaderMeshMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderMeshMessageLocation);
 
-DOCUMENT("A compute shader message's location.");
+DOCUMENT(R"(
+ShaderComputeMessageLocation()
+ShaderComputeMessageLocation(other: ShaderComputeMessageLocation)
+
+A compute shader message's location.
+)");
 struct ShaderComputeMessageLocation
 {
   DOCUMENT("");
@@ -1282,7 +1432,12 @@ struct ShaderComputeMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderComputeMessageLocation);
 
-DOCUMENT("A vertex shader message's location.");
+DOCUMENT(R"(
+ShaderVertexMessageLocation()
+ShaderVertexMessageLocation(other: ShaderVertexMessageLocation)
+
+A vertex shader message's location.
+)");
 struct ShaderVertexMessageLocation
 {
   DOCUMENT(R"(The vertex or index for this vertex.
@@ -1306,7 +1461,11 @@ struct ShaderVertexMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderVertexMessageLocation);
 
-DOCUMENT(R"(A pixel shader message's location.
+DOCUMENT(R"(
+ShaderPixelMessageLocation()
+ShaderPixelMessageLocation(other: ShaderPixelMessageLocation)
+
+A pixel shader message's location.
 
 .. data:: NoLocation
 
@@ -1349,7 +1508,11 @@ struct ShaderPixelMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderPixelMessageLocation);
 
-DOCUMENT(R"(A geometry shader message's location.
+DOCUMENT(R"(
+ShaderGeometryMessageLocation()
+ShaderGeometryMessageLocation(other: ShaderGeometryMessageLocation)
+
+A geometry shader message's location.
 
 .. data:: NoLocation
 
@@ -1372,7 +1535,12 @@ struct ShaderGeometryMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderGeometryMessageLocation);
 
-DOCUMENT("A shader message's location.");
+DOCUMENT(R"(
+ShaderMessageLocation()
+ShaderMessageLocation(other: ShaderMessageLocation)
+
+A shader message's location.
+)");
 union ShaderMessageLocation
 {
   DOCUMENT(R"(The location if the shader is a compute shader.
@@ -1408,7 +1576,12 @@ union ShaderMessageLocation
 
 DECLARE_REFLECTION_STRUCT(ShaderMessageLocation);
 
-DOCUMENT("A shader printed message.");
+DOCUMENT(R"(
+ShaderMessage()
+ShaderMessage(other: ShaderMessage)
+
+A shader printed message.
+)");
 struct ShaderMessage
 {
   DOCUMENT("");

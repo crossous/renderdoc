@@ -114,6 +114,9 @@ TEMPLATE_FIXEDARRAY_DECLARE(rdcfixedarray);
   static int capviewer_init(PyObject *self, PyObject *args) {
     PyObject *resultobj = 0;
     ICaptureViewer *result = 0;
+    
+    if(!SWIG_Python_UnpackTuple(args, "new_CaptureViewer", 0, 0, 0))
+      return -1;
 
     result = new PythonCaptureViewer(self);
     resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_ICaptureViewer, SWIG_BUILTIN_INIT | 0);
@@ -168,9 +171,10 @@ SWIGPY_DESTRUCTOR_CLOSURE(capviewer_deinit) /* defines capviewer_deinit_destruct
 %include <stdint.i>
 
 %include "Code/Interface/QRDInterface.h"
-%include "Code/Interface/PersistantConfig.h"
+%include "Code/Interface/PersistentConfig.h"
 %include "Code/Interface/RemoteHost.h"
 %include "Code/Interface/Extensions.h"
+%include "Code/Interface/Helpers.h"
 
 DOCUMENT("");
 
@@ -181,13 +185,15 @@ TEMPLATE_ARRAY_INSTANTIATE(rdcarray, BugReport)
 TEMPLATE_ARRAY_INSTANTIATE(rdcarray, ExtensionMetadata)
 TEMPLATE_ARRAY_INSTANTIATE(rdcarray, DialogButton)
 TEMPLATE_ARRAY_INSTANTIATE(rdcarray, RemoteHost)
+TEMPLATE_ARRAY_INSTANTIATE(rdcarray, ConnectedTempCapture)
 TEMPLATE_ARRAY_INSTANTIATE_PTR(rdcarray, ICaptureViewer)
+TEMPLATE_ARRAY_INSTANTIATE(rdcarray, ParseError)
 
 // unignore the function from above
 %rename("%s") IReplayManager::BlockInvoke;
 
 %extend IReplayManager {
-  void BlockInvoke(InvokeCallback m) {
+  void BlockInvoke(ReplayInvokeCallback m) {
     PyObject *global_internal_handle = NULL;
 
     PyObject *globals = PyEval_GetGlobals();

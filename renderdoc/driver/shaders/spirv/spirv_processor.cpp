@@ -223,6 +223,10 @@ void Decorations::Register(const DecorationAndParamData &decoration)
   {
     flags = Flags(flags | Aliased);
   }
+  else if(decoration == Decoration::UTFEncodedKHR)
+  {
+    flags = Flags(flags | UTF8);
+  }
   else if(decoration == Decoration::Location)
   {
     RDCASSERT(!(flags & HasArrayStride));
@@ -302,6 +306,18 @@ void Decorations::Unregister(const DecorationAndParamData &decoration)
   else if(decoration == Decoration::ColMajor)
   {
     flags = Flags(flags & ~ColMajor);
+  }
+  else if(decoration == Decoration::Restrict)
+  {
+    flags = Flags(flags & ~Restrict);
+  }
+  else if(decoration == Decoration::Aliased)
+  {
+    flags = Flags(flags & ~Aliased);
+  }
+  else if(decoration == Decoration::UTFEncodedKHR)
+  {
+    flags = Flags(flags & ~UTF8);
   }
   else if(decoration == Decoration::Location)
   {
@@ -750,6 +766,19 @@ void Processor::RegisterOp(Iter it)
 
     constants[opdata.result] = {opdata.resultType, opdata.result, v, {}, opdata.op};
     if(opdata.op == Op::SpecConstant)
+      specConstants.insert(opdata.result);
+  }
+  else if(opdata.op == Op::ConstantDataKHR || opdata.op == Op::SpecConstantDataKHR)
+  {
+    // this one has complex decoding rules, so we do it by hand.
+    DataType &type = dataTypes[opdata.resultType];
+
+    RDCASSERT(type.type == DataType::ArrayType);
+
+    // don't evaluate the value because these are just strings and would waste huge amounts of space
+
+    constants[opdata.result] = {opdata.resultType, opdata.result, ShaderVariable(), {}, opdata.op};
+    if(opdata.op == Op::SpecConstantDataKHR)
       specConstants.insert(opdata.result);
   }
   else if(opdata.op == Op::TypeVoid || opdata.op == Op::TypeBool || opdata.op == Op::TypeInt ||

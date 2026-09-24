@@ -98,7 +98,7 @@ Now we can see the pipeline and vertex/index buffer binds that happened before t
 Let's say that we only care about buffer bindings and want to exclude the pipeline bind. We could do this by adding a ``-Pipeline`` term, but we might then have to exclude other types of bindings and that could get tedious. Instead we'll change the bind term to ``(+Bind +Buffer)`` which will only match events that contain ``Bind`` and ``Buffer``. Since the term itself is optional, this still means actions are included.
 
 .. note::
-    This could be accomplished another way such as usuing a regular expression, but for the sake of example we'll do it like this.
+    This could be accomplished another way such as using a regular expression, but for the sake of example we'll do it like this.
 
 .. figure:: ../imgs/Screenshots/EventsFilteredBindBuffer.png
 

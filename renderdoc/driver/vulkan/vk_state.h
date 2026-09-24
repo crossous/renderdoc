@@ -138,6 +138,10 @@ struct VulkanRenderState
     float depth = 0.0f;
     float biasclamp = 0.0f;
     float slope = 0.0f;
+
+    VkDepthBiasRepresentationEXT repr =
+        VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORMAT_EXT;
+    bool exact = false;
   } bias;
   float blendConst[4] = {};
   float mindepth = 0.0f;

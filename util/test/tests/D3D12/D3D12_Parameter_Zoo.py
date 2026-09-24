@@ -12,7 +12,7 @@ class D3D12_Parameter_Zoo(rdtest.TestCase):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -99,7 +99,7 @@ class D3D12_Parameter_Zoo(rdtest.TestCase):
         rdtest.log.success("Overlay color is as expected")
 
         action = self.find_action("No Sig Draw")
-        action = action.next
+        action = action.nextAction
         
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -110,14 +110,14 @@ class D3D12_Parameter_Zoo(rdtest.TestCase):
         rdtest.log.success("No sig draw worked as expected")
 
         action = self.find_action("No Sig Dispatch")
-        action = action.next
+        action = action.nextAction
         
         self.controller.SetFrameEvent(action.eventId, False)
 
         # nothing to actually check here
 
         action = self.find_action("Temp heap Draw")
-        action = action.next
+        action = action.nextAction
         
         self.controller.SetFrameEvent(action.eventId, False)
 

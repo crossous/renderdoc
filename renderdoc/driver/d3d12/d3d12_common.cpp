@@ -647,7 +647,7 @@ TextureType MakeTextureDim(D3D12_SRV_DIMENSION dim)
     case D3D12_SRV_DIMENSION_TEXTURE3D: return TextureType::Texture3D;
     case D3D12_SRV_DIMENSION_TEXTURECUBE: return TextureType::TextureCube;
     case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY: return TextureType::TextureCubeArray;
-    default: break;
+    case D3D12_SRV_DIMENSION_BUFFER_BYTE_OFFSET: return TextureType::Buffer;
   }
 
   return TextureType::Unknown;
@@ -666,7 +666,6 @@ TextureType MakeTextureDim(D3D12_RTV_DIMENSION dim)
     case D3D12_RTV_DIMENSION_TEXTURE2DMS: return TextureType::Texture2DMS;
     case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY: return TextureType::Texture2DMSArray;
     case D3D12_RTV_DIMENSION_TEXTURE3D: return TextureType::Texture3D;
-    default: break;
   }
 
   return TextureType::Unknown;
@@ -683,7 +682,6 @@ TextureType MakeTextureDim(D3D12_DSV_DIMENSION dim)
     case D3D12_DSV_DIMENSION_TEXTURE2DARRAY: return TextureType::Texture2DArray;
     case D3D12_DSV_DIMENSION_TEXTURE2DMS: return TextureType::Texture2DMS;
     case D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY: return TextureType::Texture2DMSArray;
-    default: break;
   }
 
   return TextureType::Unknown;
@@ -702,7 +700,7 @@ TextureType MakeTextureDim(D3D12_UAV_DIMENSION dim)
     case D3D12_UAV_DIMENSION_TEXTURE2DMS: return TextureType::Texture2DMS;
     case D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY: return TextureType::Texture2DMSArray;
     case D3D12_UAV_DIMENSION_TEXTURE3D: return TextureType::Texture3D;
-    default: break;
+    case D3D12_UAV_DIMENSION_BUFFER_BYTE_OFFSET: return TextureType::Buffer;
   }
 
   return TextureType::Unknown;
@@ -717,7 +715,6 @@ AddressMode MakeAddressMode(D3D12_TEXTURE_ADDRESS_MODE addr)
     case D3D12_TEXTURE_ADDRESS_MODE_CLAMP: return AddressMode::ClampEdge;
     case D3D12_TEXTURE_ADDRESS_MODE_BORDER: return AddressMode::ClampBorder;
     case D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE: return AddressMode::MirrorOnce;
-    default: break;
   }
 
   return AddressMode::Wrap;
@@ -736,7 +733,6 @@ CompareFunction MakeCompareFunc(D3D12_COMPARISON_FUNC func)
     case D3D12_COMPARISON_FUNC_NOT_EQUAL: return CompareFunction::NotEqual;
     case D3D12_COMPARISON_FUNC_GREATER_EQUAL: return CompareFunction::GreaterEqual;
     case D3D12_COMPARISON_FUNC_ALWAYS: return CompareFunction::AlwaysTrue;
-    default: break;
   }
 
   return CompareFunction::AlwaysTrue;

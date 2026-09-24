@@ -89,7 +89,7 @@ class D3D12_Shader_DebugData_Zoo(rdtest.TestCase):
                 rdtest.log.print(f"Skipping Graphics tests for {shaderModels[sm]}")
                 rdtest.log.end_section(shaderModels[sm] + " tests")
                 continue
-            action = test_marker.next
+            action = test_marker.nextAction
             self.controller.SetFrameEvent(action.eventId, False)
 
             pipe: rd.PipeState = self.controller.GetPipelineState()
@@ -243,7 +243,7 @@ class D3D12_Shader_DebugData_Zoo(rdtest.TestCase):
                 rdtest.log.print(f"Skipping Compute tests for {csShaderModels[sm]}")
                 rdtest.log.end_section(section)
                 continue
-            action = test_marker.next
+            action = test_marker.nextAction
             self.controller.SetFrameEvent(action.eventId, False)
             pipe: rd.PipeState = self.controller.GetPipelineState()
             if not pipe.GetShaderReflection(rd.ShaderStage.Compute).debugInfo.debuggable:

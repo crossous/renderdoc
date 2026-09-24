@@ -125,6 +125,7 @@
     <ClCompile Include="d3d12_device_wrap12.cpp" />
     <ClCompile Include="d3d12_device_wrap13.cpp" />
     <ClCompile Include="d3d12_device_wrap14.cpp" />
+    <ClCompile Include="d3d12_device_wrap15.cpp" />
     <ClCompile Include="d3d12_device_wrap2.cpp" />
     <ClCompile Include="d3d12_device_wrap3.cpp" />
     <ClCompile Include="d3d12_device_wrap4.cpp" />

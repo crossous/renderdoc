@@ -74,4 +74,14 @@ ShaderVariable GetRenderTargetSampleInfo(WrappedID3D12Device *device,
 
 DXGI_FORMAT GetUAVResourceFormat(const D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc,
                                  ID3D12Resource *pResource);
+
+template <typename VIEW_DESC>
+uint32_t GetBufferByteOffsetNumElements(const VIEW_DESC &viewDesc)
+{
+  uint32_t elemSize = viewDesc.BufferByteOffset.StructureByteStride;
+  if(elemSize == 0)
+    elemSize = GetByteSize(1, 1, 1, viewDesc.Format, 0);
+
+  return uint32_t(viewDesc.BufferByteOffset.Size / elemSize);
+}
 };

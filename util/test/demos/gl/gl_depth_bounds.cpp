@@ -57,6 +57,23 @@ RD_TEST(GL_Depth_Bounds, OpenGLGraphicsTest)
 
     GLuint program = MakeProgram(GLDefaultVertex, GLDefaultPixel);
 
+    GLuint fbo = MakeFBO();
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    // Color render texture
+    GLuint colattach = MakeTexture();
+
+    glBindTexture(GL_TEXTURE_2D, colattach);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, screenWidth, screenHeight);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colattach, 0);
+
+    GLuint depthattach = MakeTexture();
+
+    glBindTexture(GL_TEXTURE_2D, depthattach);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_DEPTH24_STENCIL8, screenWidth, screenHeight);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depthattach,
+                           0);
+
     while(Running())
     {
       glDisable(GL_DEPTH_BOUNDS_TEST_EXT);
@@ -79,6 +96,8 @@ RD_TEST(GL_Depth_Bounds, OpenGLGraphicsTest)
       glEnable(GL_DEPTH_BOUNDS_TEST_EXT);
       glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
       glDrawArrays(GL_TRIANGLES, 0, 3);
+
+      blitToSwap(colattach);
 
       Present();
     }

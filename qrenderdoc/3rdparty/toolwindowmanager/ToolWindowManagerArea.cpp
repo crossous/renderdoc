@@ -61,7 +61,6 @@ ToolWindowManagerArea::ToolWindowManagerArea(ToolWindowManager *manager, QWidget
   m_manager->m_areas << this;
 
   QObject::connect(tabBar(), &QTabBar::tabMoved, this, &ToolWindowManagerArea::tabMoved);
-  QObject::connect(tabBar(), &QTabBar::tabCloseRequested, this, &ToolWindowManagerArea::tabClosing);
   QObject::connect(tabBar(), &QTabBar::tabCloseRequested, this, &QTabWidget::tabCloseRequested);
   QObject::connect(this, &QTabWidget::currentChanged, this, &ToolWindowManagerArea::tabSelected);
 }
@@ -82,6 +81,7 @@ void ToolWindowManagerArea::addToolWindows(const QList<QWidget *> &toolWindows, 
   foreach(QWidget *toolWindow, toolWindows)
   {
     index = insertTab(insertIndex, toolWindow, toolWindow->windowIcon(), toolWindow->windowTitle());
+    tabBar()->setTabToolTip(index, toolWindow->windowTitle());
     insertIndex = index + 1;
   }
   setCurrentIndex(index);
@@ -113,6 +113,7 @@ void ToolWindowManagerArea::updateToolWindow(QWidget *toolWindow)
     else
       showCloseButton(tabBar(), index, true);
     tabBar()->setTabText(index, toolWindow->windowTitle());
+    tabBar()->setTabToolTip(index, toolWindow->windowTitle());
   }
 }
 

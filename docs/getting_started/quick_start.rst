@@ -14,7 +14,7 @@ To capture a frame, begin by selecting :guilabel:`File` → :guilabel:`Launch Ap
 
     Launching an executable
 
-The defaults work pretty well in most situations, so you can just either browse to or drag in your exe into the Executable box. If the working directory box is empty then the executable's directory will be used. Enter any command line you may need and click Launch to launch the application with RenderDoc.
+The defaults work pretty well in most situations, so you can just either browse to or drag in your executable file into the :guilabel:`Executable` box. If the :guilabel:`Working directory` box is empty then the executable's directory will be used. Enter any command line you may need and click Launch to launch the application with RenderDoc.
 
 More details of the specific options and their functionality can be found in the details page for the :doc:`../window/capture_attach`.
 
@@ -138,7 +138,7 @@ More details can be found on the :doc:`../window/timeline_bar` page.
 
 The timeline bar is essentially an alternate view of the frame, with the horizontal axis being time in the frame. The horizontal axis is scaled evenly by API calls, such that every API call has the same width at any given zoom level.
 
-The frame marker hierarchy is top-down in this case, and can be expanded or collapsed by clicking on each section. In this image, "Render Scene" and "Toon shading draw" are both expanded, but the other sections remain collapsed. Each action is rendered as a blue pip underneath the section of the hierarchy that it is a child of. The current action (if visible) is rendered as a green circle.
+The frame marker hierarchy is top-down in this case, and can be expanded or collapsed by clicking on each section. In this image, ``Render Scene`` and ``Toon shading draw`` are both expanded, but the other sections remain collapsed. Each action is rendered as a blue pip underneath the section of the hierarchy that it is a child of. The current action (if visible) is rendered as a green circle.
 
 There is a vertical line around the current action, as well as a |flag_green| above, and a gray outline around the event where the mouse is hovering.
 

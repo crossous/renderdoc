@@ -97,7 +97,8 @@ IReplayDriver *D3D11Replay::MakeDummyDriver()
   rdcarray<const ShaderReflection *> shaders;
   WrappedID3D11Shader<ID3D11ComputeShader>::GetReflections(shaders);
 
-  IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDevice->DetachStructuredFile());
+  IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDevice->DetachStructuredFile(),
+                                         m_pDevice->GetImmediateContext()->DetachAnnotations());
 
   return dummy;
 }
@@ -1721,9 +1722,9 @@ rdcarray<uint32_t> D3D11Replay::GetPassEvents(uint32_t eventId)
   const ActionDescription *action = m_pDevice->GetAction(eventId);
 
   const ActionDescription *start = action;
-  while(start && start->previous && !(start->previous->flags & ActionFlags::Clear))
+  while(start && start->previousAction && !(start->previousAction->flags & ActionFlags::Clear))
   {
-    const ActionDescription *prev = start->previous;
+    const ActionDescription *prev = start->previousAction;
 
     if(start->outputs != prev->outputs || start->depthOut != prev->depthOut)
       break;
@@ -1739,7 +1740,7 @@ rdcarray<uint32_t> D3D11Replay::GetPassEvents(uint32_t eventId)
     if(start->flags & ActionFlags::Drawcall)
       passEvents.push_back(start->eventId);
 
-    start = start->next;
+    start = start->nextAction;
   }
 
   return passEvents;

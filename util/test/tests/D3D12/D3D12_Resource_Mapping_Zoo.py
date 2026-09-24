@@ -47,18 +47,18 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
 
         rdtest.log.begin_section("SM5.x tests")
         test_marker: rd.ActionDescription = self.find_action("sm_5_0")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "sm_5_0") or failed
 
         test_marker: rd.ActionDescription = self.find_action("sm_5_1")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "sm_5_1") or failed
 
         rdtest.log.begin_section("Resource array tests")
         test_marker: rd.ActionDescription = self.find_action("ResArray")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):
@@ -69,7 +69,7 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
 
         rdtest.log.begin_section("Bindless tests")
         test_marker: rd.ActionDescription = self.find_action("Bindless")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):
@@ -86,18 +86,18 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
         
         rdtest.log.begin_section("SM6.0 tests")
 
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "SM6.0") or failed
 
         test_marker: rd.ActionDescription = self.find_action("SM6.0 Table")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "SM6.0 Table") or failed
 
         rdtest.log.begin_section("Resource array tests")
         test_marker: rd.ActionDescription = self.find_action("SM6.0 ResArray")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):
@@ -108,7 +108,7 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
 
         rdtest.log.begin_section("Bindless tests")
         test_marker: rd.ActionDescription = self.find_action("SM6.0 Bindless")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):
@@ -125,18 +125,18 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
 
         rdtest.log.begin_section("SM6.6 tests")
 
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "SM6.6") or failed
 
         test_marker: rd.ActionDescription = self.find_action("SM6.6 Table")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
         failed = not self.test_debug_pixel(200, 200, "SM6.6 Table") or failed
 
         rdtest.log.begin_section("Resource array tests")
         test_marker: rd.ActionDescription = self.find_action("SM6.6 ResArray")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):
@@ -147,7 +147,7 @@ class D3D12_Resource_Mapping_Zoo(rdtest.TestCase):
 
         rdtest.log.begin_section("Bindless tests")
         test_marker: rd.ActionDescription = self.find_action("SM6.6 Bindless")
-        action = test_marker.next
+        action = test_marker.nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         for y in range(4):

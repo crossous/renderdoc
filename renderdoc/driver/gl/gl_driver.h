@@ -668,6 +668,15 @@ public:
     m_StoredStructuredData = m_StructuredFile = NULL;
     return ret;
   }
+  rdcarray<SDObject *> DetachAnnotations()
+  {
+    rdcarray<SDObject *> ret;
+    ret.swap(m_EventAnnotations);
+    for(auto it = m_Annotations.begin(); it != m_Annotations.end(); ++it)
+      ret.push_back(it->second);
+    m_Annotations.clear();
+    return ret;
+  }
   void SetFetchCounters(bool in) { m_FetchCounters = in; };
   void SetDebugMsgContext(const rdcstr &context) { m_DebugMsgContext = context; }
   void AddDebugMessage(DebugMessage msg)
@@ -755,6 +764,8 @@ public:
     rdcarray<uint32_t> spirvWords;
     SPIRVPatchData patchData;
 
+    rdcarray<SpecConstant> specInfo;
+
     // used if the application uploaded GLSL but we were able to compile to SPIR-V
     bool convertedSPIRV = false;
     bool convertedAutomapped = false;
@@ -787,7 +798,7 @@ public:
     void Disassemble(const rdcstr &disasmEntryPoint)
     {
       if(disassembly.empty())
-        disassembly = spirv.Disassemble(disasmEntryPoint, spirvInstructionLines);
+        disassembly = spirv.Disassemble(disasmEntryPoint, specInfo, spirvInstructionLines);
     }
 
   private:

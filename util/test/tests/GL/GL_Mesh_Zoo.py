@@ -13,7 +13,7 @@ class GL_Mesh_Zoo(rdtest.TestCase):
         self.zoo_helper.check_capture(self.capture_filename, self.controller)
 
         # Test GL-only thing with geometry shader only and completely no-op vertex shader
-        action = self.zoo_helper.find_action("Geom Only").next
+        action = self.zoo_helper.find_action("Geom Only").nextAction
         self.controller.SetFrameEvent(action.eventId, False)
 
         pos: rd.MeshFormat = self.controller.GetPostVSData(0, 0, rd.MeshDataStage.VSOut)
@@ -41,7 +41,7 @@ class GL_Mesh_Zoo(rdtest.TestCase):
         self.check_mesh_data(gsout_ref, self.get_postvs(action, rd.MeshDataStage.GSOut))
 
         # Test GL-only thing with geometry shader only and completely no-op vertex shader
-        multibase = self.zoo_helper.find_action("Multi Draw").next.parent
+        multibase = self.zoo_helper.find_action("Multi Draw").nextAction.parent
         self.controller.SetFrameEvent(multibase.children[-1].eventId, False)
 
         baseVertex = [10, 11]

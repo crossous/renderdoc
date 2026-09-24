@@ -36,6 +36,7 @@ extern "C" bool IsThreadBlocking(PyObject *global_handle);
 extern "C" void SetThreadBlocking(PyObject *global_handle, bool block);
 extern "C" void QueueDecRef(PyObject *obj);
 extern "C" void ProcessDecRefQueue();
+extern "C" PyObject *DoFunctionCall(PyObject *object, PyObject *args);
 
 struct ExceptionData
 {
@@ -246,7 +247,7 @@ struct varfunc
 
     ProcessDecRefQueue();
 
-    PyObject *result = PyObject_Call(func, args, 0);
+    PyObject *result = DoFunctionCall(func, args);
 
     Py_DECREF(args);
 

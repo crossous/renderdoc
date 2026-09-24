@@ -56,10 +56,11 @@ struct VkInitialContents
   enum Tag
   {
     BufferCopy = 0,
-    ClearColorImage = 1,
+    ClearColorImage,
     ClearDepthStencilImage,
     DescriptorSet,
     SparseTableOnly,
+    PreInit,
   };
 
   VkInitialContents()

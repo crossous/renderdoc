@@ -55,7 +55,7 @@ During running or after the application has closed, all captures will appear as 
 
 	Connection Window: Viewing multiple captures taken in a program.
 
-In this example we have a connection window open to the debugmarker sample from Sascha Willms' Vulkan examples. Three captures have been made and we can see their thumbnails to help distinguish between them. This is visible at any point, regardless of whether you have close the program or not - you can simply switch back to RenderDoc while it's running.
+In this example we have a connection window open to the ``debugmarker`` sample from `Sascha Willems' Vulkan examples <https://github.com/SaschaWillems/Vulkan>`_. Three captures have been made and we can see their thumbnails to help distinguish between them. This is visible at any point, regardless of whether you have close the program or not - you can simply switch back to RenderDoc while it's running.
 
 .. note::
 

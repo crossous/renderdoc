@@ -32,7 +32,11 @@
 
 namespace D3D11Pipe
 {
-DOCUMENT(R"(Describes a single D3D11 input layout element for one vertex input.
+DOCUMENT(R"(
+D3D11Layout()
+D3D11Layout(other: D3D11Layout)
+
+Describes a single D3D11 input layout element for one vertex input.
 
 .. data:: TightlyPacked
 
@@ -123,7 +127,12 @@ with the next instance data.
   static const uint32_t TightlyPacked = ~0U;
 };
 
-DOCUMENT("Describes a single D3D11 vertex buffer binding.")
+DOCUMENT(R"(
+D3D11VertexBuffer()
+D3D11VertexBuffer(other: D3D11VertexBuffer)
+
+Describes a single D3D11 vertex buffer binding.
+)")
 struct VertexBuffer
 {
   DOCUMENT("");
@@ -164,7 +173,12 @@ struct VertexBuffer
   uint32_t byteStride = 0;
 };
 
-DOCUMENT("Describes the D3D11 index buffer binding.")
+DOCUMENT(R"(
+D3D11IndexBuffer()
+D3D11IndexBuffer(other: D3D11IndexBuffer)
+
+Describes the D3D11 index buffer binding.
+)")
 struct IndexBuffer
 {
   DOCUMENT("");
@@ -192,7 +206,12 @@ it can be 0 if no index buffer is bound.
   uint32_t byteStride = 0;
 };
 
-DOCUMENT("Describes the input assembler data.");
+DOCUMENT(R"(
+D3D11InputAssembly()
+D3D11InputAssembly(other: D3D11InputAssembly)
+
+Describes the input assembler data.
+)");
 struct InputAssembly
 {
   DOCUMENT("");
@@ -237,7 +256,12 @@ struct InputAssembly
   Topology topology = Topology::Unknown;
 };
 
-DOCUMENT("Describes a D3D11 shader stage.");
+DOCUMENT(R"(
+D3D11Shader()
+D3D11Shader(other: D3D11Shader)
+
+Describes a D3D11 shader stage.
+)");
 struct Shader
 {
   DOCUMENT("");
@@ -270,7 +294,12 @@ struct Shader
   rdcarray<rdcstr> classInstances;
 };
 
-DOCUMENT("Describes a binding on the D3D11 stream-out stage.");
+DOCUMENT(R"(
+D3D11StreamOutBind()
+D3D11StreamOutBind(other: D3D11StreamOutBind)
+
+Describes a binding on the D3D11 stream-out stage.
+)");
 struct StreamOutBind
 {
   DOCUMENT("");
@@ -303,7 +332,11 @@ struct StreamOutBind
   uint32_t byteOffset = 0;
 };
 
-DOCUMENT(R"(Describes the stream-out stage bindings.
+DOCUMENT(R"(
+D3D11StreamOut()
+D3D11StreamOut(other: D3D11StreamOut)
+
+Describes the stream-out stage bindings.
 
 .. data:: NoRasterization
 
@@ -334,7 +367,12 @@ If the value is :data:`NoRasterization` then no stream has been selected for ras
   static const uint32_t NoRasterization = ~0U;
 };
 
-DOCUMENT("Describes a rasterizer state object.");
+DOCUMENT(R"(
+D3D11RasterizerState()
+D3D11RasterizerState(other: D3D11RasterizerState)
+
+Describes a rasterizer state object.
+)");
 struct RasterizerState
 {
   DOCUMENT("");
@@ -412,7 +450,12 @@ not force any sample count.
   ConservativeRaster conservativeRasterization = ConservativeRaster::Disabled;
 };
 
-DOCUMENT("Describes the rasterization state of the D3D11 pipeline.");
+DOCUMENT(R"(
+D3D11Rasterizer()
+D3D11Rasterizer(other: D3D11Rasterizer)
+
+Describes the rasterization state of the D3D11 pipeline.
+)");
 struct Rasterizer
 {
   DOCUMENT("");
@@ -439,7 +482,12 @@ struct Rasterizer
   RasterizerState state;
 };
 
-DOCUMENT("Describes a depth-stencil state object.");
+DOCUMENT(R"(
+D3D11DepthStencilState()
+D3D11DepthStencilState(other: D3D11DepthStencilState)
+
+Describes a depth-stencil state object.
+)");
 struct DepthStencilState
 {
   DOCUMENT("");
@@ -486,7 +534,12 @@ struct DepthStencilState
   StencilFace backFace;
 };
 
-DOCUMENT("Describes a blend state object.");
+DOCUMENT(R"(
+D3D11BlendState()
+D3D11BlendState(other: D3D11BlendState)
+
+Describes a blend state object.
+)");
 struct BlendState
 {
   DOCUMENT("");
@@ -531,7 +584,12 @@ struct BlendState
   uint32_t sampleMask = ~0U;
 };
 
-DOCUMENT("Describes the current state of the output-merger stage of the D3D11 pipeline.");
+DOCUMENT(R"(
+D3D11OutputMerger()
+D3D11OutputMerger(other: D3D11OutputMerger)
+
+Describes the current state of the output-merger stage of the D3D11 pipeline.
+)");
 struct OutputMerger
 {
   DOCUMENT("");
@@ -580,7 +638,12 @@ struct OutputMerger
   bool stencilReadOnly = false;
 };
 
-DOCUMENT("Describes the current state of D3D11 predicated rendering.");
+DOCUMENT(R"(
+D3D11Predication()
+D3D11Predication(other: D3D11Predication)
+
+Describes the current state of D3D11 predicated rendering.
+)");
 struct Predication
 {
   DOCUMENT("");
@@ -607,7 +670,9 @@ struct Predication
   bool isPassing = false;
 };
 
-DOCUMENT("The full current D3D11 pipeline state.");
+DOCUMENT(R"(
+The full current D3D11 pipeline state.
+)");
 struct State
 {
 #if !defined(RENDERDOC_EXPORTS)

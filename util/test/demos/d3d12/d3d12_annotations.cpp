@@ -28,6 +28,20 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
 {
   static constexpr const char *Description = "Test annotations via the D3D12 API.";
 
+  float sqSize;
+  Vec2f viewXY;
+
+  void NextTest()
+  {
+    viewXY.x += sqSize;
+
+    if(viewXY.x + sqSize >= (float)screenWidth)
+    {
+      viewXY.x = 0.0f;
+      viewXY.y += sqSize;
+    }
+  }
+
   int main()
   {
     // initialise, create window, create device, etc
@@ -40,6 +54,23 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
 
     img->SetName(L"Annotated Image");
     DefaultTriVB->SetName(L"Vertex Buffer");
+
+    ID3D12CommandSignaturePtr plainArgSig = MakeCommandSig(NULL, {drawArg()});
+
+    const uint32_t maxCountDraws = 16;
+    D3D12_DRAW_ARGUMENTS countSingleDraws[maxCountDraws];
+    for(uint32_t i = 0; i < maxCountDraws; ++i)
+    {
+      countSingleDraws[i].VertexCountPerInstance = 3;
+      countSingleDraws[i].InstanceCount = i + 1;
+      countSingleDraws[i].StartInstanceLocation = 0;
+      countSingleDraws[i].StartVertexLocation = 0;
+    }
+    ID3D12ResourcePtr countSingleDrawsArgBuf =
+        MakeBuffer().Size(sizeof(countSingleDraws)).Data(&countSingleDraws);
+
+    uint32_t counts[] = {0, 0, 2, 0};
+    ID3D12ResourcePtr countBuf = MakeBuffer().Data(counts);
 
     // cache the device pointer we pass in
     void *d = dev;
@@ -103,8 +134,13 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
       rdoc->SetObjectAnnotation(d, img, "path.deleted", eRENDERDOC_Empty, 0, NULL);
     }
 
+    sqSize = float(screenHeight) / 3.0f;
+
     while(Running())
     {
+      viewXY.x = 0.0f;
+      viewXY.y = 0.0f;
+
       if(rdoc)
       {
         // queue annotations are only included when in the captured frame
@@ -123,6 +159,9 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
 
         rdoc->SetCommandAnnotation(d, queue, "command.deleted", eRENDERDOC_Int32, 0,
                                    RDAnnotationHelper(50));
+
+        rdoc->SetCommandAnnotation(d, queue, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(10000));
       }
 
       ID3D12GraphicsCommandListPtr cmd = GetCommandBuffer();
@@ -143,6 +182,9 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
                                    RDAnnotationHelper(3333));
 
         rdoc->SetCommandAnnotation(d, cmd, "command.deleted", eRENDERDOC_Empty, 0, NULL);
+
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(20000));
       }
 
       setMarker(cmd, "Initial");
@@ -166,7 +208,8 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
       cmd->SetPipelineState(DefaultTriPSO);
       cmd->SetGraphicsRootSignature(DefaultTriSig);
 
-      SetMainWindowViewScissor(cmd);
+      RSSetViewport(cmd, {viewXY.x, viewXY.y, sqSize, sqSize, 0.0f, 1.0f});
+      RSSetScissorRect(cmd, {0, 0, screenWidth, screenHeight});
 
       OMSetRenderTargets(cmd, {BBRTV}, {});
 
@@ -183,19 +226,95 @@ RD_TEST(D3D12_Annotations, D3D12GraphicsTest)
       setMarker(cmd, "Draw 1");
 
       cmd->DrawInstanced(3, 1, 0, 0);
+      NextTest();
 
-      RSSetViewport(
-          cmd, {0.0f, 0.0f, (float)screenWidth / 2.0f, (float)screenHeight / 2.0f, 0.0f, 1.0f});
+      RSSetViewport(cmd, {viewXY.x, viewXY.y, sqSize, sqSize, 0.0f, 1.0f});
+      RSSetScissorRect(cmd, {0, 0, screenWidth, screenHeight});
 
       setMarker(cmd, "Draw 2");
 
       cmd->DrawInstanced(3, 1, 0, 0);
+      NextTest();
+
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(30000));
+      }
+      setMarker(cmd, "Pre-DrawIndirectCount");
+
+      pushMarker(cmd, "DrawIndirectCount");
+      {
+        RSSetViewport(cmd, {viewXY.x, viewXY.y, sqSize, sqSize, 0.0f, 1.0f});
+        RSSetScissorRect(cmd, {0, 0, screenWidth, screenHeight});
+        setMarker(cmd, "DrawIndirectCount(0:0)");
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(1));
+        }
+        cmd->ExecuteIndirect(plainArgSig, 0, countSingleDrawsArgBuf, 0, countBuf, 0);
+        NextTest();
+
+        RSSetViewport(cmd, {viewXY.x, viewXY.y, sqSize, sqSize, 0.0f, 1.0f});
+        RSSetScissorRect(cmd, {0, 0, screenWidth, screenHeight});
+        setMarker(cmd, "DrawIndirectCount(10:0)");
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(2));
+        }
+        // TODO EXECUTE INDIRECT DRAW MAXCOUNT = 10 COUNT = 0
+        cmd->ExecuteIndirect(plainArgSig, 10, countSingleDrawsArgBuf, 0, countBuf, 4);
+        NextTest();
+
+        RSSetViewport(cmd, {viewXY.x, viewXY.y, sqSize, sqSize, 0.0f, 1.0f});
+        RSSetScissorRect(cmd, {0, 0, screenWidth, screenHeight});
+        setMarker(cmd, "DrawIndirectCount(10:N)");
+        if(rdoc)
+        {
+          rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                     RDAnnotationHelper(3));
+        }
+        // TODO EXECUTE INDIRECT DRAW MAXCOUNT = 10 COUNT = N
+        cmd->ExecuteIndirect(plainArgSig, 10, countSingleDrawsArgBuf, 0, countBuf, 8);
+        NextTest();
+        popMarker(cmd);
+      }
+
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "draw.indirect", eRENDERDOC_Int32, 0,
+                                   RDAnnotationHelper(40000));
+      }
+      setMarker(cmd, "Post-DrawIndirectCount");
+
+      setMarker(cmd, "Loose");
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "loose.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(1));
+      }
 
       FinishUsingBackbuffer(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, cmd, "loose.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(2));
+        rdoc->SetCommandAnnotation(d, cmd, "new.value", eRENDERDOC_Empty, 0, NULL);
+      }
 
       cmd->Close();
 
-      SubmitAndPresent({cmd});
+      ID3D12GraphicsCommandListPtr empty = GetCommandBuffer();
+
+      Reset(empty);
+      setMarker(empty, "Empty");
+      if(rdoc)
+      {
+        rdoc->SetCommandAnnotation(d, empty, "empty.int", eRENDERDOC_Int32, 0, RDAnnotationHelper(1));
+      }
+      empty->Close();
+
+      SubmitAndPresent({empty, cmd});
     }
 
     return 0;

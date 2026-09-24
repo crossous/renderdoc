@@ -1337,8 +1337,8 @@ DescriptorViewer::DescriptorViewer(ICaptureContext &ctx, QWidget *parent)
 
       if(tag.descriptor.type == DescriptorType::TypedBuffer ||
          tag.descriptor.type == DescriptorType::ReadWriteTypedBuffer)
-        format = BufferFormatter::GetBufferFormatString(Packing::C, ResourceId(), ShaderResource(),
-                                                        tag.descriptor.format);
+        format = BufferFormatter::GetBufferFormatString(PackingRules::C(), ResourceId(),
+                                                        ShaderResource(), tag.descriptor.format);
 
       IBufferViewer *viewer = m_Ctx.ViewBuffer(tag.descriptor.byteOffset, tag.descriptor.byteSize,
                                                tag.descriptor.resource, format);

@@ -1133,6 +1133,15 @@ void DoSerialise(SerialiserType &ser, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SR
 }
 
 template <class SerialiserType>
+void DoSerialise(SerialiserType &ser, D3D12_BUFFER_SRV_BYTE_OFFSET &el)
+{
+  SERIALISE_MEMBER(Offset).OffsetOrSize();
+  SERIALISE_MEMBER(Size).OffsetOrSize();
+  SERIALISE_MEMBER(StructureByteStride).OffsetOrSize();
+  SERIALISE_MEMBER(Flags);
+}
+
+template <class SerialiserType>
 void DoSerialise(SerialiserType &ser, D3D12_SHADER_RESOURCE_VIEW_DESC &el)
 {
   SERIALISE_MEMBER(Format).Important();
@@ -1158,6 +1167,7 @@ void DoSerialise(SerialiserType &ser, D3D12_SHADER_RESOURCE_VIEW_DESC &el)
     case D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE:
       SERIALISE_MEMBER(RaytracingAccelerationStructure);
       break;
+    case D3D12_SRV_DIMENSION_BUFFER_BYTE_OFFSET: SERIALISE_MEMBER(BufferByteOffset); break;
     default: RDCERR("Unrecognised SRV Dimension %d", el.ViewDimension); break;
   }
 }
@@ -1365,6 +1375,16 @@ void DoSerialise(SerialiserType &ser, D3D12_TEX3D_UAV &el)
 }
 
 template <class SerialiserType>
+void DoSerialise(SerialiserType &ser, D3D12_BUFFER_UAV_BYTE_OFFSET &el)
+{
+  SERIALISE_MEMBER(Offset).OffsetOrSize();
+  SERIALISE_MEMBER(Size).OffsetOrSize();
+  SERIALISE_MEMBER(StructureByteStride).OffsetOrSize();
+  SERIALISE_MEMBER(CounterOffsetInBytes).OffsetOrSize();
+  SERIALISE_MEMBER(Flags);
+}
+
+template <class SerialiserType>
 void DoSerialise(SerialiserType &ser, D3D12_UNORDERED_ACCESS_VIEW_DESC &el)
 {
   SERIALISE_MEMBER(Format).Important();
@@ -1383,6 +1403,7 @@ void DoSerialise(SerialiserType &ser, D3D12_UNORDERED_ACCESS_VIEW_DESC &el)
     case D3D12_UAV_DIMENSION_TEXTURE2DMS: SERIALISE_MEMBER(Texture2DMS); break;
     case D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY: SERIALISE_MEMBER(Texture2DMSArray); break;
     case D3D12_UAV_DIMENSION_TEXTURE3D: SERIALISE_MEMBER(Texture3D); break;
+    case D3D12_UAV_DIMENSION_BUFFER_BYTE_OFFSET: SERIALISE_MEMBER(BufferByteOffset); break;
     default: RDCERR("Unrecognised RTV Dimension %d", el.ViewDimension); break;
   }
 }

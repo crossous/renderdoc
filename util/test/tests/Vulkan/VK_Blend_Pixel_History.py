@@ -56,11 +56,11 @@ class VK_Blend_Pixel_History(rdtest.TestCase):
         if tex_details.mips > 1:
             sub.mip = rt.firstMip
 
-        red_eid = self.find_action("Red: ").next.eventId
-        red_last_eid = self.find_action("End of red").next.eventId
-        green_eid = self.find_action("Green: ").next.eventId
-        blue_eid = self.find_action("Blue: ").next.eventId
-        all_eid = self.find_action("All of the above in a single drawcall").next.eventId
+        red_eid = self.find_action("Red: ").nextAction.eventId
+        red_last_eid = self.find_action("End of red").nextAction.eventId
+        green_eid = self.find_action("Green: ").nextAction.eventId
+        blue_eid = self.find_action("Blue: ").nextAction.eventId
+        all_eid = self.find_action("All of the above in a single drawcall").nextAction.eventId
 
         # Pixel inside of all of the triangles
         x, y = 200, 150

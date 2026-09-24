@@ -756,7 +756,28 @@ void VulkanRenderState::BindDynamicState(WrappedVulkan *vk, VkCommandBuffer cmd)
     ObjDisp(cmd)->CmdSetLineWidth(Unwrap(cmd), lineWidth);
 
   if(dynamicStates[VkDynamicDepthBias])
-    ObjDisp(cmd)->CmdSetDepthBias(Unwrap(cmd), bias.depth, bias.biasclamp, bias.slope);
+  {
+    if(vk->DepthBiasControl())
+    {
+      VkDepthBiasRepresentationInfoEXT reprInfo = {
+          VK_STRUCTURE_TYPE_DEPTH_BIAS_REPRESENTATION_INFO_EXT,
+      };
+      VkDepthBiasInfoEXT info = {VK_STRUCTURE_TYPE_DEPTH_BIAS_INFO_EXT, &reprInfo};
+
+      info.depthBiasClamp = bias.biasclamp;
+      info.depthBiasConstantFactor = bias.depth;
+      info.depthBiasSlopeFactor = bias.slope;
+
+      reprInfo.depthBiasExact = bias.exact;
+      reprInfo.depthBiasRepresentation = bias.repr;
+
+      ObjDisp(cmd)->CmdSetDepthBias2EXT(Unwrap(cmd), &info);
+    }
+    else
+    {
+      ObjDisp(cmd)->CmdSetDepthBias(Unwrap(cmd), bias.depth, bias.biasclamp, bias.slope);
+    }
+  }
 
   if(dynamicStates[VkDynamicBlendConstants])
     ObjDisp(cmd)->CmdSetBlendConstants(Unwrap(cmd), blendConst);

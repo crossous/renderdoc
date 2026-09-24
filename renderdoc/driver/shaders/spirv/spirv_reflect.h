@@ -113,7 +113,8 @@ public:
   Reflector();
   virtual void Parse(const rdcarray<uint32_t> &spirvWords);
 
-  rdcstr Disassemble(const rdcstr &entryPoint, std::map<size_t, uint32_t> &instructionLines) const;
+  rdcstr Disassemble(const rdcstr &entryPoint, const rdcarray<SpecConstant> &specInfo,
+                     std::map<size_t, uint32_t> &instructionLines) const;
 
   rdcarray<ShaderEntryPoint> EntryPoints() const;
 
@@ -132,7 +133,7 @@ private:
 
   void CalculateArrayTypeName(DataType &type);
 
-  rdcstr StringiseConstant(rdcspv::Id id) const;
+  rdcstr StringiseConstant(rdcspv::Id id, const rdcarray<SpecConstant> &specInfo) const;
   void CheckDebuggable(bool &debuggable, rdcstr &debugStatus) const;
 
   void ApplyMatrixByteStride(const DataType &type, uint8_t matrixByteStride,

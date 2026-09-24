@@ -114,7 +114,7 @@ class TargetControl():
 
 def run_executable(exe: str, cmdline: str,
                    workdir="", envmods=None, cappath=None,
-                   opts=rd.GetDefaultCaptureOptions()):
+                   opts=None):
     """
     Runs an executable with RenderDoc injected, and returns the control ident.
 
@@ -130,6 +130,8 @@ def run_executable(exe: str, cmdline: str,
     """
     if envmods is None:
         envmods = []
+    if opts is None:
+        opts = rd.CaptureOptions()
     if cappath is None:
         cappath = util.get_tmp_path('capture')
 
@@ -150,7 +152,7 @@ def run_executable(exe: str, cmdline: str,
     return res.ident
 
 
-def run_and_capture(exe: str, cmdline: str, frame: int, *, frame_count=1, captures_expected=None, capture_name=None, opts=rd.GetDefaultCaptureOptions(),
+def run_and_capture(exe: str, cmdline: str, frame: int, *, frame_count=1, captures_expected=None, capture_name=None, opts=None,
                     timeout=None, logfile=None):
     """
     Helper function to run an executable with a command line, capture a particular frame, and exit.
@@ -172,6 +174,9 @@ def run_and_capture(exe: str, cmdline: str, frame: int, *, frame_count=1, captur
 
     if capture_name is None:
         capture_name = 'capture'
+
+    if opts is None:
+        opts = rd.CaptureOptions()
 
     if captures_expected is None:
         captures_expected = frame_count

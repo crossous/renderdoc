@@ -427,7 +427,7 @@ uint32_t Serialiser<SerialiserMode::Writing>::BeginChunk(uint32_t chunkID, uint6
         m_Write->Write(m_ChunkMetadata.timestampMicro);
       }
 
-      if(byteLength > 0 || m_DataStreaming)
+      if((byteLength > 0 && byteLength != LARGE_CHUNK_SIZE) || m_DataStreaming)
       {
         // write length, assuming it is an upper bound
         m_ChunkFixup = 0;
@@ -442,6 +442,13 @@ uint32_t Serialiser<SerialiserMode::Writing>::BeginChunk(uint32_t chunkID, uint6
         }
         m_LastChunkOffset = m_Write->GetOffset();
         m_ChunkMetadata.length = byteLength;
+      }
+      else if(byteLength == LARGE_CHUNK_SIZE)
+      {
+        uint64_t chunkSize = 0xbeebfeedbeebfeedULL;
+        m_ChunkFixup = m_Write->GetOffset();
+        m_Write->Write(chunkSize);
+        m_ChunkMetadata.length = LARGE_CHUNK_SIZE;
       }
       else
       {
@@ -493,14 +500,23 @@ void Serialiser<SerialiserMode::Writing>::EndChunk()
 
     RDCASSERT(curOffset > chunkOffset);
 
-    uint64_t chunkLength = (curOffset - chunkOffset) - sizeof(uint32_t);
-    if(chunkLength > 0xffffffff)
+    uint64_t chunkLength = (curOffset - chunkOffset);
+    if(m_ChunkMetadata.length == LARGE_CHUNK_SIZE)
     {
-      RDCERR("!!! CHUNK LENGTH %llu EXCEEDED 32 BIT VALUE. CAPTURE WILL BE CORRUPTED. !!!",
-             chunkLength);
+      chunkLength -= sizeof(uint64_t);
+      m_Write->WriteAt(chunkOffset, chunkLength);
     }
+    else
+    {
+      chunkLength -= sizeof(uint32_t);
+      if(chunkLength > 0xffffffff)
+      {
+        RDCERR("!!! CHUNK LENGTH %llu EXCEEDED 32 BIT VALUE. CAPTURE WILL BE CORRUPTED. !!!",
+               chunkLength);
+      }
 
-    m_Write->WriteAt(chunkOffset, uint32_t(chunkLength & 0xffffffff));
+      m_Write->WriteAt(chunkOffset, uint32_t(chunkLength & 0xffffffff));
+    }
 
     m_ChunkMetadata.length = chunkLength;
   }
@@ -1036,8 +1052,8 @@ Chunk *Chunk::Create(Serialiser<SerialiserMode::Writing> &ser, uint16_t chunkTyp
 {
   RDCCOMPILE_ASSERT(sizeof(Chunk) <= 16, "Chunk should be no more than 16 bytes");
 
-  RDCASSERT(ser.GetWriter()->GetOffset() < 0xffffffff);
-  uint32_t length = (uint32_t)ser.GetWriter()->GetOffset();
+  uint64_t length = ser.GetWriter()->GetOffset();
+  RDCASSERT(length < (1ULL << CHUNK_LENGTH_BITS));
 
   byte *data = NULL;
 

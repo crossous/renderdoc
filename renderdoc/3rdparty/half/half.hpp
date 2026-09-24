@@ -117,7 +117,7 @@
 	#define HALF_TWOS_COMPLEMENT_INT 1
 	#define HALF_POP_WARNINGS 1
 	#pragma warning(push)
-	#pragma warning(disable : 4099 4127 4146)	//struct vs class, constant in if, negative unsigned
+	#pragma warning(disable : 4099 4127 4146 4834)	//struct vs class, constant in if, negative unsigned
 #endif
 
 // check C++11 library features

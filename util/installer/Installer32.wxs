@@ -129,9 +129,16 @@
           </Component>
 
           <Component Id='Python' Guid='63C5667D-38DA-464B-8E2F-B2857B8EAEC8'>
-            <File Id='Python36' Name='python36.dll' DiskId='1' Source='dist/Release32/python36.dll' KeyPath='yes' />
-            <File Id='PythonLibsZIP' Name='python36.zip' DiskId='1' Source='dist/Release32/python36.zip' />
-            <File Id='CTypes' Name='_ctypes.pyd' DiskId='1' Source='dist/Release32/_ctypes.pyd' />
+            <File Id='Python38' Name='python38.dll' DiskId='1' Source='dist/Release32/python38.dll' KeyPath='yes' />
+            <File Id='PythonLibsZIP' Name='python38.zip' DiskId='1' Source='dist/Release32/python38.zip' />
+            <File Id='Py_ctypes' Name='_ctypes.pyd' DiskId='1' Source='dist/Release32/_ctypes.pyd' />
+            <File Id='Py_hashlib' Name='_hashlib.pyd' DiskId='1' Source='dist/Release32/_hashlib.pyd' />
+            <File Id='Py_queue' Name='_queue.pyd' DiskId='1' Source='dist/Release32/_queue.pyd' />
+            <File Id='Py_socket' Name='_socket.pyd' DiskId='1' Source='dist/Release32/_socket.pyd' />
+            <File Id='Py_ssl' Name='_ssl.pyd' DiskId='1' Source='dist/Release32/_ssl.pyd' />
+            <File Id='Py_pyexpat' Name='pyexpat.pyd' DiskId='1' Source='dist/Release32/pyexpat.pyd' />
+            <File Id='Py_select' Name='select.pyd' DiskId='1' Source='dist/Release32/select.pyd' />
+            <File Id='Py_unicodedata' Name='unicodedata.pyd' DiskId='1' Source='dist/Release32/unicodedata.pyd' />
             <File Id='Shiboken2' Name='shiboken2.dll' DiskId='1' Source='dist/Release32/shiboken2.dll' />
           </Component>
 
@@ -161,7 +168,6 @@
               <File Id='PS2QtCore' Name='QtCore.pyd' DiskId='1' Source='dist/Release32/PySide2/QtCore.pyd' />
               <File Id='PS2QtGui' Name='QtGui.pyd' DiskId='1' Source='dist/Release32/PySide2/QtGui.pyd' />
               <File Id='PS2QtWidgets' Name='QtWidgets.pyd' DiskId='1' Source='dist/Release32/PySide2/QtWidgets.pyd' />
-              <File Id='PS2utils' Name='_utils.py' DiskId='1' Source='dist/Release32/PySide2/_utils.py' />
               <File Id='PS2init' Name='__init__.py' DiskId='1' Source='dist/Release32/PySide2/__init__.py' />
             </Component>
           </Directory>

@@ -426,3 +426,26 @@ def shadervariable_equal(a: rd.ShaderVariable, b : rd.ShaderVariable) -> Tuple[b
             return (False, difference)
 
     return (True, "")
+
+def get_event_parameters_text(chunk: rd.SDChunk):
+    parameters = ""
+    if chunk.type.basetype == rd.SDBasic.SignedInteger:
+        parameters += str(chunk.AsInt())
+    elif chunk.type.basetype == rd.SDBasic.UnsignedInteger:
+        parameters += str(chunk.AsInt())
+    elif chunk.type.basetype == rd.SDBasic.Float:
+        parameters += str(chunk.AsFloat())
+    elif chunk.type.basetype == rd.SDBasic.String:
+        parameters += chunk.AsString()
+
+    onlyImportant = (chunk.type.flags & rd.SDTypeFlags.ImportantChildren != 0)
+    first = True
+    for i in range(chunk.NumChildren()):
+        child = chunk.GetChild(i)
+        if not onlyImportant or child.type.flags & rd.SDTypeFlags.Important != 0:
+            if not first:
+                parameters += ", "
+            parameters += get_event_parameters_text(child)
+            first = False
+
+    return parameters

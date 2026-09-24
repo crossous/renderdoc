@@ -28,7 +28,11 @@
 
 namespace D3D12Pipe
 {
-DOCUMENT(R"(Describes a single D3D12 input layout element for one vertex input.
+DOCUMENT(R"(
+D3D12Layout()
+D3D12Layout(other: D3D12Layout)
+
+Describes a single D3D12 input layout element for one vertex input.
 
 .. data:: TightlyPacked
 
@@ -119,7 +123,12 @@ with the next instance data.
   static const uint32_t TightlyPacked = ~0U;
 };
 
-DOCUMENT("Describes a single D3D12 vertex buffer binding.")
+DOCUMENT(R"(
+D3D12VertexBuffer()
+D3D12VertexBuffer(other: D3D12VertexBuffer)
+
+Describes a single D3D12 vertex buffer binding.
+)")
 struct VertexBuffer
 {
   DOCUMENT("");
@@ -169,7 +178,12 @@ struct VertexBuffer
   uint32_t byteStride = 0;
 };
 
-DOCUMENT("Describes the D3D12 index buffer binding.")
+DOCUMENT(R"(
+D3D12IndexBuffer()
+D3D12IndexBuffer(other: D3D12IndexBuffer)
+
+Describes the D3D12 index buffer binding.
+)")
 struct IndexBuffer
 {
   DOCUMENT("");
@@ -203,7 +217,12 @@ it can be 0 if no index buffer is bound.
   uint32_t byteStride = 0;
 };
 
-DOCUMENT("Describes the input assembler state in the PSO.");
+DOCUMENT(R"(
+D3D12InputAssembly()
+D3D12InputAssembly(other: D3D12InputAssembly)
+
+Describes the input assembler state in the PSO.
+)");
 struct InputAssembly
 {
   DOCUMENT("");
@@ -243,7 +262,12 @@ If the value is 0, strip cutting is disabled.
   Topology topology = Topology::Unknown;
 };
 
-DOCUMENT("Describes a D3D12 shader stage.");
+DOCUMENT(R"(
+D3D12Shader()
+D3D12Shader(other: D3D12Shader)
+
+Describes a D3D12 shader stage.
+)");
 struct Shader
 {
   DOCUMENT("");
@@ -270,7 +294,12 @@ struct Shader
   ShaderStage stage = ShaderStage::Vertex;
 };
 
-DOCUMENT("Describes a binding on the D3D12 stream-out stage.");
+DOCUMENT(R"(
+D3D12StreamOutBind()
+D3D12StreamOutBind(other: D3D12StreamOutBind)
+
+Describes a binding on the D3D12 stream-out stage.
+)");
 struct StreamOutBind
 {
   DOCUMENT("");
@@ -328,7 +357,11 @@ written.
   uint64_t writtenCountByteOffset = 0;
 };
 
-DOCUMENT(R"(Describes the stream-out state in the PSO.
+DOCUMENT(R"(
+D3D12StreamOut()
+D3D12StreamOut(other: D3D12StreamOut)
+
+Describes the stream-out state in the PSO.
 
 .. data:: NoRasterization
 
@@ -359,7 +392,12 @@ If the value is :data:`NoRasterization` then no stream has been selected for ras
   static const uint32_t NoRasterization = ~0U;
 };
 
-DOCUMENT("Describes the rasterizer state in the PSO.");
+DOCUMENT(R"(
+D3D12RasterizerState()
+D3D12RasterizerState(other: D3D12RasterizerState)
+
+Describes the rasterizer state in the PSO.
+)");
 struct RasterizerState
 {
   DOCUMENT("");
@@ -461,7 +499,12 @@ shading rate sampled from the shading rate image.
   ResourceId shadingRateImage;
 };
 
-DOCUMENT("Describes the rasterization state of the D3D12 pipeline.");
+DOCUMENT(R"(
+D3D12Rasterizer()
+D3D12Rasterizer(other: D3D12Rasterizer)
+
+Describes the rasterization state of the D3D12 pipeline.
+)");
 struct Rasterizer
 {
   DOCUMENT("");
@@ -494,7 +537,12 @@ struct Rasterizer
   RasterizerState state;
 };
 
-DOCUMENT("Describes the state of the depth-stencil state in the PSO.");
+DOCUMENT(R"(
+D3D12DepthStencilState()
+D3D12DepthStencilState(other: D3D12DepthStencilState)
+
+Describes the state of the depth-stencil state in the PSO.
+)");
 struct DepthStencilState
 {
   DOCUMENT("");
@@ -552,7 +600,12 @@ struct DepthStencilState
   float maxDepthBounds = 0.0f;
 };
 
-DOCUMENT("Describes the blend state in the PSO.");
+DOCUMENT(R"(
+D3D12BlendState()
+D3D12BlendState(other: D3D12BlendState)
+
+Describes the blend state in the PSO.
+)");
 struct BlendState
 {
   DOCUMENT("");
@@ -586,7 +639,12 @@ struct BlendState
   rdcfixedarray<float, 4> blendFactor = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
-DOCUMENT("Describes the current state of the output-merger stage of the D3D12 pipeline.");
+DOCUMENT(R"(
+D3D12OM()
+D3D12OM(other: D3D12OM)
+
+Describes the current state of the output-merger stage of the D3D12 pipeline.
+)");
 struct OM
 {
   DOCUMENT("");
@@ -622,14 +680,19 @@ struct OM
 :type: bool
 )");
   bool depthReadOnly = false;
-  DOCUMENT(R"(``True`` if stenncil access to the depth-stencil target is read-only.
+  DOCUMENT(R"(``True`` if stencil access to the depth-stencil target is read-only.
 
 :type: bool
 )");
   bool stencilReadOnly = false;
 };
 
-DOCUMENT("Describes the current state that a sub-resource is in.");
+DOCUMENT(R"(
+D3D12ResourceState()
+D3D12ResourceState(other: D3D12ResourceState)
+
+Describes the current state that a sub-resource is in.
+)");
 struct ResourceState
 {
   DOCUMENT("");
@@ -651,7 +714,12 @@ struct ResourceState
   rdcstr name;
 };
 
-DOCUMENT("Contains the current state of a given resource.");
+DOCUMENT(R"(
+D3D12ResourceData()
+D3D12ResourceData(other: D3D12ResourceData)
+
+Contains the current state of a given resource.
+)");
 struct ResourceData
 {
   DOCUMENT("");
@@ -684,7 +752,12 @@ struct ResourceData
   rdcarray<ResourceState> states;
 };
 
-DOCUMENT("Contains the structure of a single range within a root table definition.");
+DOCUMENT(R"(
+D3D12RootTableRange()
+D3D12RootTableRange(other: D3D12RootTableRange)
+
+Contains the structure of a single range within a root table definition.
+)");
 struct RootTableRange
 {
   DOCUMENT("");
@@ -749,7 +822,12 @@ offset in :data:`tableByteOffset`.
   bool appended = false;
 };
 
-DOCUMENT("Contains the structure and content of a single root parameter.");
+DOCUMENT(R"(
+D3D12RootParam()
+D3D12RootParam(other: D3D12RootParam)
+
+Contains the structure and content of a single root parameter.
+)");
 struct RootParam
 {
   DOCUMENT("");
@@ -836,7 +914,12 @@ parameter. See :data:`heap` and :data:`tableRanges`.
   rdcarray<RootTableRange> tableRanges;
 };
 
-DOCUMENT("Contains the details of a single static sampler in a root signature.");
+DOCUMENT(R"(
+D3D12StaticSampler()
+D3D12StaticSampler(other: D3D12StaticSampler)
+
+Contains the details of a single static sampler in a root signature.
+)");
 struct StaticSampler
 {
   DOCUMENT("");
@@ -887,7 +970,12 @@ struct StaticSampler
   SamplerDescriptor descriptor;
 };
 
-DOCUMENT("Contains the root signature structure and root parameters.");
+DOCUMENT(R"(
+D3D12RootSignature()
+D3D12RootSignature(other: D3D12RootSignature)
+
+Contains the root signature structure and root parameters.
+)");
 struct RootSignature
 {
   DOCUMENT("");
@@ -914,7 +1002,12 @@ struct RootSignature
   rdcarray<StaticSampler> staticSamplers;
 };
 
-DOCUMENT("Describes the current state of D3D12 predicated rendering.");
+DOCUMENT(R"(
+D3D12Predication()
+D3D12Predication(other: D3D12Predication)
+
+Describes the current state of D3D12 predicated rendering.
+)");
 struct Predication
 {
   DOCUMENT("");
@@ -946,7 +1039,9 @@ If ``False`` then a zero in the buffer would lead to them being performed as nor
   bool skipIfZero = false;
 };
 
-DOCUMENT("The full current D3D12 pipeline state.");
+DOCUMENT(R"(
+The full current D3D12 pipeline state.
+)");
 struct State
 {
 #if !defined(RENDERDOC_EXPORTS)

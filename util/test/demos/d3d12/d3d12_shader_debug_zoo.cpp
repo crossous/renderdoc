@@ -376,8 +376,8 @@ float4 main(v2f IN) : SV_Target0
   if(IN.tri == 33)
     return float4(-nan, abs(nan), 0.0f, 1.0f);
 
-  // check denorm flushing
-  if(IN.tri == 34)
+  // check denorm flushing (not undefined, but broken on NV currently)
+  if(IN.tri == 34) // undefined-test
     return float4(tiny * 1.5e-8f, tiny * 1.5e-9f, asfloat(intval) == 0.0f ? 1.0f : 0.0f, 1.0f);
 
   // test reading/writing byte address data
@@ -1154,6 +1154,14 @@ float4 main(v2f IN) : SV_Target0
     return float4(asfloat(rootbytesrv.Load(z+0).x), asfloat(rootbytesrv.Load(z+4).x),
                   asfloat(rootbytesrv.Load(z+8).x), float(rootbytesrv.Load(z+12).x));
   }
+  if(IN.tri == 113)
+  {
+    uint a = 0, b = 0, c = 0;
+    byterotest.GetDimensions(a);
+    byterwtest.GetDimensions(b);
+    byterwtest2.GetDimensions(c);
+    return float4(float(a), float(b), float(c), 0.0f);
+  }
   return float4(0.4f, 0.4f, 0.4f, 0.4f);
 }
 )EOSHADER";
@@ -1210,9 +1218,9 @@ float4 main(v2f IN) : SV_Target0
   if(IN.tri == 4)
   {
     float4 Color = float4(0,0,0,0);
-    float floatA = IN.tri/100.0 + 1.5f;
-    float floatB = IN.tri/100.0 + 1.7f;
-    float floatC = IN.tri/100.0 + 2.5f;
+    float floatA = zero + 1.5f;
+    float floatB = zero + 1.75f;
+    float floatC = zero + 2.5f;
     DOUBLE doubleA = (DOUBLE)floatA; 
     DOUBLE doubleB = (DOUBLE)floatB;
     DOUBLE doubleC = (DOUBLE)floatC;
@@ -1323,10 +1331,10 @@ float4 main(v2f IN) : SV_Target0
   if(IN.tri == 11)
   {
     float4 Color = float4(0,0,0,0);
-    float3 floatA = float3(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f);
-    float3 floatB = float3(IN.tri/100.0 - 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 - 2.7f);
-    vector<HALF, 3> halfA = {IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f};
-    vector<HALF, 3> halfB = {IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f};
+    float3 floatA = float3(zero + 1.5f, zero + 1.75f, zero + 2.75f);
+    float3 floatB = float3(zero - 1.5f, zero + 1.75f, zero - 2.75f);
+    vector<HALF, 3> halfA = {zero + 1.5f, zero + 1.75f, zero + 2.75f};
+    vector<HALF, 3> halfB = {zero - 1.5f, zero - 1.75f, zero - 2.75f};
 
     HALF half_val = dot(halfA, halfB);
     float float_val = dot(floatA, floatB);
@@ -1337,10 +1345,10 @@ float4 main(v2f IN) : SV_Target0
   if(IN.tri == 12)
   {
     float4 Color = float4(0,0,0,0);
-    float4 floatA = float4(IN.tri/100.0 + 1.5f, IN.tri/100.0 + 1.7f, IN.tri/100.0 + 2.7f, IN.tri/100.0 + 3.7f);
-    float4 floatB = float4(IN.tri/100.0 - 1.5f, IN.tri/100.0 - 1.7f, IN.tri/100.0 - 2.7f, IN.tri/100.0 - 3.7f);
-    vector<HALF, 4> halfA = {IN.tri + 1.5f, IN.tri + 1.7f, IN.tri + 2.7f, IN.tri + 3.7f};
-    vector<HALF, 4> halfB = {IN.tri - 1.5f, IN.tri - 1.7f, IN.tri - 2.7f, IN.tri - 3.7f};
+    float4 floatA = float4(zero + 1.5f, zero + 1.75f, zero + 2.75f, zero + 3.75f);
+    float4 floatB = float4(zero - 1.5f, zero - 1.75f, zero - 2.75f, zero - 3.75f);
+    vector<HALF, 4> halfA = {zero + 1.5f, zero + 1.75f, zero + 2.75f, zero + 3.75f};
+    vector<HALF, 4> halfB = {zero - 1.5f, zero - 1.75f, zero - 2.75f, zero - 3.75f};
 
     HALF half_val = dot(halfA, halfB);
     float float_val = dot(floatA, floatB);
@@ -1686,7 +1694,11 @@ struct v2f
   float2 uv : TEXCOORD0;
 };
 
-float4 main(v2f IN, uint samp : SV_SampleIndex, float3 bary : SV_Barycentrics) : SV_Target0 
+float4 main(v2f IN, uint samp : SV_SampleIndex
+#if SUPPORTS_BARY
+            , float3 bary : SV_Barycentrics
+#endif
+) : SV_Target0 
 {
   float2 uvCentroid = EvaluateAttributeCentroid(IN.uv);
   float2 uvSamp0 = EvaluateAttributeAtSample(IN.uv, 0) - IN.uv;
@@ -1697,7 +1709,9 @@ float4 main(v2f IN, uint samp : SV_SampleIndex, float3 bary : SV_Barycentrics) :
   float y = (uvSamp0.x + uvSamp0.y) * 0.5f;
   float z = (uvSampThis.x + uvSampThis.y) * 0.5f;
   float w = (uvOffset.x + uvOffset.y) * 0.5f;
+#if SUPPORTS_BARY
   w += x * bary.x + y * bary.y + z * bary.z;
+#endif
 
   // Test sampleinfo with a MSAA rasterizer
   uint numSamples = GetRenderTargetSampleCount();
@@ -1728,6 +1742,11 @@ cbuffer packed_consts : register(b1)
   uint col2w : packoffset(c2.w);
 };
 
+cbuffer oob_consts : register(b2)
+{
+  int4 oob_array[2];
+};
+
 RWStructuredBuffer<uint4> bufIn : register(u0);
 RWStructuredBuffer<uint4> bufOut : register(u1);
 
@@ -1754,6 +1773,9 @@ void main(int3 inTestIndex : SV_GroupID)
   int ONE = ZERO + 1;
 
   int4 testResult = 123;
+  testResult += oob_array[ZERO+2];
+  testResult -= oob_array[ONE+1];
+
   gsmInt = testIndex;
   gsmStruct[gsmInt].a = inTestIndex;
   if (testIndex == 0)
@@ -1936,6 +1958,7 @@ void main(uint3 inDTID : SV_DispatchThreadID, uint3 inGID : SV_GroupThreadID, ui
 
     bool supportSM60 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_0) && m_DXILSupport;
     bool supportSM61 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_1) && m_DXILSupport;
+    bool supportBary = (opts3.BarycentricsSupported) && m_DXILSupport;
     bool supportSM62 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_2) && m_DXILSupport;
     bool supportSM66 = (m_HighestShaderModel >= D3D_SHADER_MODEL_6_6) && m_DXILSupport;
     TEST_ASSERT(!supportSM62 || supportSM60, "SM 6.2 requires SM 6.0 support");
@@ -2582,11 +2605,16 @@ void main(uint3 inDTID : SV_DispatchThreadID, uint3 inGID : SV_GroupThreadID, ui
 
       if(supportSM61)
       {
+        std::string defines = "#define SUPPORTS_BARY ";
+
+        defines += supportBary ? "1" : "0";
+        defines += "\n";
+
         msaaPSOs[2] = MakePSO()
                           .RootSig(sigmsaa)
                           .InputLayout()
                           .VS(Compile(D3DDefaultVertex, "main", "vs_6_1"))
-                          .PS(Compile(msaaPixel61, "main", "ps_6_1"))
+                          .PS(Compile(defines + msaaPixel61, "main", "ps_6_1"))
                           .SampleCount(4)
                           .RTVs({DXGI_FORMAT_R32G32B32A32_FLOAT});
       }
@@ -2701,8 +2729,9 @@ void main(uint3 inDTID : SV_DispatchThreadID, uint3 inGID : SV_GroupThreadID, ui
     ID3D12RootSignaturePtr sigCompute = MakeSig({
         uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0),
         uavParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1),
-        constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 4),
+        constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 0, 8),
         constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 1, 12),
+        constParam(D3D12_SHADER_VISIBILITY_ALL, 0, 2, 12),
         tableParam(D3D12_SHADER_VISIBILITY_ALL, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 2, 1, 3),
     });
 
@@ -3046,7 +3075,19 @@ void main(uint3 inDTID : SV_DispatchThreadID, uint3 inGID : SV_GroupThreadID, ui
         cmd->SetComputeRoot32BitConstant(2, 8, 3);
         cmd->SetComputeRoot32BitConstant(3, 10, 4 + 2);    // col1z
         cmd->SetComputeRoot32BitConstant(3, 11, 8 + 3);    // col2w
-        cmd->SetComputeRootDescriptorTable(4, m_CBVUAVSRV->GetGPUDescriptorHandleForHeapStart());
+        cmd->SetComputeRoot32BitConstant(4, 12, 0 + 0);    // oob_array[0].x
+        cmd->SetComputeRoot32BitConstant(4, 13, 0 + 1);    // oob_array[0].y
+        cmd->SetComputeRoot32BitConstant(4, 14, 0 + 2);    // oob_array[0].z
+        cmd->SetComputeRoot32BitConstant(4, 15, 0 + 3);    // oob_array[0].w
+        cmd->SetComputeRoot32BitConstant(4, 16, 4 + 0);    // oob_array[1].x
+        cmd->SetComputeRoot32BitConstant(4, 17, 4 + 1);    // oob_array[1].y
+        cmd->SetComputeRoot32BitConstant(4, 18, 4 + 2);    // oob_array[1].z
+        cmd->SetComputeRoot32BitConstant(4, 19, 4 + 3);    // oob_array[1].w
+        cmd->SetComputeRoot32BitConstant(4, 20, 8 + 0);    // oob_array[2].x
+        cmd->SetComputeRoot32BitConstant(4, 21, 8 + 1);    // oob_array[2].y
+        cmd->SetComputeRoot32BitConstant(4, 22, 8 + 2);    // oob_array[2].z
+        cmd->SetComputeRoot32BitConstant(4, 23, 8 + 3);    // oob_array[2].w
+        cmd->SetComputeRootDescriptorTable(5, m_CBVUAVSRV->GetGPUDescriptorHandleForHeapStart());
 
         cmd->SetPipelineState(computePSOs[i]);
         setMarker(cmd, computeSMs[i]);

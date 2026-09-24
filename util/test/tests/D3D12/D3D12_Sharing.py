@@ -10,7 +10,7 @@ class D3D12_Sharing(rdtest.TestCase):
         for marker in markers:
             action = self.find_action(marker)
 
-            action: rd.ActionDescription = action.next
+            action: rd.ActionDescription = action.nextAction
 
             self.controller.SetFrameEvent(action.eventId, False)
 

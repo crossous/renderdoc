@@ -245,6 +245,7 @@ public:
   rdcstr GetCompilerSig() const { return m_CompilerSig; }
   rdcstr GetEntryFunction() const { return m_Entry; }
   rdcstr GetShaderProfile() const { return m_Profile; }
+  bool HasSourceDebugInfo() const { return true; }
   ShaderCompileFlags GetShaderCompileFlags() const { return EncodeFlags(m_ShaderFlags, m_Profile); }
   void GetLineInfo(size_t instruction, uintptr_t offset, LineColumnInfo &lineInfo) const;
   void GetCallstack(size_t instruction, uintptr_t offset, rdcarray<rdcstr> &callstack) const;

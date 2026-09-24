@@ -1149,8 +1149,6 @@ void VulkanCreationInfo::ShaderObject::Init(VulkanResourceManager *resourceMan,
   // specialization info
   if(pCreateInfo->pSpecializationInfo)
   {
-    key = ShaderModuleReflectionKey(shad.stage, shad.entryPoint, id);
-
     const byte *data = (const byte *)pCreateInfo->pSpecializationInfo->pData;
 
     const VkSpecializationMapEntry *maps = pCreateInfo->pSpecializationInfo->pMapEntries;
@@ -1565,6 +1563,19 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
     extraPrimitiveOverestimationSize = conservRast->extraPrimitiveOverestimationSize;
   }
 
+  // VkDepthBiasRepresentationInfoEXT
+  depthBiasRepresentation = VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORMAT_EXT;
+  depthBiasExact = false;
+
+  const VkDepthBiasRepresentationInfoEXT *depthBiasRepr =
+      (const VkDepthBiasRepresentationInfoEXT *)FindNextStruct(
+          pCreateInfo->pRasterizationState, VK_STRUCTURE_TYPE_DEPTH_BIAS_REPRESENTATION_INFO_EXT);
+  if(depthBiasRepr)
+  {
+    depthBiasRepresentation = depthBiasRepr->depthBiasRepresentation;
+    depthBiasExact = depthBiasRepr->depthBiasExact;
+  }
+
   // VkPipelineRasterizationLineStateCreateInfo
   lineRasterMode = VK_LINE_RASTERIZATION_MODE_DEFAULT;
   stippleEnabled = false;
@@ -1797,6 +1808,8 @@ void VulkanCreationInfo::Pipeline::Init(VulkanResourceManager *resourceMan,
         depthBiasConstantFactor = pipeInfo.depthBiasConstantFactor;
         depthBiasClamp = pipeInfo.depthBiasClamp;
         depthBiasSlopeFactor = pipeInfo.depthBiasSlopeFactor;
+        depthBiasRepresentation = pipeInfo.depthBiasRepresentation;
+        depthBiasExact = pipeInfo.depthBiasExact;
         lineWidth = pipeInfo.lineWidth;
 
         rasterizationStream = pipeInfo.rasterizationStream;
@@ -2598,17 +2611,18 @@ void VulkanCreationInfo::Image::Init(VulkanResourceManager *resourceMan, VulkanC
 
   creationFlags = TextureCategory::NoFlags;
 
-  if(pCreateInfo->usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+  VkImageUsageFlagBits2KHR usage = (VkImageUsageFlagBits2KHR)GetImageUsageFlags(pCreateInfo);
+
+  if(usage & VK_IMAGE_USAGE_SAMPLED_BIT)
     creationFlags |= TextureCategory::ShaderRead;
-  if(pCreateInfo->usage &
-     (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT))
+  if(usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT))
     creationFlags |= TextureCategory::ColorTarget;
-  if(pCreateInfo->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+  if(usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
     creationFlags |= TextureCategory::DepthTarget;
-  if(pCreateInfo->usage & VK_IMAGE_USAGE_STORAGE_BIT)
+  if(usage & VK_IMAGE_USAGE_STORAGE_BIT)
     creationFlags |= TextureCategory::ShaderReadWrite;
 
-  cube = (pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) ? true : false;
+  cube = (GetImageCreateFlags(pCreateInfo) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) ? true : false;
 
   address = 0;
 }
@@ -2749,6 +2763,26 @@ void VulkanCreationInfo::ImageView::Init(VulkanResourceManager *resourceMan, Vul
   }
 
   isDepthImage = !!(info.m_Image[image].creationFlags & TextureCategory::DepthTarget);
+
+  storageSliceOffset = 0;
+  storageSliceCount = 0;
+
+  const VkImageViewSlicedCreateInfoEXT *slicedInfo =
+      (const VkImageViewSlicedCreateInfoEXT *)FindNextStruct(
+          pCreateInfo, VK_STRUCTURE_TYPE_IMAGE_VIEW_SLICED_CREATE_INFO_EXT);
+  if(slicedInfo)
+  {
+    // only valid for 3D image views, which should have 0/1 layers currently
+    RDCASSERTEQUAL(range.baseArrayLayer, 0);
+    RDCASSERTEQUAL(range.layerCount, 1);
+    storageSliceOffset = slicedInfo->sliceOffset;
+    storageSliceCount = slicedInfo->sliceCount;
+
+    if(storageSliceCount == VK_REMAINING_3D_SLICES_EXT)
+    {
+      storageSliceCount = info.m_Image[image].extent.depth - storageSliceOffset;
+    }
+  }
 }
 
 void VulkanCreationInfo::ShaderModule::Init(VulkanResourceManager *resourceMan,
@@ -3022,7 +3056,7 @@ void VulkanCreationInfo::ShaderModuleReflection::Init(VulkanResourceManager *res
 void VulkanCreationInfo::ShaderModuleReflection::PopulateDisassembly(const rdcspv::Reflector &spirv)
 {
   if(disassembly.empty())
-    disassembly = spirv.Disassemble(refl->entryPoint, instructionLines);
+    disassembly = spirv.Disassemble(refl->entryPoint, specConstantData, instructionLines);
 }
 
 void VulkanCreationInfo::ShaderModuleReflection::Reload(VulkanResourceManager *resourceMan,

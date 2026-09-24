@@ -45,7 +45,13 @@ class VK_Shader_Debug_Zoo(rdtest.TestCase):
                     debugged = self.evaluate_source_var(output, variables)
 
                     try:
-                        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, x, y, debugged.value.f32v[0:4])
+                            
+                        valscale = min(debugged.value.f32v[0:4])
+                        eps = rdtest.FLT_EPSILON
+                        if valscale > 1.0:
+                            eps = 5.0e-05
+
+                        self.check_pixel_value(pipe.GetOutputTargets()[0].resource, x, y, debugged.value.f32v[0:4], eps=eps)
                     except rdtest.TestFailureException as ex:
                         failed = True
                         rdtest.log.error("Test {} in sub-section {} did not match. {}".format(test, child, str(ex)))

@@ -1,242 +1,82 @@
-Writing UI extensions
-=====================
+Tutorial: UI extensions
+=======================
 
-This document outlines how to get started writing a UI extension. For information on how to configure, register and install a UI extension see :doc:`../how/how_python_extension`.
+This document outlines how to get started writing a UI extension.
 
-First steps
------------
+Creating an extension
+---------------------
 
-We start off with the basic registration function. Create an ``__init__.py`` in your extension's root and fill it out:
+RenderDoc UI extensions are python modules loaded from standard locations on disk, depending on your platform. On Windows it's :file:`%APPDATA%\\qrenderdoc\\extensions` and on linux it's ``~/.local/share/qrenderdoc/extensions``.
 
-.. highlight:: python
-.. code:: python
+In any subdirectory under this path you can register an extension by creating a ``extension.json`` file with some metadata, and creating a python module starting with an ``__init__.py`` file.
 
-    import qrenderdoc as qrd
+.. figure:: ../imgs/Screenshots/ExtensionManager.png
 
-    extiface_version = ''
+	Extension Manager: Configures installed extensions.
 
-    def register(version: str, ctx: qrd.CaptureContext):
-        global extiface_version
-        extiface_version = version
+To streamline setup we will ask RenderDoc to create a new extension for us. Open the python scripting window from :guilabel:`Window` → :guilabel:`Python Scripting`. Then either double click the :guilabel:`Create New...` item under the :guilabel:`UI Extensions` section, or right click on the section title and select the option from the context menu.
 
-        print("Registering my extension for RenderDoc version {}".format(version))
+From the dialog that appears enter a package name such as ``tutorialext``. This will create the ``extension.json`` and ``__init__.py`` files in a new folder ``tutorialext`` for us.
 
-    def unregister():
-        print("Unregistering my extension")
+For more information about the registration of python extensions see :doc:`../how/how_python_extension`
 
-Here we create the minimum ``register()`` and ``unregister()`` functions required for an extension to load, that just print a message. We store the interface version in a global which we can use in future to do version-checks if we want to be compatible with more than one RenderDoc version, since the python interface is not fully forwards and backwards compatible.
+Enabling the extension
+----------------------
 
-This doesn't really do much, let's register a tool menu item:
+To load the extension, tick the :guilabel:`Enable` checkbox for its entry the extension manager. Python modules can't be unloaded but they can be reloaded if changes are made to the files on disk, which can be done from the :doc:`python scripting <../window/python_scripting>` window or the status bar.
 
-.. highlight:: python
-.. code:: python
+Editing your extension
+----------------------
 
-    def menu_callback(ctx: qrd.CaptureContext, data):
-        ctx.Extensions().MessageDialog("Hello from the extension!", "Extension message")
+At this point you will have an ``extension.json`` and ``__init__.py`` in the ``extensions/tutorialext`` folder in your application data directory. These can be edited in the program of your choice, but we will use the python scripting window which can browse and open extension files for edit.
 
-    def register(version: str, ctx: qrd.CaptureContext):
-        # as above ...
+In the python scripting panel project sidebar, expand :guilabel:`UI Extensions` and :guilabel:`tutorialext` to open these two files and see the default-provided contents.
 
-        ctx.Extensions().RegisterWindowMenu(qrd.WindowMenu.Tools, ["My extension"], menu_callback)
+.. figure:: ../imgs/Screenshots/PythonUIProjectEditor.png
 
-Now we have a new menu item which when clicked produces a popup message dialog!
+	Python Scripting: Editing the files for a new UI extension.
 
-.. figure:: ../imgs/python_ext/Step1.png
-
-    Python extension generating a message box
-
-This is a good proof of concept, but really we want something more directly usable. Instead of showing a message box, let's show a window which reacts to the selected action by showing a series of breadcrumbs for marker labels.
-
-Adding a window and capture viewer
-----------------------------------
-
-First we create a class to handle our window and to derive from :py:class:`qrenderdoc.CaptureViewer` to get callbacks for events.
+We will add a UI button and new panel to demonstrate how UI extensions can provide user-interactive features. This is available as ``Tutorial: UI extension`` in the :guilabel:`Examples` section of the project explorer, though note that you will have to copy the code into your ``__init__.py`` as the example does not run on its own.
 
 .. highlight:: python
-.. code:: python
+.. literalinclude:: ui_extensions.py
 
-    class Window(qrd.CaptureViewer):
-        def __init__(self, ctx: qrd.CaptureContext, version: str):
-            super().__init__()
+If you edit the ``__init__.py`` you'll find that the RenderDoc status bar will notify you that as well as having one extension currently loaded the files have been changed on disk. Clicking the button in the status bar will reload the extension:
 
-            self.mqt: qrd.MiniQtHelper = ctx.Extensions().GetMiniQtHelper()
+.. figure:: ../imgs/Screenshots/PythonExtensionModified.png
 
-            self.ctx = ctx
-            self.version = version
-            self.topWindow = self.mqt.CreateToplevelWidget("Breadcrumbs", lambda c, w, d: window_closed())
+	The RenderDoc status bar with a modified extension loaded
 
-            ctx.AddCaptureViewer(self)
+.. |plugin| image:: ../imgs/icons/plugin.png
 
-        def OnCaptureLoaded(self):
-            pass
+After the extension has been reloaded, you can use the new extension menu item under the extension icon |plugin| in the event browser. The menu item  will open a new panel with a scavenger hunt for the largest drawcall in your capture.
 
-        def OnCaptureClosed(self):
-            pass
+.. figure:: ../imgs/Screenshots/TutorialUIExtension.png
 
-        def OnSelectedEventChanged(self, event):
-            pass
+	The new button and window added by the extension.
 
-        def OnEventChanged(self, event):
-            pass
+Breaking it down
+----------------
 
-Here we implement stubs for the different events. More information on when they are sent can be found in the class documentation. We use the :py:class:`qrenderdoc.MiniQtHelper` to create a top-level window for ourselves with the 'breadcrumbs' title, then register oureslves as a capture viewer. The mini-Qt helper is useful to provide simple access to Qt widgets in a portable way from the RenderDoc UI, without relying on full Qt python bindings that may not be available depending on how RenderDoc was built.
+This example demonstrates how you can bridge the gap between python scripts and UI elements. It shows how to add a menu item to one of the main interfaces - the event browser - and how to create a new UI panel with custom interactivity.
 
-We will need to unregister ourselves as a capture viewer when the window is closed, which happens in the ``window_closed()`` callback that we'll define later.
+When our extension is loaded (or reloaded) the ``register()`` function we define is called with two parameters, the version of RenderDoc as a string e.g. ``"1.23"`` and the :class:`~qrenderdoc.CaptureContext` which is also available as a global ``pyrenderdoc``.
 
-An empty window is not very useful, so let's give ourselves a label. More complex layouts and widgets are of course possible but for the moment we'll keep it simple:
+From the :class:`~qrenderdoc.CaptureContext` at ``pyrenderdoc`` that we used in the previous example, we can get access to :class:`~qrenderdoc.ExtensionManager` which gives us the option to create a UI. First we register a menu item (:meth:`~qrenderdoc.ExtensionManager.RegisterPanelMenu`) in the event browser's toolbar, providing a list of submenus and a callback to call when it is pressed.
 
-.. highlight:: python
-.. code:: python
+.. tip::
 
-    vert = self.mqt.CreateVerticalContainer()
-    self.mqt.AddWidget(self.topWindow, vert)
+	There are multiple places where you can add a new menu item, explore the available enum values and functions here to see what options there are!
 
-    self.breadcrumbs = self.mqt.CreateLabel()
+When the ``open_window`` callback is called, we create a new window using the :doc:`UI helpers <in_depth/miniqt>` in :class:`~qrenderdoc.MiniQtHelper`. Note that most RenderDoc builds ship with fully integrated python Qt access via PySide, but the full Qt API is quite complex and not necessary for simple quick UIs.
 
-    self.mqt.AddWidget(vert, self.breadcrumbs)
+For the UI we create a groupbox with a label and a button. When the button is pressed, it updates the label based on where the :ref:`current event <currentevent>` is relative to the largest drawcall found in the capture. This is all contained within a top-level widget (:meth:`~qrenderdoc.MiniQtHelper.CreateToplevelWidget`)
 
-And finally we can fill in the event functions to set the breadcrumbs. We use ``@1234`` syntax for events which causes them to be clickable links that jump to that event. You can also convert a :py:class:`renderdoc.ResourceId` to a string with ``str()`` and it will similarly provide a link for that resource named with the current debug name.
+Finally we use :meth:`~qrenderdoc.CaptureContext.AddDockWindow` to add the top-level widget into RenderDoc's docking system. Any widget can be added as a new top-level docking panel, but it is recommended that you use an explicit top-level widget to be able to use its callback when it is closed.
 
-.. highlight:: python
-.. code:: python
-
-    def OnCaptureLoaded(self):
-        self.mqt.SetWidgetText(self.breadcrumbs, "Breadcrumbs:")
-
-    def OnCaptureClosed(self):
-        self.mqt.SetWidgetText(self.breadcrumbs, "Breadcrumbs:")
-
-    def OnSelectedEventChanged(self, event):
-        pass
-
-    def OnEventChanged(self, event):
-        action = self.ctx.GetAction(event)
-
-        breadcrumbs = ''
-
-        if action is not None:
-            breadcrumbs = '@{}: {}'.format(action.eventId, action.customName)
-
-            while action.parent is not None:
-                action = action.parent
-                breadcrumbs = '@{}: {}'.format(action.eventId, action.customName) + '\n' + breadcrumbs
-
-        self.mqt.SetWidgetText(self.breadcrumbs, "Breadcrumbs:\n{}".format(breadcrumbs))
-
-Finally we'll register a new menu item to display the window. We only allow one window at once, so if it still exists we'll just raise it. Otherwise we create a new one. This is also where we unregister the capture viewer:
-
-.. highlight:: python
-.. code:: python
-
-    from typing import Optional
-
-
-    cur_window: Optional[Window] = None
-
-
-    def window_closed():
-        global cur_window
-        if cur_window is not None:
-            cur_window.ctx.RemoveCaptureViewer(cur_window)
-        cur_window = None
-
-
-    def open_window_callback(ctx: qrd.CaptureContext, data):
-        global cur_window
-
-        mqt = ctx.Extensions().GetMiniQtHelper()
-
-        if cur_window is None:
-            cur_window = Window(ctx, extiface_version)
-            if ctx.HasEventBrowser():
-                ctx.AddDockWindow(cur_window.topWindow, qrd.DockReference.TopOf, ctx.GetEventBrowser().Widget(), 0.1)
-            else:
-                ctx.AddDockWindow(cur_window.topWindow, qrd.DockReference.MainToolArea, None)
-
-        ctx.RaiseDockWindow(cur_window.topWindow)
-
-
-    def register(version: str, ctx: qrd.CaptureContext):
-        # as above ...
-
-        ctx.Extensions().RegisterWindowMenu(qrd.WindowMenu.Window, ["Extension Window"], open_window_callback)
-
-
-    def unregister():
-        print("Unregistering my extension")
-
-        global cur_window
-
-        if cur_window is not None:
-            # The window_closed() callback will unregister the capture viewer
-            cur_window.ctx.Extensions().GetMiniQtHelper().CloseToplevelWidget(cur_window.topWindow)
-            cur_window = None
-
-With that we now have a new little breadcrumbs window that docks itself above our event browser to show where we are in the frame:
-
-.. figure:: ../imgs/python_ext/Step2.png
-
-    Python extension showing the current action's breadcrumbs
-
-Calling onto replay thread
---------------------------
-
-So far this has worked well, but we're only using information available on the UI thread. A good amount of useful information is cached on the UI thread including the current pipeline state and actions, but for some work we might want to call into the underlying analysis functions. When we do this we must do it on the replay thread to avoid blocking the UI if the analysis work takes a long time.
-
-This can get quite complex so we will do something very simple, in the message box callback that we created earlier instead of displaying the message box immediately we will first figure out the minimum and maximum values for the current depth output or first colour output and display that.
-
-To start with we can identify the resource on the UI thread, so let's do that:
-
-.. highlight:: python
-.. code:: python
-
-    import renderdoc as rd
-
-    def menu_callback(ctx: qrd.CaptureContext, data):
-        texid = rd.ResourceId.Null()
-        depth = ctx.CurPipelineState().GetDepthTarget()
-
-        # Prefer depth if possible
-        if depth.resourceId != rd.ResourceId.Null():
-            texid = depth.resourceId
-        else:
-            cols = ctx.CurPipelineState().GetOutputTargets()
-
-            # See if we can get the first colour target instead
-            if len(cols) > 1 and cols[0].resourceId != rd.ResourceId.Null():
-                texid = cols[0].resourceId
-
-        if texid == rd.ResourceId.Null():
-            ctx.Extensions().MessageDialog("Couldn't find any bound target!", "Extension message")
-            return
-
-
-This all happens as before on the UI thread using UI-cached pipeline state data. If we can't find a resource we just bail out, but otherwise we have ``texid`` with the texture we want to analyse.
-
-To do this we invoke onto a different thread twice - first the UI thread invokes onto the replay thread to calculate the minimum and maximum values. Then that callback invokes back onto the UI thread to display a message.
-
-.. highlight:: python
-.. code:: python
-
-    if texid == rd.ResourceId.Null():
-        ctx.Extensions().MessageDialog("Couldn't find any bound target!", "Extension message")
-        return
-    else:
-        mqt = ctx.Extensions().GetMiniQtHelper()
-        texname = ctx.GetResourceName(texid)
-
-        def get_minmax(r: rd.ReplayController):
-            minvals, maxvals = r.GetMinMax(texid, rd.Subresource(), rd.CompType.Typeless)
-
-            msg = '{} has min {:.4} and max {:.4} in red'.format(texname, minvals.floatValue[0], maxvals.floatValue[0])
-
-            mqt.InvokeOntoUIThread(lambda: ctx.Extensions().MessageDialog(msg, "Extension message"))
-
-        ctx.Replay().AsyncInvoke('', get_minmax)
-
-Now that we've done that correctly our extension will be able to run in-depth replay analysis without calling functions from the wrong thread or stalling the UI.
-
-Conclusion
+Next steps
 ----------
 
-Hopefully now from that worked example you have an idea of the basics of writing UI extensions. More complex examples can be found at the `community contributed repository <https://github.com/baldurk/renderdoc-contrib>`_ and the source code for this extension is available in the `github repository <https://github.com/baldurk/renderdoc/tree/v1.x/docs/python_api/ui_extension_tutorial>`_
+This shows how to expose user-visible tools to connect through to custom scripts which can be of varying complexity. At this point you hopefully have the starting point to begin exploring APIs available in the documentation or through autocomplete.
+
+Up until now we have written everything within the RenderDoc UI to get started quickly. This is fine for writing small snippets of code, but we can also set up an external IDE for a better experience when writing larger or more complex extensions.

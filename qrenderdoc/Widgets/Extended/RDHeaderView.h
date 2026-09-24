@@ -79,6 +79,7 @@ protected:
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
   void paintEvent(QPaintEvent *e) override;
+  bool viewportEvent(QEvent *e) override;
 
   void paintSection(QPainter *painter, const QRect &rect, int section) const override;
   void currentChanged(const QModelIndex &current, const QModelIndex &old) override;

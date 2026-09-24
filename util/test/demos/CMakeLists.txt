@@ -175,6 +175,7 @@ set(VULKAN_SRC
         vk/vk_vertex_attr_zoo.cpp
         vk/vk_video_textures.cpp
         vk/vk_vs_max_desc_set.cpp
+        vk/vk_vrs.cpp
         vk/vk_workgroup_zoo.cpp)
 
 set(OPENGL_SRC

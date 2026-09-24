@@ -61,7 +61,7 @@ An example for this for linux would be to use ``plink.exe`` and passwordless key
 
     plink.exe user@host DISPLAY=:0.0 renderdoccmd remoteserver -d
 
-Assuming that plink.exe is in ``PATH`` on the host machine, and ``renderdoccmd`` is on the host machine.
+Assuming that ``plink.exe`` is in ``PATH`` on the host machine, and ``renderdoccmd`` is on the host machine.
 
 Switching to a Replay Context
 -----------------------------

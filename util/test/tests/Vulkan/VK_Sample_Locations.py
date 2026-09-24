@@ -7,7 +7,7 @@ class VK_Sample_Locations(rdtest.TestCase):
 
     def check_capture(self):
         action: rd.ActionDescription = self.find_action("Degenerate")
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
         pipe: rd.VKState = self.controller.GetVulkanPipelineState()
 
         if pipe.multisample.rasterSamples != 4:
@@ -34,7 +34,7 @@ class VK_Sample_Locations(rdtest.TestCase):
                                               .format(sampleLoc.customLocations[1], sampleLoc.customLocations[2]))
 
         action: rd.ActionDescription = self.find_action("Rotated")
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
         pipe: rd.VKState = self.controller.GetVulkanPipelineState()
 
         if pipe.multisample.rasterSamples != 4:

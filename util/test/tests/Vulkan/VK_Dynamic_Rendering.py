@@ -11,7 +11,7 @@ class VK_Dynamic_Rendering(rdtest.TestCase):
                                                             rd.ReplayOutputType.Texture)
 
         for cmdLevel in [0, 1]:
-            action = self.find_action("Draw {}".format(cmdLevel)).next
+            action = self.find_action("Draw {}".format(cmdLevel)).nextAction
 
             self.check(action is not None)
 

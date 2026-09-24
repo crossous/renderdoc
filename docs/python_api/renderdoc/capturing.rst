@@ -17,8 +17,6 @@ Execution & Injection
 .. autoclass:: renderdoc.CaptureOptions
   :members:
   
-.. autofunction:: renderdoc.GetDefaultCaptureOptions
-
 .. autoclass:: renderdoc.EnvironmentModification
   :members:
 

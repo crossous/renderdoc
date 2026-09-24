@@ -1,0 +1,276 @@
+Example: Mesh Output
+====================
+
+RenderDoc is able to fetch and display the mesh output data at each shader stage, in the :doc:`../../window/mesh_viewer`. This data can also be queried and decoded in python, as we will show in this example.
+
+It is worth noting that although this is written from the perspective of decoding the output data from mesh stages, a large amount of this applies equally to decoding general buffer data with a known format.
+
+.. warning::
+    Decoding mesh output data *in the general case* to fully handle all possible API features, shader stages, and variable types can be very complex. This example will deliberately focus on a simple case where the reflection and types are easy to understand. From that basic foundation it is then possible to expand in different ways that are outside the scope of this example.
+
+Selecting an action
+-------------------
+
+For this example we are keeping it simple, so we want to find an action that is a simple draw call that uses just a vertex shader. Task/mesh shaders may require different handling and the presence of tessellation or geometry shaders will also complicate matters.
+
+Unlike other examples, we will fail to run if a capture is not loaded or a suitable action is not already selected.
+
+.. highlight:: python
+.. code:: python
+
+    pipe = pyrenderdoc.CurPipelineState()
+
+    avoid_stages = [
+        renderdoc.ShaderStage.Mesh,
+        renderdoc.ShaderStage.Geometry,
+        renderdoc.ShaderStage.Hull,
+    ]
+
+    if any([pipe.GetShader(x) != renderdoc.ResourceId() for x in avoid_stages]):
+        raise RuntimeError("Can't run example on this draw")
+
+    refl = pipe.GetShaderReflection(renderdoc.ShaderStage.Vertex)
+
+    if refl is None:
+        raise RuntimeError("Can't run example on this draw")
+
+Retrieving mesh output data
+---------------------------
+
+Internally RenderDoc refers to any general data fetched from any stage as "Post VS" data. Fetching this is fairly simple via a call to :meth:`~renderdoc.ReplayController.GetPostVSData` for a given stage and for a given instance and multiview.
+
+Post VS data is cached per-event unless something causes the cache to be invalidated like shader editing. If you have the mesh viewer open in the UI then the data is already being cached whenever an event is selected.
+
+.. warning::
+    As in other cases, this can take some time depending on if the cache is warm or not so it is best to consider ensuring this call happens on the :ref:`replay thread <pythreading>`!
+
+This function returns a :class:`~renderdoc.MeshFormat` which details the properties of the returned data in an optional index buffer and vertex buffer. The index buffer is *not* necessarily the same as any index buffer used in the draw, and is not interchangeable. The buffer resources referred to are internal and will not match the IDs returned for any buffer in the capture itself.
+
+.. highlight:: python
+.. code:: python
+
+    controller = pyrenderdoc.GetBlockingController()
+
+    meshdata = controller.GetPostVSData(0, 0, renderdoc.MeshDataStage.VSOut)
+
+The :class:`~renderdoc.MeshFormat` also contains information about the size of the draw and its topology, in case this stage is not outputting triangles to the rasterizer. For stages that do rasterize their output RenderDoc estimates the projection matrix's near plane and far plane which can be used to display the unprojected mesh data.
+
+.. highlight:: python
+.. code:: python
+
+    print(f"Mesh data contains {meshdata.numIndices} indices in {str(meshdata.topology)}")
+    if meshdata.indexResourceId != renderdoc.ResourceId():
+        print("         (indexed)")
+    else:
+        print("         (non-indexed)")
+    if meshdata.unproject:
+        print(f"         Rasterized data: {meshdata.nearPlane:.2f}-{meshdata.farPlane:.2f}")
+
+Fetching indices
+----------------
+
+To decode the provided vertex data we first set up a list of indices. If there is an index buffer we can fetch its buffer contents with :meth:`~renderdoc.ReplayController.GetBufferData` and decode using ``struct.unpack``. If there's no index buffer it's simple and we can generate a list of integers ourselves.
+
+The details of unpacking formats are available in the `python documentation <https://docs.python.org/3/library/struct.html>`_, but we only need to handle a couple of different possible index byte sizes as determined by :data:`~renderdoc.MeshFormat.indexByteStride`.
+
+.. highlight:: python
+.. code:: python
+
+    idxs = [i for i in range(meshdata.numIndices)]
+    if meshdata.indexResourceId != renderdoc.ResourceId():
+        bufdata = controller.GetBufferData(
+            meshdata.indexResourceId, meshdata.indexByteOffset, meshdata.indexByteSize
+        )
+
+        #              01234
+        struct_type = " BH I"[meshdata.indexByteStride]
+
+        idxs = cast(
+            List[int], struct.unpack_from(f"={meshdata.numIndices}{struct_type}", bufdata)
+        )
+
+Fetching vertex data
+--------------------
+
+The new vertex buffer generated by RenderDoc will have a format closely following the :data:`~renderdoc.ShaderReflection.outputSignature` from the reflection data of the stage that output it - in our case the vertex shader.
+
+As a general rule, the output data follows a specific format - each vertex is separated by a stride of :data:`~renderdoc.MeshFormat.vertexByteStride` bytes and starts at :data:`~renderdoc.MeshFormat.vertexByteOffset` in the vertex buffer. The vertex data is made up of the reflection's output signature elements, including any builtin outputs.
+
+We will iterate over up to 4 triangles, and in each triangle process each index. For each index we use it to calculate the offset in the vertex buffer and fetch the data for the whole vertex:
+
+.. highlight:: python
+.. code:: python
+
+    idx += meshdata.baseVertex
+
+    offset = meshdata.vertexByteOffset + meshdata.vertexByteStride * idx
+
+    vert_data = controller.GetBufferData(
+        meshdata.vertexResourceId, offset, meshdata.vertexByteStride
+    )
+
+.. tip::
+    It would be better to fetch the buffer data for all vertices into python at once and then slice it here, but for this example we query the buffer data per-vertex
+
+Decoding vertex data
+--------------------
+
+We can now decode the vertex data according to the expected layout, but there are two important points to note:
+
+#. For shaders that are the last stage before the rasterizer and output to the builtin position (:data:`~renderdoc.ShaderBuiltin.Position`) this position data is always output first in the vertex data, before every other element in order.
+
+   This re-ordering is done by RenderDoc so that the mesh data returned by :meth:`~renderdoc.ReplayController.GetPostVSData` immediately describes the position data. In many cases there is no re-ordering as position is often the first declared output anyway.
+
+#. By default all data is tightly packed without respect for alignment. However on some APIs and shader stages, each element will be aligned up according to 'traditional' conservative padding: with vector elements aligned so they do not cross a 16-byte boundary.
+
+   This can be queried with :meth:`~renderdoc.PipeState.HasAlignedPostVSData`.
+
+In our example we will handle both of these for demonstration, though you may find in your capture that one or both is redundant.
+
+First we identify the position output. Since we know that this draw only uses a vertex shader so it must write to position. We can then decode the position, assuming it is float data but fetching the number of components from the output signature.
+
+.. highlight:: python
+.. code:: python
+
+    posidx = [
+        o.systemValue == renderdoc.ShaderBuiltin.Position
+        for o in refl.outputSignature
+    ].index(True)
+    if posidx >= 0:
+        pos = refl.outputSignature[posidx]
+
+        # simple case, we assume float output and don't have to worry about alignment
+        posdata = struct.unpack_from(f"={pos.compCount}f", vert_data)
+
+        print(f"    <pos>: {fmt_vec(posdata)}")
+
+After the position will follow all of the other signature elements in the order they appear in the reflection signature. We track this in an ``offset`` variable which we update after fetching the position.
+
+Before each element we check if we need to align upwards for the new element's data:
+
+.. highlight:: python
+.. code:: python
+
+    for output in refl.outputSignature:
+        # position was handled above, so skip it here
+        if output.systemValue == renderdoc.ShaderBuiltin.Position:
+            continue
+
+        if pipe.HasAlignedPostVSData(renderdoc.MeshDataStage.VSOut):
+            align = max(4, renderdoc.VarTypeByteSize(output.varType))
+            if output.compCount == 3:
+                align *= 4
+            else:
+                align *= output.compCount
+
+            if offset % align != 0:
+                offset = align - (offset % align)
+
+        data_offs = offset
+
+        offset += output.compCount * renderdoc.VarTypeByteSize(output.varType)
+
+Once we know where the data appears, we can decode it. For simplicity we will only handle 32-bit integer and floating point data, which covers most common types as this includes vectors.
+
+.. highlight:: python
+.. code:: python
+
+    fmtchar = ""
+    if output.varType == renderdoc.VarType.Float:
+        fmtchar = "f"
+    elif output.varType == renderdoc.VarType.UInt:
+        fmtchar = "I"
+    elif output.varType == renderdoc.VarType.SInt:
+        fmtchar = "i"
+    if fmtchar != "":
+        fmt = f"={output.compCount}{fmtchar}"
+        data = fmt_vec(struct.unpack_from(fmt, vert_data, data_offs))
+    else:
+        data = "<non-decoded data>"
+
+Putting this all together we can then print this signature's data for that vertex:
+
+.. highlight:: python
+.. code:: python
+
+    name = output.varName
+    if name == "":
+        name = output.semanticIdxName
+
+    print(f"    {name}: {fmt_vec(data)}")
+    
+Sample Output
+-------------
+
+.. sourcecode:: text
+
+    Mesh data contains 36 indices in Topology.TriangleList
+            (non-indexed)
+            Rasterized data: 0.20-100.00
+
+    Triangle 0:
+    [0]:
+        <pos>: -0.416, 3.814, 4.952, 5.142
+        texcoord: 0.000, 1.000, 0.000, 0.000
+        frag_pos: -0.416, 3.814, 4.952
+    [1]:
+        <pos>: 3.389, 2.284, 6.010, 6.198
+        texcoord: 1.000, 1.000, 0.000, 0.000
+        frag_pos: 3.389, 2.284, 6.010
+    [2]:
+        <pos>: 3.389, -1.856, 4.979, 5.169
+        texcoord: 1.000, 0.000, 0.000, 0.000
+        frag_pos: 3.389, -1.856, 4.979
+
+    Triangle 1:
+    [3]:
+        <pos>: 3.389, -1.856, 4.979, 5.169
+        texcoord: 1.000, 0.000, 0.000, 0.000
+        frag_pos: 3.389, -1.856, 4.979
+    [4]:
+        <pos>: -0.416, -0.327, 3.921, 4.113
+        texcoord: 0.000, 0.000, 0.000, 0.000
+        frag_pos: -0.416, -0.327, 3.921
+    [5]:
+        <pos>: -0.416, 3.814, 4.952, 5.142
+        texcoord: 0.000, 1.000, 0.000, 0.000
+        frag_pos: -0.416, 3.814, 4.952
+
+    Triangle 2:
+    [6]:
+        <pos>: -0.416, 3.814, 4.952, 5.142
+        texcoord: 1.000, 1.000, 0.000, 0.000
+        frag_pos: -0.416, 3.814, 4.952
+    [7]:
+        <pos>: -3.389, -2.284, 5.275, 5.464
+        texcoord: 0.000, 0.000, 0.000, 0.000
+        frag_pos: -3.389, -2.284, 5.275
+    [8]:
+        <pos>: -3.389, 1.856, 6.306, 6.493
+        texcoord: 0.000, 1.000, 0.000, 0.000
+        frag_pos: -3.389, 1.856, 6.306
+
+    Triangle 3:
+    [9]:
+        <pos>: -0.416, 3.814, 4.952, 5.142
+        texcoord: 1.000, 1.000, 0.000, 0.000
+        frag_pos: -0.416, 3.814, 4.952
+    [10]:
+        <pos>: -0.416, -0.327, 3.921, 4.113
+        texcoord: 1.000, 0.000, 0.000, 0.000
+        frag_pos: -0.416, -0.327, 3.921
+    [11]:
+        <pos>: -3.389, -2.284, 5.275, 5.464
+        texcoord: 0.000, 0.000, 0.000, 0.000
+        frag_pos: -3.389, -2.284, 5.275
+
+Example Source
+--------------
+
+This example can be found under the name "Mesh Output" in the python scripting window.
+
+.. only:: html and not htmlhelp
+
+    :download:`Download the example script <mesh_output.py>`.
+
+.. literalinclude:: mesh_output.py

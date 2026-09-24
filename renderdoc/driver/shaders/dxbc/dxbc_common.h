@@ -508,6 +508,7 @@ public:
   virtual rdcstr GetEntryFunction() const = 0;
   virtual rdcstr GetShaderProfile() const = 0;
 
+  virtual bool HasSourceDebugInfo() const = 0;
   virtual ShaderCompileFlags GetShaderCompileFlags() const = 0;
 
   rdcarray<ShaderSourceFile> Files;

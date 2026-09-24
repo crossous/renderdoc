@@ -1109,6 +1109,7 @@ WrappedOpenGL::ContextData &WrappedOpenGL::GetCtxData()
 void WrappedOpenGL::DeleteContext(void *contextHandle)
 {
   ContextData &ctxdata = m_ContextData[contextHandle];
+  GLWindowingData existing = m_ActiveContexts[Threading::GetCurrentID()];
 
   RDCLOG("Deleting context %p", contextHandle);
 
@@ -1131,28 +1132,76 @@ void WrappedOpenGL::DeleteContext(void *contextHandle)
     }
   }
 
+  bool canDelete = (existing.ctx == ctxdata.ctx);
+
+  GLWindowingData savedContext;
+
+  if(existing.ctx == NULL)
+  {
+    if(m_Platform.PushChildContext(existing, ctxdata.shareGroup->m_BackDoor, &savedContext))
+    {
+      canDelete = true;
+    }
+  }
+
+  GLenum err = glGetError();
+  if(canDelete)
+  {
+    if(ctxdata.built && ctxdata.ready)
+    {
+      ctxdata.ArrayMS.Destroy();
+      if(ctxdata.Program)
+        GL.glDeleteProgram(ctxdata.Program);
+      if(ctxdata.ArrayBuffer)
+        GL.glDeleteBuffers(1, &ctxdata.ArrayBuffer);
+      if(ctxdata.GlyphTexture)
+        GL.glDeleteTextures(1, &ctxdata.GlyphTexture);
+    }
+
+    if(ctxdata.m_ClientMemoryVBOs[0])
+      glDeleteBuffers(ARRAY_COUNT(ctxdata.m_ClientMemoryVBOs), ctxdata.m_ClientMemoryVBOs);
+    err = glGetError();
+    if(ctxdata.m_ClientMemoryIBO)
+      glDeleteBuffers(1, &ctxdata.m_ClientMemoryIBO);
+    err = glGetError();
+  }
+  else
+  {
+    if(!lastInGroup)
+      RDCWARN("leaking objects in context %p, assuming driver cleanup eventually", ctxdata.ctx);
+
+    // release our tracking to ensure we don't false-alias
+    GLResource res = BufferRes({ctxdata.ctx, ctxdata.shareGroup}, ctxdata.m_ClientMemoryIBO);
+    if(GetResourceManager()->HasResource(res))
+    {
+      if(GetResourceManager()->HasResourceRecord(res))
+        GetResourceManager()->GetResourceRecord(res)->Delete(GetResourceManager());
+      GetResourceManager()->UnregisterResource(res);
+    }
+    for(GLuint buf : ctxdata.m_ClientMemoryVBOs)
+    {
+      res.name = buf;
+      if(GetResourceManager()->HasResource(res))
+      {
+        if(GetResourceManager()->HasResourceRecord(res))
+          GetResourceManager()->GetResourceRecord(res)->Delete(GetResourceManager());
+        GetResourceManager()->UnregisterResource(res);
+      }
+    }
+  }
+
+  if(savedContext.ctx != NULL)
+  {
+    // restore the context
+    m_Platform.PopChildContext(existing, ctxdata.shareGroup->m_BackDoor, savedContext);
+  }
+
   // if this is the last context in the share group, delete the group.
   if(lastInGroup)
   {
     RDCLOG("Deleting shader group %p", ctxdata.shareGroup);
     delete ctxdata.shareGroup;
   }
-
-  if(ctxdata.built && ctxdata.ready)
-  {
-    ctxdata.ArrayMS.Destroy();
-    if(ctxdata.Program)
-      GL.glDeleteProgram(ctxdata.Program);
-    if(ctxdata.ArrayBuffer)
-      GL.glDeleteBuffers(1, &ctxdata.ArrayBuffer);
-    if(ctxdata.GlyphTexture)
-      GL.glDeleteTextures(1, &ctxdata.GlyphTexture);
-  }
-
-  if(ctxdata.m_ClientMemoryVBOs[0])
-    glDeleteBuffers(ARRAY_COUNT(ctxdata.m_ClientMemoryVBOs), ctxdata.m_ClientMemoryVBOs);
-  if(ctxdata.m_ClientMemoryIBO)
-    glDeleteBuffers(1, &ctxdata.m_ClientMemoryIBO);
 
   if(ctxdata.m_ContextDataRecord)
   {
@@ -3585,7 +3634,7 @@ RDResult WrappedOpenGL::ReadLogInitialisation(RDCFile *rdc, bool storeStructured
   GetReplay()->WriteFrameRecord().frameInfo.initDataSize =
       chunkInfos[(GLChunk)SystemChunk::InitialContents].totalsize;
 
-  RDCDEBUG("Allocating %llu persistant bytes of memory for the log.",
+  RDCDEBUG("Allocating %llu persistent bytes of memory for the log.",
            GetReplay()->WriteFrameRecord().frameInfo.persistentSize);
 
   return ResultCode::Succeeded;

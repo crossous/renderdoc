@@ -98,6 +98,13 @@ VA_IGNORE_REST_OF_FILE
   PyDateTime_IMPORT;
 %}
 
+%typemap(out) const SWIGTYPE & {
+  static_assert(false, "Const ref types must be explicitly allowed, to ensure proper copy semantics. " \
+                       "Consider returning by copy if reasonable, or explicitly set up copy typemap.");
+  //$ltype owned = new std::remove_pointer<$ltype>::type(indirect($1));
+  //$result = SWIG_NewPointerObj(SWIG_as_voidptr(owned), $descriptor, SWIG_POINTER_OWN |  0 );
+}
+
 %include "pyconversion.i"
 
 // typemaps for windowing data
@@ -125,13 +132,7 @@ VA_IGNORE_REST_OF_FILE
 %ignore rdhalf;
 %ignore bytebuf;
 
-// special handling for RENDERDOC_GetDefaultCaptureOptions to transform output parameter to a return value
-%typemap(in, numinputs=0) CaptureOptions *defaultOpts { $1 = new CaptureOptions; }
-%typemap(argout) CaptureOptions *defaultOpts {
-  $result = SWIG_NewPointerObj($1, $descriptor(struct CaptureOptions*), SWIG_POINTER_OWN);
-}
-
-// same for RENDERDOC_GetSupportedDeviceProtocols
+// special handling for RENDERDOC_GetSupportedDeviceProtocols to transform output parameter to a return value
 %typemap(in, numinputs=0) rdcarray<rdcstr> *supportedProtocols { $1 = new rdcarray<rdcstr>; }
 %typemap(argout) rdcarray<rdcstr> *supportedProtocols {
   $result = ConvertToPy(*$1);
@@ -232,6 +233,17 @@ VA_IGNORE_REST_OF_FILE
   $1.assign(*$input);
 }
 
+// this is fine to return directly as it offers no mutable members
+%typemap(out) const PipeState & {
+  $result = SWIG_NewPointerObj(SWIG_as_voidptr($1), $descriptor, 0 );
+}
+
+// this is returned directly due to the size of the data contained in the type.
+// it's mostly "pythonic" to have an object returned that is considered mutable
+%typemap(out) const SDFile & {
+  $result = SWIG_NewPointerObj(SWIG_as_voidptr($1), $descriptor, 0 );
+}
+
 %typemap(ret) const ActionDescription * {
   // for ActionDescription pointers don't apply parent tracking, since these are preserved
   // in other ways and the linked-list nature of walking them can produce absurdly long
@@ -307,8 +319,8 @@ TEMPLATE_FIXEDARRAY_DECLARE(rdcfixedarray);
 }
 
   %feature("docstring") R"(Returns a string representation of an object. This is quite similar to
-the built-in repr() function but it iterates over struct members and prints them out, where normally
-repr() would stop and say something like 'Swig Object of type ...'.
+the built-in ``repr()`` function but it iterates over struct members and prints them out, where normally
+``repr()`` would stop and say something like 'Swig Object of type ...'.
 
 :param Any obj: The object to dump
 :return: The string representation of the object.
@@ -365,6 +377,7 @@ EXTEND_ARRAY_CLASS_METHODS(StructuredBufferList)
 // or in qrenderdoc.i, depending on which one is appropriate
 TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, float, 2)
 TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, float, 4)
+TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, uint32_t, 2)
 TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, uint32_t, 3)
 TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, uint32_t, 4)
 TEMPLATE_FIXEDARRAY_INSTANTIATE(rdcfixedarray, uint64_t, 4)

@@ -13,7 +13,7 @@ class D3D12_List_Alloc_Tests(rdtest.TestCase):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 

@@ -68,7 +68,7 @@ inline bool checkname(rdcstr &log, const char *baseType, rdcstr name, NameType n
     return false;
 
   // allow the config to have different names
-  if((baseType && strstr(baseType, "PersistantConfig")) || name.contains("PersistantConfig"))
+  if((baseType && strstr(baseType, "PersistentConfig")) || name.contains("PersistentConfig"))
     return false;
 
   // skip swig internal type

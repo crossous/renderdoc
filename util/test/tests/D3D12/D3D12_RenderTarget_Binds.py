@@ -19,7 +19,7 @@ class D3D12_RenderTarget_Binds(rdtest.TestCase):
 
         rdtest.log.success("Picked value for clear is as expected")
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -35,7 +35,7 @@ class D3D12_RenderTarget_Binds(rdtest.TestCase):
 
         rdtest.log.success("RTVs at first action are as expected")
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -51,7 +51,7 @@ class D3D12_RenderTarget_Binds(rdtest.TestCase):
 
         rdtest.log.success("RTVs at second action are as expected")
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 
@@ -67,7 +67,7 @@ class D3D12_RenderTarget_Binds(rdtest.TestCase):
 
         rdtest.log.success("RTVs at third action are as expected")
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, False)
 

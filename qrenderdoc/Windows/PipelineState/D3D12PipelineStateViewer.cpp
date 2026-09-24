@@ -708,6 +708,24 @@ void D3D12PipelineStateViewer::setViewDetails(RDTreeWidgetItem *node, const D3D1
     viewdetails = true;
   }
 
+  uint32_t effectiveDepth = qMax(1U, tex->depth >> res.firstMip);
+
+  if(effectiveDepth > 1 &&
+     ((effectiveDepth != res.numSlices && res.numSlices > 0) || res.firstSlice > 0))
+  {
+    if(res.numSlices == 1)
+      text += tr("The texture has %1 3D slices at first mip, the view covers slice %2.\n")
+                  .arg(effectiveDepth)
+                  .arg(res.firstSlice);
+    else
+      text += tr("The texture has %1 3D slices at first mip, the view covers slices %2-%3.\n")
+                  .arg(effectiveDepth)
+                  .arg(res.firstSlice)
+                  .arg(res.firstSlice + res.numSlices - 1);
+
+    viewdetails = true;
+  }
+
   if(view.descriptor.minLODClamp != 0.0f)
   {
     text += tr("The texture has a ResourceMinLODClamp of %1.\n").arg(view.descriptor.minLODClamp);
@@ -2137,18 +2155,26 @@ void D3D12PipelineStateViewer::setState()
   ui->blends->beginUpdate();
   ui->blends->clear();
   {
+    bool independent = state.outputMerger.blendState.independentBlend;
     int i = 0;
     for(const ColorBlend &blend : state.outputMerger.blendState.blends)
     {
-      bool filledSlot = (blend.enabled || targets[i]);
+      bool filledSlot = true;
       bool usedSlot = (targets[i]);
+
+      if(!independent)
+        usedSlot = i == 0;
 
       if(showNode(usedSlot, filledSlot))
       {
         RDTreeWidgetItem *node = NULL;
 
+        QString slotName = QString::number(i);
+        if(!independent)
+          slotName = i == 0 ? tr("All") : lit("-");
+
         node = new RDTreeWidgetItem(
-            {i, blend.enabled ? tr("True") : tr("False"),
+            {slotName, blend.enabled ? tr("True") : tr("False"),
 
              ToQStr(blend.colorBlend.source), ToQStr(blend.colorBlend.destination),
              ToQStr(blend.colorBlend.operation),
@@ -2163,9 +2189,6 @@ void D3D12PipelineStateViewer::setState()
                  .arg((blend.writeMask & 0x2) == 0 ? lit("_") : lit("G"))
                  .arg((blend.writeMask & 0x4) == 0 ? lit("_") : lit("B"))
                  .arg((blend.writeMask & 0x8) == 0 ? lit("_") : lit("A"))});
-
-        if(!filledSlot)
-          setEmptyRow(node);
 
         if(!usedSlot)
           setInactiveRow(node);
@@ -2433,7 +2456,7 @@ void D3D12PipelineStateViewer::resource_itemActivated(RDTreeWidgetItem *item, in
 
     if(shaderRes)
     {
-      format = BufferFormatter::GetBufferFormatString(Packing::D3DUAV, stage->resourceId,
+      format = BufferFormatter::GetBufferFormatString(PackingRules::D3DUAV(), stage->resourceId,
                                                       *shaderRes, view.descriptor.format);
 
       if(view.descriptor.flags & DescriptorFlags::RawBuffer)
@@ -3400,6 +3423,7 @@ void D3D12PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D12Pipe
 
     QList<QVariantList> rows;
 
+    bool independent = om.blendState.independentBlend;
     int i = 0;
     for(const ColorBlend &b : om.blendState.blends)
     {
@@ -3412,7 +3436,11 @@ void D3D12PipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const D3D12Pipe
                          .arg((b.writeMask & 0x4) == 0 ? lit("_") : lit("B"))
                          .arg((b.writeMask & 0x8) == 0 ? lit("_") : lit("A"));
 
-      rows.push_back({i, b.enabled ? tr("Yes") : tr("No"),
+      QString slotName = QString::number(i);
+      if(!independent)
+        slotName = i == 0 ? tr("All") : lit("-");
+
+      rows.push_back({slotName, b.enabled ? tr("Yes") : tr("No"),
                       b.logicOperationEnabled ? tr("Yes") : tr("No"), ToQStr(b.colorBlend.source),
                       ToQStr(b.colorBlend.destination), ToQStr(b.colorBlend.operation),
                       ToQStr(b.alphaBlend.source), ToQStr(b.alphaBlend.destination),

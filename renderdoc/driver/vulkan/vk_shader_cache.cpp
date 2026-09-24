@@ -834,6 +834,19 @@ void VulkanShaderCache::MakeGraphicsPipelineInfo(VkGraphicsPipelineCreateInfo &p
   rs.depthBiasSlopeFactor = pipeInfo.depthBiasSlopeFactor;
   rs.lineWidth = pipeInfo.lineWidth;
 
+  static VkDepthBiasRepresentationInfoEXT depthBiasRepr = {
+      VK_STRUCTURE_TYPE_DEPTH_BIAS_REPRESENTATION_INFO_EXT,
+  };
+
+  if(m_pDriver->DepthBiasControl())
+  {
+    depthBiasRepr.depthBiasRepresentation = pipeInfo.depthBiasRepresentation;
+    depthBiasRepr.depthBiasExact = pipeInfo.depthBiasExact;
+
+    depthBiasRepr.pNext = rs.pNext;
+    rs.pNext = &depthBiasRepr;
+  }
+
   static VkPipelineRasterizationConservativeStateCreateInfoEXT conservRast = {
       VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT,
   };

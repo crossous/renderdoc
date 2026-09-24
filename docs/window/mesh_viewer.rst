@@ -79,11 +79,11 @@ To select which element will be displayed as secondary, simply right click on th
 
 The selection will be remembered as long as the mesh format stays consistent between actions.
 
-You can also use this if the position data isn't detected in your inputs and you'd like to choose which element contains the positions, or if you'd like to visualise some other data such as UV co-ordinates as positional (in effect rendering the mesh in uv-space).
+You can also use this if the position data isn't detected in your inputs and you'd like to choose which element contains the positions, or if you'd like to visualise some other data such as UV co-ordinates as positional (in effect rendering the mesh in UV-space).
 
 .. figure:: ../imgs/Screenshots/SolidPreview.png
 
-	Preview: Previewing the uv co-ordinates as color on the mesh.
+	Preview: Previewing the UV co-ordinates as color on the mesh.
 
 When displaying the post-projection output - typically the VS output, but possibly tessellation/geometry output - you can select how much data to display.
 

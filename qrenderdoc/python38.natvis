@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="python38.dll!_object">
+    <!-- TODO: Set, Slice, DateTime (and sub types), Complex, Range, OrderedDict,
+         Exception, Traceback, Frame, Generator, Iterator, Method, InstanceMethod -->
+  
+    <!-- None -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!_PyNone_Type">
+      None
+    </DisplayString>
+
+    <!-- Bools -->
+    <DisplayString Condition="(python38.dll!_longobject *)this == &amp;python38.dll!_Py_TrueStruct">True</DisplayString>
+    <DisplayString Condition="(python38.dll!_longobject *)this == &amp;python38.dll!_Py_FalseStruct">False</DisplayString>
+
+    <!-- Modules -->
+    <DisplayString Condition="(void *)ob_type == (void *)&amp;python38.dll!PyModule_Type">
+      Python module {*((python38.dll!PyModuleObject *)this)->md_name}
+    </DisplayString>
+
+    <!-- Functions -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyFunction_Type">
+      Python function {*((python38.dll!PyFunctionObject *)this)->func_name}
+    </DisplayString>
+
+    <!-- C Function -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyCFunction_Type">
+      C Function {((python38.dll!PyCFunctionObject *)this)->m_ml->ml_name,s}
+    </DisplayString>
+
+    <!-- Bytes -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyBytes_Type">
+      Python bytes object {((python38.dll!PyBytesObject *)this)->ob_base.ob_size} bytes
+    </DisplayString>
+
+    <!-- Dictionaries -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyDict_Type">
+      Python dict, {((python38.dll!PyDictObject *)this)->ma_used} items
+    </DisplayString>
+
+    <!-- Lists -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyList_Type">
+      Python list, {((python38.dll!PyListObject *)this)->ob_base.ob_size} items
+    </DisplayString>
+
+    <!-- Tuples -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyTuple_Type">
+      Python tuple, {((python38.dll!PyTupleObject *)this)->ob_base.ob_size} items
+    </DisplayString>
+
+    <!-- Floats -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyFloat_Type">
+      {((python38.dll!PyFloatObject *)this)->ob_fval}
+    </DisplayString>
+
+    <!-- Longs -->
+
+    <!-- 30 bit digits -->
+    
+    <!-- up to 30 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit) == 4 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 1">
+      {((python38.dll!PyLongObject *)this)->ob_digit[0]}
+    </DisplayString>
+    <!-- up to 60 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 4 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 2">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;30)
+      }
+    </DisplayString>
+    <!-- up to 64 bits (check for overflow) -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 4 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 3 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_digit[2] &lt;= 0xf">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;30) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[2])&lt;&lt;60)
+      }
+    </DisplayString>
+
+    <!-- 15 bit digits -->
+
+    <!-- up to 15 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit) == 2 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 1">
+      {((python38.dll!PyLongObject *)this)->ob_digit[0]}
+    </DisplayString>
+    <!-- up to 30 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 2 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 2">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;15)
+      }
+    </DisplayString>
+    <!-- up to 45 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 2 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 3">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;15) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[2])&lt;&lt;30)
+      }
+    </DisplayString>
+    <!-- up to 60 bits -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 2 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 4">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;15) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[2])&lt;&lt;30) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[3])&lt;&lt;45)
+      }
+    </DisplayString>
+    <!-- up to 64 bits (check for overflow) -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type &amp;&amp;
+                              sizeof(((python38.dll!PyLongObject *)this)->ob_digit[0]) == 4 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_base.ob_size == 5 &amp;&amp;
+                              ((python38.dll!PyLongObject *)this)->ob_digit[4] &lt;= 0xf">
+      {
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[0])) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[1])&lt;&lt;15) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[2])&lt;&lt;30) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[3])&lt;&lt;45) +
+      (uint64_t(((python38.dll!PyLongObject *)this)->ob_digit[4])&lt;&lt;60)
+      }
+    </DisplayString>
+    
+    <!-- overflow -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type">
+      Python Big Integer
+    </DisplayString>
+
+    <!-- End Longs -->
+
+    <!-- Strings -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                              ((python38.dll!PyASCIIObject *)this)->state.ascii &amp;&amp;
+                              ((python38.dll!PyASCIIObject *)this)->state.compact">
+      <!-- Compact ASCII -->
+      {(char *)(((python38.dll!PyASCIIObject *)this) + 1),s}
+    </DisplayString>
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type">
+      Non compact ASCII string
+    </DisplayString>
+
+    <!-- End Strings -->
+
+    <!-- Type Objects -->
+    <DisplayString Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyType_Type">
+      Type Object
+    </DisplayString>
+
+    <!-- Unknown Type -->
+    <DisplayString>
+      Unknown {ob_type->tp_name,s} object
+    </DisplayString>
+
+    <!-- Strings -->
+    <StringView Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                           ((python38.dll!PyASCIIObject *)this)->state.ascii &amp;&amp;
+                           ((python38.dll!PyASCIIObject *)this)->state.compact">
+      <!-- Compact ASCII -->
+      (char *)(((python38.dll!PyASCIIObject *)this) + 1),s
+    </StringView>
+
+    <!-- End Strings -->
+
+    <Expand>
+      <!-- Common properties -->
+      <Item Name="Reference Count">ob_refcnt</Item>
+      <Item Name="Type">ob_type</Item>
+
+      <!-- Modules -->
+      <Item Name="Module Name" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyModule_Type">
+        ((python38.dll!PyModuleObject *)this)->md_name
+      </Item>
+      <Item Name="Module Dictionary" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyModule_Type">
+        ((python38.dll!PyModuleObject *)this)->md_dict
+      </Item>
+      <Item Name="Module Properties" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyModule_Type">
+        (python38.dll!PyModuleObject *)this
+      </Item>
+
+      <!-- Functions -->
+      <Item Name="Function Name" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyFunction_Type">
+        ((python38.dll!PyFunctionObject *)this)->func_name
+      </Item>
+      <Item Name="Function Properties" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyFunction_Type">
+        (python38.dll!PyFunctionObject *)this
+      </Item>
+
+      <!-- C Function -->
+      <Item Name="Function Properties" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyCFunction_Type">
+        (python38.dll!PyCFunctionObject *)this
+      </Item>
+
+      <!-- Dictionaries -->
+      <Item Name="Dict Properties" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyDict_Type">
+        (python38.dll!PyDictObject *)this
+      </Item>
+      <Item Name="[Length]" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyDict_Type">
+        ((python38.dll!PyDictObject *)this)->ma_used
+      </Item>
+      <CustomListItems Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyDict_Type">
+        <!-- combined table-->
+        <Variable Name="i" InitialValue="0" />
+        <Variable Name="nentries" InitialValue="((python38.dll!PyDictObject *)this)->ma_keys->dk_nentries" />
+        <Variable Name="dk_size" InitialValue="((python38.dll!PyDictObject *)this)->ma_keys->dk_size" />
+        <Variable Name="offset" InitialValue="dk_size&lt;=0xff ? 1 : dk_size&lt;=0xffff ? 2 : dk_size&lt;=0xffffffff ? 4 : 8" />
+        <Variable Name="entries" InitialValue="(python38.dll!PyDictKeyEntry *)(((python38.dll!PyDictObject *)this)->ma_keys->dk_indices + offset*dk_size)" />
+      
+        <Loop>
+          <Break Condition="i>=nentries" />
+          <Item Condition="entries[i].me_key" Name="{*entries[i].me_key}">*entries[i].me_value</Item>
+          <Exec>i++</Exec>
+        </Loop>
+      </CustomListItems>
+      <CustomListItems Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyDict_Type &amp;&amp;
+                             ((python38.dll!PyDictObject *)this)->ma_values">
+        <!-- separate value -->
+        <Variable Name="i" InitialValue="0" />
+        <Variable Name="nentries" InitialValue="((python38.dll!PyDictObject *)this)->ma_keys->dk_nentries" />
+        <Variable Name="entries" InitialValue="(python38.dll!PyDictKeyEntry *)((python38.dll!PyDictObject *)this)->ma_values" />
+        
+        <Loop>
+          <Break Condition="i>=nentries" />
+          <Item Condition="entries[i].me_key" Name="{*entries[i].me_key}">*entries[i].me_value</Item>
+          <Exec>i++</Exec>
+        </Loop>
+        
+      </CustomListItems>
+
+      <!-- End Dictionaries -->
+
+      <!-- Lists -->
+      <Item Name="[Length]" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyList_Type">
+        ((python38.dll!PyListObject *)this)->ob_base.ob_size
+      </Item>
+      <ArrayItems Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyList_Type">
+        <Size>((python38.dll!PyListObject *)this)->ob_base.ob_size</Size>
+        <ValuePointer>
+          ((python38.dll!PyListObject *)this)->ob_item
+        </ValuePointer>
+      </ArrayItems>
+
+      <!-- Tuple -->
+      <Item Name="[Length]" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyTuple_Type">
+        ((python38.dll!PyTupleObject *)this)->ob_base.ob_size
+      </Item>
+      <ArrayItems Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyTuple_Type">
+        <Size>((python38.dll!PyTupleObject *)this)->ob_base.ob_size</Size>
+        <ValuePointer>
+          ((python38.dll!PyTupleObject *)this)->ob_item
+        </ValuePointer>
+      </ArrayItems>
+
+      <!-- Longs -->
+      <Item Name="Number of Digit Sections" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type">
+        ((python38.dll!PyLongObject *)this)->ob_base.ob_size
+      </Item>
+      <ArrayItems Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyLong_Type">
+        <Size>((python38.dll!PyLongObject *)this)->ob_base.ob_size</Size>
+        <ValuePointer>
+          ((python38.dll!PyLongObject *)this)->ob_digit
+        </ValuePointer>
+      </ArrayItems>
+
+      <!-- Bytes -->
+      <Item Name="Bytes Data" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyBytes_Type">
+        (char *)((python38.dll!PyBytesObject *)this)->ob_sval
+      </Item>
+
+      <!-- Strings -->
+      <!-- General state (shared among all string representations) -->
+      <Item Name="String State" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type">
+        ((python38.dll!PyASCIIObject *)this)->state
+      </Item>
+      
+      <!-- Compact ASCII strings -->
+      <Item Name="ASCII String Object" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                                                  ((python38.dll!PyASCIIObject *)this)->state.ascii &amp;&amp;
+                                                  ((python38.dll!PyASCIIObject *)this)->state.compact">
+        (python38.dll!PyASCIIObject *)this
+      </Item>
+      <Item Name="ASCII Data" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                                         ((python38.dll!PyASCIIObject *)this)->state.ascii &amp;&amp;
+                                         ((python38.dll!PyASCIIObject *)this)->state.compact">
+        (char *)(((python38.dll!PyASCIIObject *)this) + 1)
+      </Item>
+
+      <!-- Compact Unicode strings -->
+      <Item Name="Compact Unicode String Object" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                                                            ((python38.dll!PyASCIIObject *)this)->state.ascii == 0 &amp;&amp;
+                                                            ((python38.dll!PyASCIIObject *)this)->state.compact">
+        (python38.dll!PyCompactUnicodeObject *)this
+      </Item>
+
+      <!-- Non-compact Unicode strings -->
+      <Item Name="Unicode String Object" Condition="(python38.dll!_typeobject *)ob_type == &amp;python38.dll!PyUnicode_Type &amp;&amp;
+                                                    ((python38.dll!PyASCIIObject *)this)->state.ascii == 0 &amp;&amp;
+                                                    ((python38.dll!PyASCIIObject *)this)->state.compact == 0">
+        (python38.dll!PyUnicodeObject *)this
+      </Item>
+
+      <!-- End Strings -->
+    </Expand>
+  </Type>
+</AutoVisualizer>

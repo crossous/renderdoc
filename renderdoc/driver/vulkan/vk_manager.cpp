@@ -576,7 +576,7 @@ void VulkanResourceManager::InsertDeviceMemoryRefs(WriteSerialiser &ser)
       memRefs = &emptyMemRefs;
     else
       memRefs = &it->second;
-    Intervals<FrameRefType> &rangeRefs = memRefs->rangeRefs;
+    const Intervals<FrameRefType> &rangeRefs = memRefs->rangeRefs;
     for(auto jt = rangeRefs.begin(); jt != rangeRefs.end(); jt++)
       data.push_back({*memIt, jt->start(), jt->value()});
   }
@@ -919,6 +919,9 @@ void VulkanResourceManager::MarkMemoryFrameReferenced(ResourceId mem, VkDeviceSi
                                                       VkDeviceSize size, FrameRefType refType)
 {
   SCOPED_LOCK_OPTIONAL(m_Lock, m_Capturing);
+
+  if(mem == ResourceId())
+    return;
 
   FrameRefType maxRef = MarkMemoryReferenced(m_MemFrameRefs, mem, offset, size, refType);
   if(IsCompleteWriteFrameRef(maxRef))

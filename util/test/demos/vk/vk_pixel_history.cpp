@@ -28,6 +28,14 @@ RD_TEST(VK_Pixel_History, VulkanGraphicsTest)
 {
   static constexpr const char *Description = "Tests pixel history";
 
+  VkPhysicalDeviceNestedCommandBufferFeaturesEXT nestedFeats = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_FEATURES_EXT,
+  };
+
+  VkPhysicalDeviceNestedCommandBufferPropertiesEXT nestedProps = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NESTED_COMMAND_BUFFER_PROPERTIES_EXT,
+  };
+
   std::string common = R"EOSHADER(
 
 #version 460 core
@@ -122,6 +130,8 @@ void main()
 
     devExts.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
 
+    optDevExts.push_back(VK_EXT_NESTED_COMMAND_BUFFER_EXTENSION_NAME);
+
     VulkanGraphicsTest::Prepare(argc, argv);
 
     if(!Avail.empty())
@@ -134,6 +144,17 @@ void main()
       Avail = "D32S8 not supported";
       return;
     }
+
+    if(hasExt(VK_EXT_NESTED_COMMAND_BUFFER_EXTENSION_NAME))
+    {
+      getPhysFeatures2(&nestedFeats);
+
+      if((nestedFeats.nestedCommandBuffer) && (nestedFeats.nestedCommandBufferRendering))
+      {
+        nestedFeats.pNext = (void *)devInfoNext;
+        devInfoNext = &nestedFeats;
+      }
+    }
   }
 
   struct VKTestBatch
@@ -141,6 +162,7 @@ void main()
     std::string name;
 
     bool secondary = false;
+    bool nested = false;
     bool uint = false;
 
     AllocatedImage colImg;
@@ -659,6 +681,22 @@ vec4 ProcessColor(vec4 col)
     if(!Init())
       return 3;
 
+    bool nestedSecondaries = hasExt(VK_EXT_NESTED_COMMAND_BUFFER_EXTENSION_NAME);
+    if(nestedSecondaries)
+    {
+      getPhysFeatures2(&nestedFeats);
+      if(!nestedFeats.nestedCommandBuffer)
+        nestedSecondaries = false;
+      if(!nestedFeats.nestedCommandBufferRendering)
+        nestedSecondaries = false;
+      getPhysProperties2(&nestedProps);
+      if(nestedProps.maxCommandBufferNestingLevel < 5)
+        nestedSecondaries = false;
+    }
+
+    if(nestedSecondaries)
+      TEST_LOG("Running tests with nested secondaries");
+
     PixelHistory::init();
 
     AllocatedBuffer vb(
@@ -707,6 +745,12 @@ vec4 ProcessColor(vec4 col)
                    defaultDepthFormat, -1, 3);
     BuildTestBatch("Secondary", VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_UNORM, defaultDepthFormat);
     batches.back().secondary = true;
+    if(nestedSecondaries)
+    {
+      BuildTestBatch("Secondary Nested", VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_UNORM,
+                     defaultDepthFormat);
+      batches.back().nested = true;
+    }
 
     BuildTestBatch("3D texture", VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_UNORM,
                    defaultDepthFormat, -1, -1, 8);
@@ -798,6 +842,38 @@ vec4 ProcessColor(vec4 col)
                                                   vkh::CommandBufferInheritanceInfo(b.rp, 0, b.fb)));
             vkh::cmdBindVertexBuffers(cmd2, 0, {vb.buffer}, {0});
             RunBatch(b, cmd2);
+            vkEndCommandBuffer(cmd2);
+
+            vkCmdExecuteCommands(cmd, 1, &cmd2);
+
+            vkCmdEndRenderPass(cmd);
+          }
+          popMarker(cmd);
+        }
+        else if(b.nested)
+        {
+          pushMarker(cmd, "Batch: " + b.name);
+          {
+            setMarker(cmd, "Begin RenderPass");
+            vkCmdBeginRenderPass(cmd,
+                                 vkh::RenderPassBeginInfo(b.rp, b.fb, {{0, 0}, b.extent}, clears),
+                                 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
+            VkCommandBuffer cmd3 = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+            secondaries.push_back(cmd3);
+            vkBeginCommandBuffer(
+                cmd3, vkh::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+                                                  vkh::CommandBufferInheritanceInfo(b.rp, 0, b.fb)));
+            vkh::cmdBindVertexBuffers(cmd3, 0, {vb.buffer}, {0});
+            RunBatch(b, cmd3);
+            vkEndCommandBuffer(cmd3);
+
+            VkCommandBuffer cmd2 = GetCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+            secondaries.push_back(cmd2);
+            vkBeginCommandBuffer(
+                cmd2, vkh::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+                                                  vkh::CommandBufferInheritanceInfo(b.rp, 0, b.fb)));
+            vkCmdExecuteCommands(cmd2, 1, &cmd3);
             vkEndCommandBuffer(cmd2);
 
             vkCmdExecuteCommands(cmd, 1, &cmd2);

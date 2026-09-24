@@ -257,7 +257,7 @@
 </OBJECT>
 <LI> <OBJECT type="text/sitemap">
     <param name="Keyword" value="Python Scripting">
-    <param name="Local" value="window/python_shell.html">
+    <param name="Local" value="window/python_scripting.html">
 </OBJECT>
 <LI> <OBJECT type="text/sitemap">
     <param name="Keyword" value="Quick Start">
@@ -293,7 +293,7 @@
 </OBJECT>
 <LI> <OBJECT type="text/sitemap">
     <param name="Keyword" value="Scripting the UI">
-    <param name="Local" value="window/python_shell.html">
+    <param name="Local" value="window/python_scripting.html">
 </OBJECT>
 <LI> <OBJECT type="text/sitemap">
     <param name="Keyword" value="Settings">
@@ -415,8 +415,8 @@
 				<param name="Local" value="window/pipeline_state.html">
 		</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
-				<param name="Keyword" value="Python Shell">
-				<param name="Local" value="window/python_shell.html">
+				<param name="Keyword" value="Python Scripting">
+				<param name="Local" value="window/python_scripting.html">
 		</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
 				<param name="Keyword" value="Raw Buffer Viewer">

@@ -467,8 +467,13 @@ void D3D12Descriptor::Create(D3D12_DESCRIPTOR_HEAP_TYPE heapType, WrappedID3D12D
         }
       }
 
-      if(countRes == NULL && desc && desc->ViewDimension == D3D12_UAV_DIMENSION_BUFFER)
-        desc->Buffer.CounterOffsetInBytes = 0;
+      if(countRes == NULL && desc)
+      {
+        if(desc->ViewDimension == D3D12_UAV_DIMENSION_BUFFER)
+          desc->Buffer.CounterOffsetInBytes = 0;
+        if(desc->ViewDimension == D3D12_UAV_DIMENSION_BUFFER_BYTE_OFFSET)
+          desc->BufferByteOffset.CounterOffsetInBytes = 0;
+      }
 
       D3D12_UNORDERED_ACCESS_VIEW_DESC planeDesc;
       // ensure that multi-plane formats have a valid plane slice specified. This shouldn't be
@@ -3776,7 +3781,7 @@ void AddStateResetBarrier(D3D12ResourceLayout srcState, D3D12ResourceLayout dstS
                           ID3D12Resource *res, UINT subresource, BarrierSet &barriers)
 {
   if((srcState.IsStates() || srcState.ToLayout() == D3D12_BARRIER_LAYOUT_UNDEFINED) &&
-     dstState.IsStates())
+     (dstState.IsStates() || dstState.ToLayout() == D3D12_BARRIER_LAYOUT_UNDEFINED))
   {
     D3D12_RESOURCE_BARRIER b;
     b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -3789,7 +3794,10 @@ void AddStateResetBarrier(D3D12ResourceLayout srcState, D3D12ResourceLayout dstS
     if(srcState.ToLayout() == D3D12_BARRIER_LAYOUT_UNDEFINED)
       b.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
 
-    // could now be identical after silently promoting the before state.
+    if(dstState.ToLayout() == D3D12_BARRIER_LAYOUT_UNDEFINED)
+      b.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+
+    // could now be identical after silently promoting the before/after state.
     if(b.Transition.StateBefore != b.Transition.StateAfter)
       barriers.barriers.push_back(b);
   }

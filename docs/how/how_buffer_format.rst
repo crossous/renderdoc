@@ -1,9 +1,11 @@
+.. _how_buffer_format:
+
 How do I specify a buffer format?
 =================================
 
 This page documents how to format buffer data, in cases where the default reflected format is missing or you want to customise it.
 
-The format string can contain C and C++ style comments freely, but a C pre-processor is not supported.
+The format string can contain C and C++ style comments freely, but a C preprocessor is not supported.
 
 By default the final interpreted format is defined by the list of global variables in the layout string, however if no global variables are defined the final struct to be defined is used as-if there were a single variable instance of that struct.
 
@@ -170,6 +172,10 @@ Annotations
 
 The buffer format supports annotations on declarations to specify special properties. These use C++ ``[[annotation(parameter)]]`` syntax.
 
+Enum definitions support the following annotations:
+
+* ``[[flags]]`` or ``[[mask]]`` - The enum should be interpreted as a bitmask for matching values, and with the exception of any ``0`` values should use a bitwise AND to match against values instead of requiring equality, and list all matching values in the string representation.
+
 Struct definitions support the following annotations:
 
 * ``[[size(number)]]`` or ``[[byte_size(number)]]`` - Forces the struct to be padded up to a given size even if the contents don't require it.
@@ -198,7 +204,7 @@ Variable declarations support the following annotations:
 Array of Structs (AoS) vs Struct of Arrays (SoA)
 ------------------------------------------------
 
-The :doc:`../window/buffer_viewer` is capable of displaying both repeating data of a single format (AoS) as well as fixed non-repeating data (called SoA). Typically AoS is used for large buffers, where a small struct is repeated many times to form the elemnts in the buffer. SoA is used most commonly for constant buffers with a fixed amount of data, but can be used in any context. On some APIs it is possible for a buffer to contain some fixed data before the repeating data and thus it contains both types.
+The :doc:`../window/buffer_viewer` is capable of displaying both repeating data of a single format (AoS) as well as fixed non-repeating data (called SoA). Typically AoS is used for large buffers, where a small struct is repeated many times to form the elements in the buffer. SoA is used most commonly for constant buffers with a fixed amount of data, but can be used in any context. On some APIs it is possible for a buffer to contain some fixed data before the repeating data and thus it contains both types.
 
 RenderDoc tries to use context to interpret buffer formats correctly, defaulting to AoS interpretation in cases where it is likely intended. However this can be hinted or overridden as desired.
 
@@ -208,7 +214,7 @@ To specify AoS data explicitly you can declare an unbounded array:
 
   float3 unboundedArray[]; // unbounded array of float3s
 
-When supported by the API, this can be preceeded by any fixed data in the buffer before the repeated AoS data. The buffer viewer will show both parts of the data separately, with a tree view for the fixed data and a table for the repeated data.
+When supported by the API, this can be preceded by any fixed data in the buffer before the repeated AoS data. The buffer viewer will show both parts of the data separately, with a tree view for the fixed data and a table for the repeated data.
 
 In the opposite direction, normally a loose collection of variables without any such unbounded array will be taken as the definition of a struct within an AoS view:
 

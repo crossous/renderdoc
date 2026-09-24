@@ -344,7 +344,7 @@ These overlays are only relevant when the currently selected action is a rasteri
 
 * ``Quad Overdraw (Draw)`` will show a similar visualisation to the above option, but limited only to the current drawcall.
 
-* ``Triangle Size (Pass)`` will show a visualisation of how much pixel area triangles in the meshes are covering in the 'pass' up to the selected draw, up to 4x4 pixels (16 square px) at most. If the current API does not have the concept of a pass, it is defined as all the drawcalls with the same set of render targets.
+* ``Triangle Size (Pass)`` will show a visualisation of how much pixel area triangles in the meshes are covering in the 'pass' up to the selected draw, up to 4x4 pixels (16 square pixels) at most. If the current API does not have the concept of a pass, it is defined as all the drawcalls with the same set of render targets.
 
 * ``Triangle Size (Draw)`` will show a similar visualisation to the above option, but limited only to the current drawcall.
 

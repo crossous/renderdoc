@@ -56,7 +56,7 @@ Troubleshooting
 
 RenderDoc assumes your device is already configured for debugging. Check that it appears in ``adb devices``. `See here <https://developer.android.com/studio/run/device.html>`_ for instructions on how to configure that.
 
-If you have Android Studio open, it will interfere with RenderDoc's debugging by attaching to the package itself. Either close it or disable adb integration in "Tools → Android → Enable ADB integration".
+If you have Android Studio open, it will interfere with RenderDoc's debugging by attaching to the package itself. Either close it or disable ``adb`` integration in :guilabel:`Tools → Android → Enable ADB integration`.
 
 RenderDoc does its best to locate or provide necessary Android tools from the Android SDK. On Windows, these tools are shipped with the distributions and all that's required is java - either in your ``PATH`` or via the ``JAVA_HOME`` environment variable. If these tools aren't present then RenderDoc searches through ``PATH`` and other variables like ``ANDROID_HOME`` or ``ANDROID_SDK_ROOT`` to find the SDK. If you don't have those environment variables set, you can browse to the SDK and JDK folders in the :doc:`settings window <../window/settings_window>` under the :guilabel:`Android` section.
 

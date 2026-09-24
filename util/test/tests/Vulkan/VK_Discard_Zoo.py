@@ -23,7 +23,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
 
         self.check(action is not None)
 
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
 
         # At the start they should be cleared
 
@@ -36,7 +36,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
 
         action = self.find_action("TestMiddle")
 
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
 
         for y in range(0, rpcol.height-1, 17):
             for x in range(0, rpcol.width-1, 17):
@@ -68,7 +68,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
 
         action = self.find_action("TestEnd")
 
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
 
         for y in range(0, rpcol.height-1, 17):
             for x in range(0, rpcol.width-1, 17):
@@ -103,7 +103,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
 
         action = self.find_action("UndefinedLoad_Before")
 
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
 
         # check that they are cleared again
         for y in range(0, rpcol.height-1, 17):
@@ -115,7 +115,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
 
         action = self.find_action("UndefinedLoad_After")
 
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
 
         # check that they are all undefined pattern - initial layout affects the whole resource
         for y in range(0, rpcol.height-1, 17):
@@ -146,7 +146,7 @@ class VK_Discard_Zoo(rdtest.Discard_Zoo):
         tex_id = pipe.GetOutputTargets()[0].resource
 
         self.check_pixel_value(tex_id, 0.5, 0.5, [0.0, 1.0, 0.0, 1.0])
-        self.controller.SetFrameEvent(action.next.eventId, True)
+        self.controller.SetFrameEvent(action.nextAction.eventId, True)
         self.check_pixel_value(tex_id, 0.5, 0.5, [0.0, 1.0, 0.0, 1.0])
 
         rdtest.log.success("Output value from draw is correct at draw and after it")

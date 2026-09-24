@@ -30,14 +30,38 @@
 void WrappedID3D12Device::CreateSampler2(const D3D12_SAMPLER_DESC2 *pDesc,
                                          D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
+  CreateSampler2(false, pDesc, DestDescriptor);
+}
+
+HRESULT STDMETHODCALLTYPE WrappedID3D12Device::TryCreateSampler2(
+    const D3D12_SAMPLER_DESC2 *pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  return CreateSampler2(true, pDesc, DestDescriptor);
+}
+
+HRESULT WrappedID3D12Device::CreateSampler2(bool tryCall, const D3D12_SAMPLER_DESC2 *pDesc,
+                                            D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
+{
+  HRESULT hr = S_OK;
+  if(tryCall)
+  {
+    SERIALISE_TIME_CALL(hr = m_pDevice15->TryCreateSampler2(pDesc, Unwrap(DestDescriptor)));
+  }
+  else
+  {
+    SERIALISE_TIME_CALL(m_pDevice11->CreateSampler2(pDesc, Unwrap(DestDescriptor)));
+  }
+
+  // don't perform the actual write if it failed
+  if(FAILED(hr))
+    return hr;
+
   bool capframe = false;
 
   {
     SCOPED_READLOCK(m_CapTransitionLock);
     capframe = IsActiveCapturing(m_State);
   }
-
-  SERIALISE_TIME_CALL(m_pDevice11->CreateSampler2(pDesc, Unwrap(DestDescriptor)));
 
   // assume descriptors are volatile
   if(capframe)
@@ -49,7 +73,8 @@ void WrappedID3D12Device::CreateSampler2(const D3D12_SAMPLER_DESC2 *pDesc,
     {
       CACHE_THREAD_SERIALISER();
 
-      SCOPED_SERIALISE_CHUNK(D3D12Chunk::Device_CreateSampler2);
+      SCOPED_SERIALISE_CHUNK(tryCall ? D3D12Chunk::Device_TryCreateSampler2
+                                     : D3D12Chunk::Device_CreateSampler2);
       Serialise_DynamicDescriptorWrite(ser, &write);
 
       m_FrameCaptureRecord->AddChunk(scope.Get());
@@ -57,4 +82,6 @@ void WrappedID3D12Device::CreateSampler2(const D3D12_SAMPLER_DESC2 *pDesc,
   }
 
   GetWrapped(DestDescriptor)->Init(pDesc);
+
+  return hr;
 }

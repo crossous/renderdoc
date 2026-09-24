@@ -110,7 +110,9 @@ void main()
 
     if(range.aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
     {
-      if(img.createInfo.format == VK_FORMAT_A2B10G10R10_UINT_PACK32)
+      if(img.createInfo.format == VK_FORMAT_A2B10G10R10_UINT_PACK32 ||
+         img.createInfo.format == VK_FORMAT_R16G16B16A16_UINT ||
+         img.createInfo.format == VK_FORMAT_R16G16B16A16_SINT)
         vkCmdClearColorImage(cmd, img.image, VK_IMAGE_LAYOUT_GENERAL,
                              vkh::ClearColorValue(0u, 1023u, 0u, 1u), 1, range);
       else
@@ -502,6 +504,12 @@ void main()
       TEX_TEST("DiscardAll", MakeTex2D(VK_FORMAT_BC6H_UFLOAT_BLOCK, 300, 300));
       DiscardImage(cmd, tex);
       TEX_TEST("DiscardAll", MakeTex2D(VK_FORMAT_BC7_UNORM_BLOCK, 300, 300));
+      DiscardImage(cmd, tex);
+      TEX_TEST("DiscardAll", MakeTex2D(VK_FORMAT_BC7_UNORM_BLOCK, 300, 300));
+      DiscardImage(cmd, tex);
+      TEX_TEST("DiscardAll", MakeTex2D(VK_FORMAT_R16G16B16A16_UINT, 300, 300));
+      DiscardImage(cmd, tex);
+      TEX_TEST("DiscardAll", MakeTex2D(VK_FORMAT_R16G16B16A16_SINT, 300, 300));
       DiscardImage(cmd, tex);
 
       // test with different mips/array sizes

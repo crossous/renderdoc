@@ -61,7 +61,7 @@ class D3D12_Mesh_Shader(rdtest.TestCase):
 
         action = self.find_action("Mesh Shaders")
 
-        action = action.next
+        action = action.nextAction
         name = f"Pure Mesh Shader Test EID:{action.eventId}"
         rdtest.log.begin_section(name)
         self.controller.SetFrameEvent(action.eventId, False)
@@ -78,7 +78,7 @@ class D3D12_Mesh_Shader(rdtest.TestCase):
         rdtest.log.end_section(name)
 
         y += 100
-        action = action.next
+        action = action.nextAction
         name = f"Amplification Shader with Global Payload EID:{action.eventId}"
         rdtest.log.begin_section(name)
         self.controller.SetFrameEvent(action.eventId, False)
@@ -96,7 +96,7 @@ class D3D12_Mesh_Shader(rdtest.TestCase):
         rdtest.log.end_section(name)
 
         y += 100
-        action = action.next
+        action = action.nextAction
         name = f"Amplification Shader with Local Payload EID:{action.eventId}"
         rdtest.log.begin_section(name)
         self.controller.SetFrameEvent(action.eventId, False)

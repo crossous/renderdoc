@@ -407,6 +407,7 @@ typedef bool (*VulkanLayerCheck)(VulkanLayerFlags &flags, rdcarray<rdcstr> &myJS
 typedef void (*VulkanLayerInstall)(bool systemLevel);
 
 typedef void (*ShutdownFunction)();
+typedef void (*EnvSetupFunction)();
 
 // this class mediates everything and owns any 'global' resources such as the crash handler.
 //
@@ -541,6 +542,8 @@ public:
 
   rdcarray<CaptureFileFormat> GetCaptureFileFormats();
   rdcarray<GPUDevice> GetAvailableGPUs();
+
+  void AddEnvSetup(EnvSetupFunction envSetup) { m_EnvSetups.push_back(envSetup); }
 
   void SetVulkanLayerCheck(VulkanLayerCheck callback) { m_VulkanCheck = callback; }
   void SetVulkanLayerInstall(VulkanLayerInstall callback) { m_VulkanInstall = callback; }
@@ -749,6 +752,7 @@ private:
   VulkanLayerInstall m_VulkanInstall;
 
   rdcarray<ShutdownFunction> m_ShutdownFunctions;
+  rdcarray<EnvSetupFunction> m_EnvSetups;
 
   struct FrameCap
   {

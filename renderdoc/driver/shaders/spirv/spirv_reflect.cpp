@@ -178,9 +178,80 @@ void AddXFBAnnotations(const ShaderReflection &refl, const SPIRVPatchData &patch
 
       outpatch.insert(0, outpatch[i]);
       outpatch.erase(i + 1);
+
+      // extra unused gl_PerVertex members not in the signature can bite us now, delete them
+      rdcspv::Id structID = outpatch[i].structID;
+      if(structID)
+      {
+        rdcarray<uint32_t> usedMembers = {outpatch[i].structMemberIndex};
+        uint32_t maxMember = outpatch[i].structMemberIndex;
+        for(size_t j = 0; j < outsig.size(); j++)
+        {
+          if(i != j && structID == outpatch[j].structID)
+          {
+            usedMembers.push_back(outpatch[i].structMemberIndex);
+            maxMember = RDCMAX(maxMember, outpatch[i].structMemberIndex);
+          }
+        }
+
+        if(maxMember + 1 != usedMembers.size())
+        {
+          RDCERR("Not a clean subset of builtin block used");
+          break;
+        }
+
+        rdcspv::Iter strIt = editor.GetID(structID);
+        rdcspv::OpTypeStruct str(strIt);
+
+        if(str.members.size() > usedMembers.size())
+        {
+          RDCDEBUG("Truncating builtin block from %zu members to %zu", str.members.size(),
+                   usedMembers.size());
+          str.members.resize(usedMembers.size());
+
+          strIt = str;
+        }
+
+        // remove any MemberDecoration or MemberName
+        for(rdcspv::Iter it = editor.Begin(rdcspv::Section::DebugNames);
+            it < editor.End(rdcspv::Section::Annotations); ++it)
+        {
+          if(it.opcode() == rdcspv::Op::MemberDecorate)
+          {
+            rdcspv::OpMemberDecorate mem(it);
+
+            if(mem.structureType == structID && mem.member > maxMember)
+              it.nopRemove();
+          }
+          else if(it.opcode() == rdcspv::Op::MemberDecorateIdEXT)
+          {
+            rdcspv::OpMemberDecorateIdEXT mem(it);
+
+            if(mem.structureType == structID && mem.member > maxMember)
+              it.nopRemove();
+          }
+          else if(it.opcode() == rdcspv::Op::MemberDecorateString)
+          {
+            rdcspv::OpMemberDecorateString mem(it);
+
+            if(mem.structType == structID && mem.member > maxMember)
+              it.nopRemove();
+          }
+          else if(it.opcode() == rdcspv::Op::MemberName)
+          {
+            rdcspv::OpMemberName mem(it);
+
+            if(mem.type == structID && mem.member > maxMember)
+              it.nopRemove();
+          }
+        }
+      }
+
       break;
     }
   }
+
+  rdcarray<rdcspv::Id> structVars;
 
   for(size_t i = 0; i < outsig.size(); i++)
   {
@@ -192,16 +263,22 @@ void AddXFBAnnotations(const ShaderReflection &refl, const SPIRVPatchData &patch
     {
       // do not patch anything as we only patch the base array, but reserve space in the stride
     }
-    else if(outpatch[i].structID && !outpatch[i].accessChain.empty())
-    {
-      editor.AddDecoration(
-          rdcspv::OpMemberDecorate(outpatch[i].structID, outpatch[i].structMemberIndex,
-                                   rdcspv::DecorationParam<rdcspv::Decoration::Offset>(xfbStride)));
-    }
     else if(outpatch[i].ID)
     {
-      editor.AddDecoration(rdcspv::OpDecorate(
-          outpatch[i].ID, rdcspv::DecorationParam<rdcspv::Decoration::Offset>(xfbStride)));
+      if(!outpatch[i].accessChain.empty())
+      {
+        if(!structVars.contains(outpatch[i].ID))
+        {
+          editor.AddDecoration(rdcspv::OpDecorate(
+              outpatch[i].ID, rdcspv::DecorationParam<rdcspv::Decoration::Offset>(xfbStride)));
+          structVars.push_back(outpatch[i].ID);
+        }
+      }
+      else
+      {
+        editor.AddDecoration(rdcspv::OpDecorate(
+            outpatch[i].ID, rdcspv::DecorationParam<rdcspv::Decoration::Offset>(xfbStride)));
+      }
     }
 
     // components always get promoted to at least 32-bit
@@ -210,7 +287,7 @@ void AddXFBAnnotations(const ShaderReflection &refl, const SPIRVPatchData &patch
     xfbStride += outsig[i].compCount * compByteSize;
   }
 
-  std::set<rdcspv::Id> vars;
+  rdcarray<rdcspv::Id> vars;
 
   for(size_t i = 0; i < outpatch.size(); i++)
   {
@@ -218,14 +295,13 @@ void AddXFBAnnotations(const ShaderReflection &refl, const SPIRVPatchData &patch
     if(outsig[i].stream != rastStream)
       continue;
 
-    if(outpatch[i].ID && !outpatch[i].isArraySubsequentElement &&
-       vars.find(outpatch[i].ID) == vars.end())
+    if(outpatch[i].ID && !outpatch[i].isArraySubsequentElement && !vars.contains(outpatch[i].ID))
     {
       editor.AddDecoration(rdcspv::OpDecorate(
           outpatch[i].ID, rdcspv::DecorationParam<rdcspv::Decoration::XfbBuffer>(0)));
       editor.AddDecoration(rdcspv::OpDecorate(
           outpatch[i].ID, rdcspv::DecorationParam<rdcspv::Decoration::XfbStride>(xfbStride)));
-      vars.insert(outpatch[i].ID);
+      vars.push_back(outpatch[i].ID);
     }
   }
 
@@ -484,9 +560,13 @@ StructSizes CalculateStructProps(uint32_t emptyStructSize, const ShaderConstant 
     }
   }
 
-  ret.scalarSize *= RDCMAX(c.type.elements, 1U);
-  ret.baseSize *= RDCMAX(c.type.elements, 1U);
-  ret.extendedSize *= RDCMAX(c.type.elements, 1U);
+  if(c.type.elements > 1)
+  {
+    const uint32_t nonFinalArraySize = (c.type.elements - 1) * c.type.arrayByteStride;
+    ret.scalarSize += nonFinalArraySize;
+    ret.baseSize += nonFinalArraySize;
+    ret.extendedSize += nonFinalArraySize;
+  }
 
   return ret;
 }
@@ -746,7 +826,7 @@ void Reflector::CalculateArrayTypeName(DataType &type)
 
     // if not, use the constant value
     if(lengthName.empty())
-      lengthName = StringiseConstant(type.length);
+      lengthName = StringiseConstant(type.length, {});
 
     // if not, it might be a spec constant, use the fallback
     if(lengthName.empty())
@@ -1014,6 +1094,8 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
     case SourceLanguage::WGSL:
     case SourceLanguage::Zig:
     case SourceLanguage::Rust:
+    case SourceLanguage::Pred:
+    case SourceLanguage::ApilaJai:
     case SourceLanguage::Max: break;
   }
 
@@ -1079,7 +1161,6 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
 
   if(knownExtSet[ExtSet_ShaderDbg] != Id() && !reflection.debugInfo.files.empty())
   {
-    reflection.debugInfo.compileFlags.flags.push_back({"preferSourceDebug", "1"});
     reflection.debugInfo.sourceDebugInformation = true;
   }
 
@@ -1191,7 +1272,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
   rdcarray<sortedsamp> samplers;
   rdcarray<sortedres> roresources, rwresources;
 
-  // for pointer types, mapping of inner type ID to index in list (assigned sequentially)
+  // for pointer types, mapping of pointer type ID to index in list (assigned sequentially)
   SparseIdMap<uint16_t> pointerTypes;
 
   // $Globals gathering - for GL global values
@@ -1210,7 +1291,7 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
     if(it->second.type == DataType::PointerType &&
        it->second.pointerType.storage == rdcspv::StorageClass::PhysicalStorageBuffer)
     {
-      pointerTypes.insert(std::make_pair(it->second.InnerType(), (uint16_t)pointerTypes.size()));
+      pointerTypes.insert(std::make_pair(it->first, (uint16_t)pointerTypes.size()));
     }
   }
 
@@ -1932,11 +2013,20 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
     {
       ShaderConstant dummy;
       MakeConstantBlockVariable(dummy, pointerTypes, dataTypes[id].pointerType.storage,
-                                dataTypes[id], rdcstr(), Decorations(), false, specInfo);
+                                dataTypes[dataTypes[id].InnerType()], rdcstr(), Decorations(),
+                                false, specInfo);
     }
 
     // continue if we generated some more
   } while(pointerTypes.size() != numPointerTypes);
+
+  // see if we have different pointer types to the same struct, to give them unique names
+  SparseIdMap<int> dupeInners;
+
+  for(auto it = pointerTypes.begin(); it != pointerTypes.end(); ++it)
+  {
+    dupeInners[dataTypes[it->first].InnerType()]++;
+  }
 
   // populate the pointer types
   reflection.pointerTypes.reserve(pointerTypes.size());
@@ -1944,11 +2034,17 @@ void Reflector::MakeReflection(const GraphicsAPI sourceAPI, const ShaderStage st
   {
     ShaderConstant dummy;
 
+    const DataType &innerType = dataTypes[dataTypes[it->first].InnerType()];
     MakeConstantBlockVariable(dummy, pointerTypes, dataTypes[it->first].pointerType.storage,
-                              dataTypes[it->first], rdcstr(), Decorations(), false, specInfo);
+                              innerType, rdcstr(), decorations[it->first], false, specInfo);
 
     if(it->second >= reflection.pointerTypes.size())
       reflection.pointerTypes.resize(it->second + 1);
+
+    // use the pointer type to disambiguate if there's multiple pointers to the same struct - since
+    // it could e.g. have different strides
+    if(innerType.type == DataType::StructType && dupeInners[innerType.id] > 1)
+      dummy.type.name += StringFormat::Fmt("_%u", it->first.value());
 
     reflection.pointerTypes[it->second] = dummy.type;
   }
@@ -2123,6 +2219,10 @@ void Reflector::MakeConstantBlockVariable(ShaderConstant &outConst,
 
   const DataType *curType = &type;
 
+  // for pointers to structs, the pointer itself has an array stride which we should pay attention to
+  if(curType->type == DataType::StructType && varDecorations.arrayStride != ~0U)
+    outConst.type.arrayByteStride = varDecorations.arrayStride;
+
   // if the type is an array, set array size and strides then unpeel the array
   if(curType->type == DataType::ArrayType)
   {
@@ -2186,8 +2286,7 @@ void Reflector::MakeConstantBlockVariable(ShaderConstant &outConst,
 
       // try to insert the inner type ID into the map. If it succeeds, it gets the next available
       // pointer type index (size of the map), if not then we just get the previously added index
-      auto it =
-          pointerTypes.insert(std::make_pair(curType->InnerType(), (uint16_t)pointerTypes.size()));
+      auto it = pointerTypes.insert(std::make_pair(curType->id, (uint16_t)pointerTypes.size()));
 
       outConst.type.pointerTypeID = it.first->second;
       return;
@@ -2465,6 +2564,36 @@ void Reflector::AddSignatureParameter(const bool isInput, const ShaderStage stag
 #include "catch/catch.hpp"
 #include "data/glsl_shaders.h"
 #include "glslang_compile.h"
+
+#if 0
+
+TEST_CASE("DO NOT COMMIT - convenience test", "[spirv]")
+{
+  // this test loads a file from disk and passes it through Reflector. Useful for when you
+  // are iterating on a shader and don't want to have to load a whole capture.
+  rdcarray<uint32_t> buf;
+  FileIO::ReadAll("/path/to/file.spv", buf);
+
+  rdcspv::Reflector reflector;
+
+  reflector.Parse(buf);
+
+  ShaderReflection reflection;
+  SPIRVPatchData patchData;
+
+  rdcstr entryPoint = reflector.EntryPoints()[0].name;
+  ShaderStage stage = reflector.EntryPoints()[0].stage;
+
+  reflector.MakeReflection(GraphicsAPI::Vulkan, stage, entryPoint, {}, reflection, patchData);
+
+  // the only thing fetched lazily is the disassembly, so grab that here
+  std::map<size_t, uint32_t> instructionLines;
+  rdcstr disasm = reflector.Disassemble(entryPoint, {}, instructionLines);
+
+  RDCLOG("%s", disasm.c_str());
+}
+
+#endif
 
 TEST_CASE("Validate SPIR-V reflection", "[spirv][reflection]")
 {

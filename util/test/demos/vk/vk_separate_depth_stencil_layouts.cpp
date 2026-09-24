@@ -463,11 +463,11 @@ void main()
                   depthStencilImg.image, vkh::ImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT)),
           });
 
-      vkCmdBeginRenderPass(
-          cmd,
-          vkh::RenderPassBeginInfo(renderPass, frameBuffer, mainWindow->scissor,
-                                   {vkh::ClearValue(1, 0, 1, 1), vkh::ClearValue(1.0f, 0)}),
-          VK_SUBPASS_CONTENTS_INLINE);
+      vkCmdBeginRenderPass(cmd,
+                           vkh::RenderPassBeginInfo(
+                               renderPass, frameBuffer, mainWindow->scissor,
+                               {vkh::ClearValue(1.0f, 0.0f, 1.0f, 1.0f), vkh::ClearValue(1.0f, 0)}),
+                           VK_SUBPASS_CONTENTS_INLINE);
       vkCmdSetViewport(cmd, 0, 1, &mainWindow->viewport);
       vkCmdSetScissor(cmd, 0, 1, &mainWindow->scissor);
 

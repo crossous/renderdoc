@@ -756,6 +756,13 @@ void RenderDoc::Initialise()
   if(IsReplayApp())
     RDCLOGOUTPUT();
 
+  if(IsReplayApp())
+  {
+    for(auto it = m_EnvSetups.begin(); it != m_EnvSetups.end(); ++it)
+      (*it)();
+    m_EnvSetups.clear();
+  }
+
   ProcessConfig();
 
 #if RENDERDOC_ENABLE_API_MONITOR

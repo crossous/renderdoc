@@ -814,29 +814,38 @@ void ListBoxImpl::Create(Window &parent,
 	unicodeMode = unicodeMode_;
 
 	QWidget *qparent = static_cast<QWidget *>(parent.GetID());
-	ListWidget *list = new ListWidget(qparent);
+
+  ListWidget *list;
+  if(wid)
+  {
+    list = (ListWidget *)window(wid);
+  }
+  else
+  {
+	  list = new ListWidget(qparent);
 
 #if defined(Q_OS_WIN)
-	// On Windows, Qt::ToolTip causes a crash when the list is clicked on
-	// so Qt::Tool is used.
-	list->setParent(0, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint
+    // On Windows, Qt::ToolTip causes a crash when the list is clicked on
+    // so Qt::Tool is used.
+    list->setParent(0, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-		| Qt::WindowDoesNotAcceptFocus
+      | Qt::WindowDoesNotAcceptFocus
 #endif
-	);
+    );
 #else
-	// On OS X, Qt::Tool takes focus so main window loses focus so
-	// keyboard stops working. Qt::ToolTip works but its only really
-	// documented for tooltips.
-	// On Linux / X this setting allows clicking on list items.
-	list->setParent(0, Qt::ToolTip | Qt::FramelessWindowHint);
+    // On OS X, Qt::Tool takes focus so main window loses focus so
+    // keyboard stops working. Qt::ToolTip works but its only really
+    // documented for tooltips.
+    // On Linux / X this setting allows clicking on list items.
+    list->setParent(0, Qt::ToolTip | Qt::FramelessWindowHint);
 #endif
+  }
 	list->setAttribute(Qt::WA_ShowWithoutActivating);
 	list->setFocusPolicy(Qt::NoFocus);
 	list->setUniformItemSizes(true);
 	list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	list->move(location.x, location.y);
+	//list->move(location.x, location.y);
 
 	int maxIconWidth = 0;
 	int maxIconHeight = 0;
@@ -1023,6 +1032,7 @@ void ListBoxImpl::SetDoubleClickAction(CallBackAction action, void *data)
 
 void ListBoxImpl::SetList(const char *list, char separator, char typesep)
 {
+  window(wid)->setUpdatesEnabled(false);
 	// This method is *not* platform dependent.
 	// It is borrowed from the GTK implementation.
 	Clear();
@@ -1048,6 +1058,7 @@ void ListBoxImpl::SetList(const char *list, char separator, char typesep)
 			*numword = '\0';
 		Append(startword, numword?atoi(numword + 1):-1);
 	}
+  window(wid)->setUpdatesEnabled(true);
 }
 
 ListBox::ListBox() {}

@@ -80,7 +80,8 @@ public:
   bool IsCBVCached(const DXDebug::BindingSlot &slot) const override;
   bool IsSRVCached(const DXDebug::BindingSlot &slot) const override;
   bool IsUAVCached(const DXDebug::BindingSlot &slot) const override;
-  bool IsResourceInfoCached(const DXDebug::BindingSlot &slot, uint32_t mipLevel) override;
+  bool IsResourceInfoCached(DXIL::ResourceClass resClass, const DXDebug::BindingSlot &slot,
+                            uint32_t mipLevel) override;
   bool IsSampleInfoCached(const DXDebug::BindingSlot &slot) override;
   bool IsRenderTargetSampleInfoCached() override;
   bool IsResourceReferenceInfoCached(const DXDebug::BindingSlot &slot) override;
@@ -113,7 +114,7 @@ public:
     return m_WorkgroupProperties;
   }
   const rdcarray<ShaderVariable> &GetConstantBlocks() const override { return m_ConstantBlocks; }
-  const std::map<ConstantBlockReference, bytebuf> &GetConstantBlocksDatas() const override
+  const std::map<ConstantBlockReference, ConstantBlockData> &GetConstantBlocksDatas() const override
   {
     return m_ConstantBlocksDatas;
   }
@@ -160,25 +161,28 @@ private:
   rdcarray<rdcflatmap<ShaderBuiltin, ShaderVariable>> m_ThreadsBuiltins;
   rdcarray<SourceVariableMapping> m_SourceVars;
   rdcarray<ShaderVariable> m_ConstantBlocks;
-  std::map<ConstantBlockReference, bytebuf> m_ConstantBlocksDatas;
+  std::map<ConstantBlockReference, ConstantBlockData> m_ConstantBlocksDatas;
   ShaderVariable m_InputPlaceholder;
   uint32_t m_SubgroupSize = 1;
 
   struct ResourceInfoMiplevel
   {
+    DXIL::ResourceClass resClass;
     BindingSlot slot;
     uint32_t mipLevel;
 
     bool operator<(const ResourceInfoMiplevel &o) const
     {
-      if(mipLevel == o.mipLevel)
+      if(resClass != o.resClass)
+        return resClass < o.resClass;
+      if(!(slot == o.slot))
         return slot < o.slot;
       return mipLevel < o.mipLevel;
     }
 
     bool operator==(const ResourceInfoMiplevel &o) const
     {
-      return slot == o.slot && mipLevel == o.mipLevel;
+      return resClass == o.resClass && slot == o.slot && mipLevel == o.mipLevel;
     }
   };
 

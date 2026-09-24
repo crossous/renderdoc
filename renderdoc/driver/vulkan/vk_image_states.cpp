@@ -1147,6 +1147,11 @@ void ImageState::ResetToOldState(ImageBarrierSequence &barriers, ImageTransition
       // Transitioning back to PREINITIALIZED; this is impossible, so transition to GENERAL instead.
       newLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
+    if(oldLayout != VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT &&
+       newLayout == VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT)
+    {
+      newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
 
     uint32_t srcQueueFamilyIndex = subIt->state().newQueueFamilyIndex;
     uint32_t dstQueueFamilyIndex = subIt->state().oldQueueFamilyIndex;
@@ -1305,6 +1310,13 @@ void ImageState::Transition(const ImageState &dstState, VkAccessFlags srcAccessM
         // Transitioning to PREINITIALIZED, which is invalid. This happens when we are resetting to
         // an earlier image state.
         // Instead, we transition to GENERAL, and make the image owned by oldQueueFamilyIndex.
+        newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        dstQueueFamilyIndex = srcSub.oldQueueFamilyIndex;
+        RDCASSERT(dstQueueFamilyIndex != VK_QUEUE_FAMILY_IGNORED);
+      }
+      if(newLayout == VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT &&
+         oldLayout != VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT)
+      {
         newLayout = VK_IMAGE_LAYOUT_GENERAL;
         dstQueueFamilyIndex = srcSub.oldQueueFamilyIndex;
         RDCASSERT(dstQueueFamilyIndex != VK_QUEUE_FAMILY_IGNORED);

@@ -26,16 +26,13 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
-#include <QDesktopWidget>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QProxyStyle>
 #include <QScrollBar>
 #include <QStack>
-#include <QStylePainter>
 #include <QWheelEvent>
 #include "Code/QRDUtils.h"
 #include "Code/Resources.h"
@@ -117,87 +114,6 @@ QSize RDTreeViewDelegate::sizeHint(const QStyleOptionViewItem &option, const QMo
   return ret;
 }
 
-RDTipLabel::RDTipLabel(QWidget *listener) : QLabel(NULL), mouseListener(listener)
-{
-  int margin = style()->pixelMetric(QStyle::PM_ToolTipLabelFrameWidth, NULL, this);
-  int opacity = style()->styleHint(QStyle::SH_ToolTipLabel_Opacity, NULL, this);
-
-  setWindowFlags(Qt::ToolTip);
-  setAttribute(Qt::WA_TransparentForMouseEvents);
-  setForegroundRole(QPalette::ToolTipText);
-  setBackgroundRole(QPalette::ToolTipBase);
-  setMargin(margin + 1);
-  setFrameStyle(QFrame::NoFrame);
-  setAlignment(Qt::AlignLeft);
-  setIndent(1);
-  setWindowOpacity(opacity / 255.0);
-}
-
-QSize RDTipLabel::configureTip(QWidget *, QModelIndex, QString text)
-{
-  setText(text);
-  return minimumSizeHint();
-}
-
-void RDTipLabel::showTip(QPoint pos)
-{
-  move(pos);
-  show();
-}
-
-bool RDTipLabel::forceTip(QWidget *widget, QModelIndex idx)
-{
-  return false;
-}
-
-void RDTipLabel::paintEvent(QPaintEvent *ev)
-{
-  QStylePainter p(this);
-  QStyleOptionFrame opt;
-  opt.init(this);
-  p.drawPrimitive(QStyle::PE_PanelTipLabel, opt);
-  p.end();
-
-  QLabel::paintEvent(ev);
-}
-
-void RDTipLabel::mousePressEvent(QMouseEvent *e)
-{
-  if(mouseListener)
-    sendListenerEvent(e);
-}
-
-void RDTipLabel::sendListenerEvent(QMouseEvent *e)
-{
-  QMouseEvent *duplicate =
-      new QMouseEvent(e->type(), mouseListener->mapFromGlobal(e->globalPos()), e->windowPos(),
-                      e->globalPos(), e->button(), e->buttons(), e->modifiers(), e->source());
-  QCoreApplication::postEvent(mouseListener, duplicate);
-}
-
-void RDTipLabel::mouseReleaseEvent(QMouseEvent *e)
-{
-  if(mouseListener)
-    sendListenerEvent(e);
-}
-
-void RDTipLabel::mouseDoubleClickEvent(QMouseEvent *e)
-{
-  if(mouseListener)
-    sendListenerEvent(e);
-}
-
-void RDTipLabel::resizeEvent(QResizeEvent *e)
-{
-  QStyleHintReturnMask frameMask;
-  QStyleOption option;
-  option.init(this);
-  if(style()->styleHint(QStyle::SH_ToolTip_Mask, &option, this, &frameMask))
-    setMask(frameMask.region);
-
-  QLabel::resizeEvent(e);
-}
-
 RDTreeView::RDTreeView(QWidget *parent) : QTreeView(parent)
 {
   setMouseTracking(true);
@@ -205,7 +121,7 @@ RDTreeView::RDTreeView(QWidget *parent) : QTreeView(parent)
   m_delegate = new RDTreeViewDelegate(this);
   QTreeView::setItemDelegate(m_delegate);
 
-  m_TooltipLabel = new RDTipLabel(viewport());
+  m_TooltipLabel = new RDToolTip(viewport());
   m_TooltipLabel->hide();
   m_CurrentTooltipElided = false;
 
@@ -258,27 +174,7 @@ void RDTreeView::mouseMoveEvent(QMouseEvent *e)
           // We don't use QToolTip since we have a custom tooltip for showing elided results, and we
           // use that for consistency. This also makes it easier to slot in a custom tooltip widget
           // externally.
-          QPoint p = QCursor::pos();
-
-          // estimate, as this is not easily queryable
-          const QPoint cursorSize(16, 16);
-          const QRect screenAvailGeom = QApplication::desktop()->availableGeometry(p);
-
-          // start with the tooltip placed bottom-right of the cursor, as the default
-          QRect tooltipRect;
-          tooltipRect.setTopLeft(p + cursorSize);
-          tooltipRect.setSize(m_Tooltip->configureTip(this, m_currentHoverIndex, tooltip));
-
-          // clip by the available geometry in x
-          if(tooltipRect.right() > screenAvailGeom.right())
-            tooltipRect.moveRight(screenAvailGeom.right());
-
-          // if we'd go out of bounds in y, place the tooltip above the cursor. Don't just clip like
-          // in x, because that could place the tooltip over the cursor.
-          if(tooltipRect.bottom() > screenAvailGeom.bottom())
-            tooltipRect.moveBottom(p.y() - cursorSize.y());
-
-          m_Tooltip->showTip(tooltipRect.topLeft());
+          m_Tooltip->showTip(this, tooltip, m_currentHoverIndex);
           m_CurrentTooltipElided = false;
         }
       }
@@ -459,8 +355,8 @@ bool RDTreeView::viewportEvent(QEvent *event)
             // need to use a custom label tooltip since the QToolTip freaks out as we're placing it
             // underneath the cursor instead of next to it (so that the tooltip lines up over the
             // row)
-            m_Tooltip->configureTip(this, index, fullText);
-            m_Tooltip->showTip(viewport()->mapToGlobal(option.rect.topLeft()));
+            m_Tooltip->configureTip(this, fullText, index);
+            m_Tooltip->showTipAtPos(viewport()->mapToGlobal(option.rect.topLeft()));
             m_CurrentTooltipElided = true;
           }
         }

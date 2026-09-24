@@ -50,7 +50,7 @@ class GL_VAO_0(rdtest.TestCase):
 
             self.check_mesh_data(postvs_ref, postvs_data)
 
-            action = action.next
+            action = action.nextAction
 
         action = self.find_action("Instanced")
 

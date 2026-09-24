@@ -1,3 +1,5 @@
+.. _how_shader_debug_info:
+
 How do I use shader debug information?
 ======================================
 
@@ -20,13 +22,13 @@ Shader search paths
 
 In the RenderDoc settings menu, under the ``Core`` category, you can specify shader debug search paths. These are the directories that will be searched to find separated debug information based on a path in the original shader.
 
-Each path can be set as 'recursive' or not, with the default being to treat it as recursive. This is explained below in the search priority list, but generally should be turned off for network shares or very large folders where listing all contained files recusively would be slow. The paths can be rearranged to provide a priority order.
+Each path can be set as 'recursive' or not, with the default being to treat it as recursive. This is explained below in the search priority list, but generally should be turned off for network shares or very large folders where listing all contained files recursively would be slow. The paths can be rearranged to provide a priority order.
 
 When searching for separate debug info based on a path in the stripped shader blob, RenderDoc follows the following algorithm. This is based on trying to match PIX's behaviour which is the primary other tool that supports this, under the principle of least surprise. PIX's search algorithm is deliberately undocumented and so this has been determined by reverse engineering, some tweaks have been made for usability.
 
 .. note::
 
-  If the filename is proceeded by ``lz4#`` then this will be stripped before consideration and the file will be considered lz4 compressed. This is a RenderDoc extension only possible when using manually-specified shader blobs and is not currently supported by any compiler.
+  If the filename is proceeded by ``lz4#`` then this will be stripped before consideration and the file will be considered LZ4 compressed. This is a RenderDoc extension only possible when using manually-specified shader blobs and is not currently supported by any compiler.
 
 In this algorithm the original path from the shader is referred to as a 'filename', but it may contain relative path elements and may not be only a filename.
 

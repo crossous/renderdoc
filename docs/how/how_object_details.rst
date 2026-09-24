@@ -57,7 +57,7 @@ More details on this section are available on the :doc:`../window/buffer_viewer`
 
 .. note::
 
-	This window supports copy and paste, so simply select the entries and ctrl-c to copy to the clipboard
+	This window supports copy and paste, so simply select the entries and :kbd:`Ctrl-C` to copy to the clipboard
 
 Viewing Constant Buffers
 ------------------------
@@ -72,4 +72,4 @@ Whenever this shader slot has a constant buffer in it, both the constant names a
 
 .. note::
 
-	This window supports copy and paste, so simply select the entries and ctrl-c to copy to the clipboard
+	This window supports copy and paste, so simply select the entries and :kbd:`Ctrl-C` to copy to the clipboard

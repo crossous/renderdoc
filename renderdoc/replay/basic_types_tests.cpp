@@ -125,6 +125,8 @@ void TestInsert()
   // insert a large amount of data to ensure this doesn't read off start/end of vector
   rdcarray<inner> largedata;
   largedata.resize(100000);
+  largedata.front() = inner(100);
+  largedata.back() = inner(101);
 
   vec.insert(4, largedata);
 
@@ -133,6 +135,8 @@ void TestInsert()
   CHECK(vec[1] == 6);
   CHECK(vec[2] == 3);
   CHECK(vec[3] == 20);
+  CHECK(vec[4] == 100);
+  CHECK(vec[4 + largedata.size() - 1] == 101);
   CHECK(vec[4 + largedata.size()] == 21);
   CHECK(vec[5 + largedata.size()] == 8);
   CHECK(vec[6 + largedata.size()] == 13);
@@ -453,6 +457,30 @@ rdcstr DoStringise(const NonTrivial &el)
   return "NonTrivial{" + DoStringise(el.val) + "}";
 }
 
+struct MoveTrasher : public NonTrivial
+{
+  MoveTrasher() {}
+  MoveTrasher(int v) : NonTrivial(v) {}
+  MoveTrasher(const MoveTrasher &v) : NonTrivial(v) { val = v.val; }
+  MoveTrasher(MoveTrasher &&v)
+  {
+    // trash on move
+    val = v.val;
+    v.val = -111111;
+  }
+  MoveTrasher &operator=(const MoveTrasher &v)
+  {
+    val = v.val;
+    return *this;
+  }
+};
+
+template <>
+rdcstr DoStringise(const MoveTrasher &el)
+{
+  return "MoveTrasher{" + DoStringise(el.val) + "}";
+}
+
 struct ConstructorCounter
 {
   int value;
@@ -521,6 +549,11 @@ TEST_CASE("Test array type", "[basictypes]")
     TestBasic<NonTrivial>();
   }
 
+  SECTION("Basic test - MoveTrasher")
+  {
+    TestBasic<MoveTrasher>();
+  }
+
   SECTION("insert - int")
   {
     TestInsert<int>();
@@ -529,6 +562,11 @@ TEST_CASE("Test array type", "[basictypes]")
   SECTION("insert - NonTrivial")
   {
     TestInsert<NonTrivial>();
+  }
+
+  SECTION("insert - MoveTrasher")
+  {
+    TestInsert<MoveTrasher>();
   }
 
   SECTION("erase - int")
@@ -541,6 +579,11 @@ TEST_CASE("Test array type", "[basictypes]")
     TestErase<NonTrivial>();
   }
 
+  SECTION("erase - MoveTrasher")
+  {
+    TestErase<MoveTrasher>();
+  }
+
   SECTION("removeOne / removeOneIf / removeIf- int")
   {
     TestRemove<int>();
@@ -549,6 +592,11 @@ TEST_CASE("Test array type", "[basictypes]")
   SECTION("removeOne / removeOneIf / removeIf- NonTrivial")
   {
     TestRemove<NonTrivial>();
+  }
+
+  SECTION("removeOne / removeOneIf / removeIf- MoveTrasher")
+  {
+    TestErase<MoveTrasher>();
   }
 
   SECTION("Test constructing/assigning from other types")

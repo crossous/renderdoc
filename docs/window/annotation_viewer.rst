@@ -118,6 +118,6 @@ This function can be used to filter the visible events, based on their annotatio
 Python access
 -------------
 
-Annotations on commands can be accessed via :py:attr:`renderdoc.APIEvent.annotations`, which is an optional :py:class:`~renderdoc.SDObject` object that can be accessed recursively. Helper functions like :py:meth:`~renderdoc.SDObject.FindChildByKeyPath` can be used to speed up accessing a specific annotation.
+Annotations on commands can be accessed via :attr:`~renderdoc.APIEvent.annotations`, which is an optional :class:`~renderdoc.SDObject` object that can be accessed recursively. Helper functions like :meth:`~renderdoc.SDObject.FindChildByKeyPath` can be used to speed up accessing a specific annotation.
 
-Annotations on objects are available in a similar way through :py:attr:`renderdoc.ResourceDescription.annotations`.
+Annotations on objects are available in a similar way through :attr:`~renderdoc.ResourceDescription.annotations`.

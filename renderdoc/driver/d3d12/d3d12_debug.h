@@ -332,3 +332,6 @@ void AddDebugDescriptorsToRenderState(WrappedID3D12Device *pDevice, D3D12RenderS
                                       bool compute, const rdcarray<PortableHandle> &handles,
                                       D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32_t sigElem,
                                       std::set<ResourceId> &copiedHeaps);
+
+// Does a command signature modify root arguments i.e. setting root constants, updating bindings.
+bool DoesCommandSignatureModifyRootArgs(ID3D12CommandSignature *comSig);

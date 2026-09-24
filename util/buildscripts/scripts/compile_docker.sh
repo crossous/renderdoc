@@ -18,8 +18,8 @@ cp -R lib/*.so /io/pymodules
 # Copy python lib folder, and trim
 mkdir -p /io/dist/share/renderdoc/pylibs/lib
 cd /io/dist/share/renderdoc/pylibs/lib
-cp -R /usr/lib/python3.6/ .
-cd python3.6
+cp -R /usr/lib/python3.8/ .
+cd python3.8
 # remove cache files
 rm -rf $(find -iname __pycache__)
 # remove unwanted modules

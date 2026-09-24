@@ -35,9 +35,9 @@ class Overlay_Test(rdtest.TestCase):
                 marker_name += fmt
                 test_marker: rd.ActionDescription = self.find_action(marker_name, base_event)
 
-                self.controller.SetFrameEvent(test_marker.next.eventId, True)
+                self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
-                rdtest.log.print("Checking overlays at event {}: {}".format(test_marker.next.eventId, marker_name))
+                rdtest.log.print("Checking overlays at event {}: {}".format(test_marker.nextAction.eventId, marker_name))
 
                 pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -423,7 +423,7 @@ class Overlay_Test(rdtest.TestCase):
 
             # Shader with discard
             test_marker: rd.ActionDescription = self.find_action("Discard " + marker_name, base_event)
-            self.controller.SetFrameEvent(test_marker.next.eventId, True)
+            self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
             pipe: rd.PipeState = self.controller.GetPipelineState()
             tex.overlay = rd.DebugOverlay.Depth
             out.SetTextureDisplay(tex)
@@ -434,7 +434,7 @@ class Overlay_Test(rdtest.TestCase):
             # Check the viewport overlay especially
             view_marker: rd.ActionDescription = self.find_action("Viewport Test " + fmt, base_event)
 
-            self.controller.SetFrameEvent(view_marker.next.eventId, True)
+            self.controller.SetFrameEvent(view_marker.nextAction.eventId, True)
 
             pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -553,7 +553,7 @@ class Overlay_Test(rdtest.TestCase):
             # Check the sample mask test
             mask_marker: rd.ActionDescription = self.find_action("Sample Mask Test " + fmt, base_event)
 
-            self.controller.SetFrameEvent(mask_marker.next.eventId, True)
+            self.controller.SetFrameEvent(mask_marker.nextAction.eventId, True)
 
             col_tex: rd.ResourceId = pipe.GetOutputTargets()[0].resource
 
@@ -583,7 +583,7 @@ class Overlay_Test(rdtest.TestCase):
             test_marker: rd.ActionDescription = self.find_action("Normal Test " + fmt, base_event)
 
             # Now check clear-before-X by hand, for colour and for depth
-            self.controller.SetFrameEvent(test_marker.next.eventId, True)
+            self.controller.SetFrameEvent(test_marker.nextAction.eventId, True)
 
             col_tex: rd.ResourceId = pipe.GetOutputTargets()[0].resource
 
@@ -722,7 +722,7 @@ class Overlay_Test(rdtest.TestCase):
         for mip in [2, 3]:
             sub_marker: rd.ActionDescription = self.find_action("Subresources mip {}".format(mip), base_event)
 
-            self.controller.SetFrameEvent(sub_marker.next.eventId, True)
+            self.controller.SetFrameEvent(sub_marker.nextAction.eventId, True)
 
             pipe: rd.PipeState = self.controller.GetPipelineState()
 

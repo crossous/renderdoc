@@ -349,6 +349,16 @@ public:
   void AttemptCapture();
   void FinishCapture();
 
+  rdcarray<SDObject *> DetachAnnotations()
+  {
+    rdcarray<SDObject *> ret;
+    ret.swap(m_EventAnnotations);
+    for(auto it = m_Annotations.begin(); it != m_Annotations.end(); ++it)
+      ret.push_back(it->second);
+    m_Annotations.clear();
+    return ret;
+  }
+
   D3D11RenderState *GetCurrentPipelineState() { return m_CurrentPipelineState; }
   ResourceId GetResourceID() { return m_ResourceID; }
   D3D11ResourceRecord *GetResourceRecord() { return m_ContextRecord; }

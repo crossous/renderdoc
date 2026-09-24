@@ -13,7 +13,7 @@ class GL_Draw_Zoo(rdtest.Draw_Zoo):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, True)
 
@@ -29,7 +29,7 @@ class GL_Draw_Zoo(rdtest.Draw_Zoo):
 
         self.check(action is not None)
 
-        action = action.next
+        action = action.nextAction
 
         self.controller.SetFrameEvent(action.eventId, True)
 
@@ -43,7 +43,7 @@ class GL_Draw_Zoo(rdtest.Draw_Zoo):
         action = self.find_action("GL_ClearDepth")
         self.check(action is not None)
         
-        action = action.next
+        action = action.nextAction
         
         self.check(action.flags & (rd.ActionFlags.Clear|rd.ActionFlags.ClearDepthStencil) == (rd.ActionFlags.Clear|rd.ActionFlags.ClearDepthStencil))
         

@@ -857,37 +857,37 @@ void init()
       {Vec3f(0.8f, -0.4f, 0.7f), Vec4f(0.0f, 1.0f, 0.0f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
 
-  // depth equal that fails
+  // depth equal setup
   DepthEqualSetup = makeDraw({
-      {Vec3f(-0.1f, -0.8f, 0.1f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(0.0f, 0.0f)},
-      {Vec3f(0.0f, -0.6f, 0.1f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(0.0f, 1.0f)},
-      {Vec3f(0.1f, -0.8f, 0.1f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(1.0f, 0.0f)},
+      {Vec3f(-0.1f, -0.8f, 0.5f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(0.0f, 0.0f)},
+      {Vec3f(0.0f, -0.6f, 0.5f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(0.0f, 1.0f)},
+      {Vec3f(0.1f, -0.8f, 0.5f), Vec4f(0.1f, 0.1f, 0.1f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
 
   // depth equal that fails
   DepthEqualFail = makeDraw({
-      {Vec3f(-0.1f, -0.8f, 0.1f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(0.0f, 0.0f)},
-      {Vec3f(0.0f, -0.6f, 0.1f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(0.0f, 1.0f)},
-      {Vec3f(0.1f, -0.8f, 0.1f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(1.0f, 0.0f)},
+      {Vec3f(-0.1f, -0.8f, 0.5f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(0.0f, 0.0f)},
+      {Vec3f(0.0f, -0.6f, 0.5f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(0.0f, 1.0f)},
+      {Vec3f(0.1f, -0.8f, 0.5f + 5.0e-4f), Vec4f(0.0f, 0.0f, 0.0f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
 
   // D16 depth equal (enough) triangle
   DepthEqualPass16 = makeDraw({
-      {Vec3f(-0.1f, -0.8f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
-      {Vec3f(0.0f, -0.6f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
-      {Vec3f(0.1f, -0.8f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
+      {Vec3f(-0.1f, -0.8f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
+      {Vec3f(0.0f, -0.6f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
+      {Vec3f(0.1f, -0.8f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
   // D24 depth equal (enough) triangle
   DepthEqualPass24 = makeDraw({
-      {Vec3f(-0.1f, -0.8f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
-      {Vec3f(0.0f, -0.6f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
-      {Vec3f(0.1f, -0.8f, 0.1f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
+      {Vec3f(-0.1f, -0.8f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
+      {Vec3f(0.0f, -0.6f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
+      {Vec3f(0.1f, -0.8f, 0.5f + 1.0e-8f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
   // D32 depth equal triangle
   DepthEqualPass32 = makeDraw({
-      {Vec3f(-0.1f, -0.8f, 0.1f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
-      {Vec3f(0.0f, -0.6f, 0.1f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
-      {Vec3f(0.1f, -0.8f, 0.1f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
+      {Vec3f(-0.1f, -0.8f, 0.5f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 0.0f)},
+      {Vec3f(0.0f, -0.6f, 0.5f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(0.0f, 1.0f)},
+      {Vec3f(0.1f, -0.8f, 0.5f), Vec4f(1.0f, 1.0f, 1.0f, 1.0f), Vec2f(1.0f, 0.0f)},
   });
 
   ColourMask = makeDraw({

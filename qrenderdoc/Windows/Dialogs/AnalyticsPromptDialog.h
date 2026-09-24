@@ -31,14 +31,14 @@ namespace Ui
 class AnalyticsPromptDialog;
 }
 
-class PersistantConfig;
+class PersistentConfig;
 
 class AnalyticsPromptDialog : public QDialog
 {
   Q_OBJECT
 
 public:
-  explicit AnalyticsPromptDialog(PersistantConfig &cfg, QWidget *parent = 0);
+  explicit AnalyticsPromptDialog(PersistentConfig &cfg, QWidget *parent = 0);
   ~AnalyticsPromptDialog();
 
 private slots:
@@ -50,5 +50,5 @@ private slots:
 
 private:
   Ui::AnalyticsPromptDialog *ui;
-  PersistantConfig &m_Config;
+  PersistentConfig &m_Config;
 };

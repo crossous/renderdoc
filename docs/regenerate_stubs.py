@@ -4,14 +4,13 @@ import os
 import sys
 import struct
 
-if len(sys.argv) != 2:
+if len(sys.argv) < 2:
     print(f"Usage: {sys.argv[0]} [path/to/stubs/folder]")
     sys.exit(1)
 
 destpath = os.path.realpath(sys.argv[1])
 
-if __name__ == '__main__':
-    print(f"Writing python stubs to {destpath}")
+print(f"Writing python stubs to {destpath}")
 
 os.makedirs(destpath, exist_ok=True)
     
@@ -33,20 +32,17 @@ os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + '/Development/')
 os.environ["PATH"] += os.pathsep + os.path.abspath(binpath + '/Release/')
 
 if sys.platform == 'win32' and sys.version_info[1] >= 8:
-    os.add_dll_directory(binpath + '/Release/')
-    os.add_dll_directory(binpath + '/Development/')
+    if os.path.exists(binpath + '/Release/'):
+        os.add_dll_directory(binpath + '/Release/')
+    if os.path.exists(binpath + '/Development/'):
+        os.add_dll_directory(binpath + '/Development/')
 
 # path to module libraries for linux
 sys.path.insert(0, os.path.abspath(os.path.join(docsdir, '../build/lib')))
 
 import renderdoc
 import qrenderdoc
+import stubgen
 
-if __name__ == '__main__':
-    print(f"Generating stubs from {renderdoc.__file__} and {qrenderdoc.__file__}")
-
-from stubs_generation.helpers import generator3
-
-if __name__ == '__main__':
-    generator3.main(['renderdoc', '-d', destpath])
-    generator3.main(['qrenderdoc', '-d', destpath])
+stubgen.gen(renderdoc, destpath)
+stubgen.gen(qrenderdoc, destpath)

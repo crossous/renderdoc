@@ -1006,17 +1006,18 @@ bool WrappedID3D12GraphicsCommandList::Serialise_BuildRaytracingAccelerationStru
     m_Cmd->m_LastCmdListID = GetResID(pCommandList);
     BakedCmdListInfo &bakedCmdInfo = m_Cmd->m_BakedCmdListInfo[m_Cmd->m_LastCmdListID];
     BakedCmdListInfo::PatchRaytracing &patchInfo =
-        bakedCmdInfo.m_patchRaytracingInfo[bakedCmdInfo.curEventID];
+        bakedCmdInfo.m_patchRaytracingInfo[m_Cmd->m_CurChunkOffset & 0xffffffff];
 
     D3D12AccelerationStructure *accStructAtDstOffset = NULL;
 
     if(D3D12_Debug_RT_Auditing())
     {
-      RDCLOG("Recording %s dynamic build to %llx on %s",
+      RDCLOG("Recording %s dynamic build to %llx on %s at EID %u offset %u",
              AccStructDesc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL
                  ? "tlas"
                  : "blas",
-             AccStructDesc.DestAccelerationStructureData, ToStr(m_Cmd->m_LastCmdListID).c_str());
+             AccStructDesc.DestAccelerationStructureData, ToStr(m_Cmd->m_LastCmdListID).c_str(),
+             bakedCmdInfo.curEventID, m_Cmd->m_CurChunkOffset & 0xffffffff);
 
       ResourceId destASBId;
       D3D12BufferOffset destASBOffset;
@@ -1396,15 +1397,16 @@ bool WrappedID3D12GraphicsCommandList::Serialise_EmitRaytracingAccelerationStruc
 
       m_Cmd->AddAction(action);
 
-      D3D12ActionTreeNode &actionNode = m_Cmd->GetActionStack().back()->children.back();
+      D3D12EventNode &eventNode = m_Cmd->GetLastEventNode();
 
-      actionNode.resourceUsage.push_back(
-          make_rdcpair(WrappedID3D12Resource::GetResIDFromAddr(Desc.DestBuffer),
-                       EventUsage(actionNode.action.eventId, ResourceUsage::CopyDst)));
+      eventNode.resourceUsage.push_back(make_rdcpair(
+          WrappedID3D12Resource::GetResIDFromAddr(Desc.DestBuffer), ResourceUsage::CopyDst));
       for(UINT i = 0; i < NumSourceAccelerationStructures; i++)
-        actionNode.resourceUsage.push_back(make_rdcpair(
+      {
+        eventNode.resourceUsage.push_back(make_rdcpair(
             WrappedID3D12Resource::GetResIDFromAddr(pSourceAccelerationStructureData[i]),
-            EventUsage(actionNode.action.eventId, ResourceUsage::CopySrc)));
+            ResourceUsage::CopySrc));
+      }
     }
   }
 

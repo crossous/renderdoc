@@ -22,9 +22,9 @@ class VK_Secondary_CmdBuf(rdtest.TestCase):
 
         resources = self.controller.GetResources()
 
-        self.check(action is not None and action.next is not None)
+        self.check(action is not None and action.nextAction is not None)
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 
@@ -47,9 +47,9 @@ class VK_Secondary_CmdBuf(rdtest.TestCase):
 
         action = self.find_action("Secondary")
 
-        self.check(action is not None and action.next is not None)
+        self.check(action is not None and action.nextAction is not None)
 
-        self.controller.SetFrameEvent(action.next.eventId, False)
+        self.controller.SetFrameEvent(action.nextAction.eventId, False)
 
         pipe: rd.PipeState = self.controller.GetPipelineState()
 

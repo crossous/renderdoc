@@ -106,7 +106,8 @@ IReplayDriver *VulkanReplay::MakeDummyDriver()
     }
   }
 
-  IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDriver->DetachStructuredFile());
+  IReplayDriver *dummy = new DummyDriver(this, shaders, m_pDriver->DetachStructuredFile(),
+                                         m_pDriver->DetachAnnotations());
 
   return dummy;
 }
@@ -247,11 +248,11 @@ rdcarray<uint32_t> VulkanReplay::GetPassEvents(uint32_t eventId)
 
     // if we've come to the start of the log we were outside of a render pass
     // to start with
-    if(start->previous == NULL)
+    if(start->previousAction == NULL)
       return passEvents;
 
     // step back
-    start = start->previous;
+    start = start->previousAction;
   }
 
   // store all the action eventIDs up to the one specified at the start
@@ -267,7 +268,7 @@ rdcarray<uint32_t> VulkanReplay::GetPassEvents(uint32_t eventId)
     if(start->flags & (ActionFlags::MeshDispatch | ActionFlags::Drawcall | ActionFlags::PassBoundary))
       passEvents.push_back(start->eventId);
 
-    start = start->next;
+    start = start->nextAction;
   }
 
   return passEvents;
@@ -345,7 +346,16 @@ rdcarray<BufferDescription> VulkanReplay::GetBuffers()
 
 TextureDescription VulkanReplay::GetTexture(ResourceId id)
 {
-  VulkanCreationInfo::Image &iminfo = m_pDriver->m_CreationInfo.m_Image[id];
+  auto imit = m_pDriver->m_CreationInfo.m_Image.find(id);
+  if(imit == m_pDriver->m_CreationInfo.m_Image.end())
+  {
+    RDCERR("Invalid image id");
+    return {};
+  }
+
+  VulkanCreationInfo::Image &iminfo = imit->second;
+
+  VkImage liveWrappedImage = GetResourceManager()->GetHandle<VkImage>(id);
 
   TextureDescription ret = {};
   ret.resourceId = id;
@@ -357,10 +367,27 @@ TextureDescription VulkanReplay::GetTexture(ResourceId id)
   ret.depth = iminfo.extent.depth;
   ret.mips = iminfo.mipLevels;
 
-  ret.byteSize = 0;
-  for(uint32_t s = 0; s < ret.mips; s++)
-    ret.byteSize += GetByteSize(ret.width, ret.height, ret.depth, iminfo.format, s);
-  ret.byteSize *= ret.arraysize;
+  VkMemoryRequirements mrq = {0};
+  VkDevice dev = m_pDriver->GetDev();
+
+  // some entries in m_Images don't have a live handle - e.g. swapchains
+  if(liveWrappedImage != VK_NULL_HANDLE)
+    ObjDisp(dev)->GetImageMemoryRequirements(Unwrap(dev), Unwrap(liveWrappedImage), &mrq);
+
+  ret.byteSize = mrq.size;
+  if(ret.byteSize == 0)
+  {
+    for(uint32_t s = 0; s < ret.mips; s++)
+      ret.byteSize += GetByteSize(ret.width, ret.height, ret.depth, iminfo.format, s);
+    ret.byteSize *= ret.arraysize;
+  }
+
+  LockedConstImageStateRef lockedImage = m_pDriver->FindConstImageState(id);
+  if(lockedImage && lockedImage->isMemoryBound)
+  {
+    ret.memory = lockedImage->boundMemory;
+    ret.memoryOffset = lockedImage->boundMemoryOffset;
+  }
 
   ret.msQual = 0;
   ret.msSamp = RDCMAX(1U, (uint32_t)iminfo.samples);
@@ -399,13 +426,23 @@ TextureDescription VulkanReplay::GetTexture(ResourceId id)
 
 BufferDescription VulkanReplay::GetBuffer(ResourceId id)
 {
-  VulkanCreationInfo::Buffer &bufinfo = m_pDriver->m_CreationInfo.m_Buffer[id];
+  auto bufit = m_pDriver->m_CreationInfo.m_Buffer.find(id);
+  if(bufit == m_pDriver->m_CreationInfo.m_Buffer.end())
+  {
+    RDCERR("Invalid image id");
+    return {};
+  }
+
+  VulkanCreationInfo::Buffer &bufinfo = bufit->second;
 
   BufferDescription ret;
   ret.resourceId = id;
   ret.length = bufinfo.size;
   ret.creationFlags = BufferCategory::NoFlags;
   ret.gpuAddress = bufinfo.gpuAddress;
+
+  ret.memory = bufinfo.boundMemory;
+  ret.memoryOffset = bufinfo.boundMemoryOffset;
 
   if(bufinfo.usage & (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT))
     ret.creationFlags |= BufferCategory::ReadWrite;
@@ -1637,6 +1674,24 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
     ret.rasterizer.slopeScaledDepthBias = state.bias.slope;
     ret.rasterizer.lineWidth = state.lineWidth;
 
+    ret.rasterizer.depthBiasExact = state.bias.exact != VK_FALSE;
+    switch(state.bias.repr)
+    {
+      case VK_DEPTH_BIAS_REPRESENTATION_MAX_ENUM_EXT:
+        ret.rasterizer.depthBiasRepresentation = DepthBiasMode::Default;
+        RDCERR("Unexpected value for DepthBiasMode %x", state.bias.repr);
+        break;
+      case VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORMAT_EXT:
+        ret.rasterizer.depthBiasRepresentation = DepthBiasMode::Default;
+        break;
+      case VK_DEPTH_BIAS_REPRESENTATION_LEAST_REPRESENTABLE_VALUE_FORCE_UNORM_EXT:
+        ret.rasterizer.depthBiasRepresentation = DepthBiasMode::ForceUNorm;
+        break;
+      case VK_DEPTH_BIAS_REPRESENTATION_FLOAT_EXT:
+        ret.rasterizer.depthBiasRepresentation = DepthBiasMode::One;
+        break;
+    }
+
     // MSAA
     ret.multisample.rasterSamples = state.rastSamples;
     ret.multisample.sampleShadingEnable = p.sampleShadingEnable;
@@ -1856,15 +1911,25 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
       fbState.attachments.push_back({});
 
       ResourceId viewid = GetResID(dyn.depth.imageView);
+      ResourceId resolveImageView;
       if(state.dynamicRendering.beginCustomResolve &&
          (dyn.depth.resolveMode & VK_RESOLVE_MODE_CUSTOM_BIT_EXT))
         viewid = GetResID(dyn.depth.resolveImageView);
+      else if((dyn.depth.resolveMode != VK_RESOLVE_MODE_NONE) &&
+              !(dyn.depth.resolveMode & VK_RESOLVE_MODE_CUSTOM_BIT_EXT) &&
+              (dyn.depth.resolveImageView != VK_NULL_HANDLE))
+        resolveImageView = GetResID(dyn.depth.resolveImageView);
+
       if(dyn.depth.imageView == VK_NULL_HANDLE)
       {
         viewid = GetResID(dyn.stencil.imageView);
         if(state.dynamicRendering.beginCustomResolve &&
            (dyn.stencil.resolveMode & VK_RESOLVE_MODE_CUSTOM_BIT_EXT))
           viewid = GetResID(dyn.stencil.resolveImageView);
+        else if((dyn.stencil.resolveMode != VK_RESOLVE_MODE_NONE) &&
+                !(dyn.stencil.resolveMode & VK_RESOLVE_MODE_CUSTOM_BIT_EXT) &&
+                (dyn.stencil.resolveImageView != VK_NULL_HANDLE))
+          resolveImageView = GetResID(dyn.stencil.resolveImageView);
       }
 
       fbState.attachments.back().view = viewid;
@@ -1879,6 +1944,29 @@ void VulkanReplay::SavePipelineState(uint32_t eventId)
       Convert(fbState.attachments.back().swizzle, c.m_ImageView[viewid].componentMapping);
 
       rpState.depthstencilAttachment = int32_t(attIdx++);
+
+      if(resolveImageView != ResourceId())
+      {
+        fbState.attachments.push_back({});
+
+        fbState.attachments.back().view = resolveImageView;
+        ret.currentPass.framebuffer.attachments[attIdx].resource =
+            c.m_ImageView[resolveImageView].image;
+
+        fbState.attachments.back().format =
+            MakeResourceFormat(c.m_ImageView[resolveImageView].format);
+        fbState.attachments.back().firstMip =
+            c.m_ImageView[resolveImageView].range.baseMipLevel & 0xff;
+        fbState.attachments.back().firstSlice =
+            c.m_ImageView[resolveImageView].range.baseArrayLayer & 0xffff;
+        fbState.attachments.back().numMips = c.m_ImageView[resolveImageView].range.levelCount & 0xff;
+        fbState.attachments.back().numSlices =
+            c.m_ImageView[resolveImageView].range.layerCount & 0xffff;
+
+        Convert(fbState.attachments.back().swizzle, c.m_ImageView[resolveImageView].componentMapping);
+
+        ret.currentPass.renderpass.depthstencilResolveAttachment = int32_t(attIdx++);
+      }
     }
     else
     {
@@ -2416,31 +2504,44 @@ void VulkanReplay::FillDescriptor(Descriptor &dstel, const DescriptorSetSlot &sr
 
     if(viewid != ResourceId())
     {
+      const VulkanCreationInfo::ImageView &viewInfo = c.m_ImageView[viewid];
+
       dstel.view = viewid;
-      dstel.resource = c.m_ImageView[viewid].image;
-      dstel.format = MakeResourceFormat(c.m_ImageView[viewid].format);
+      dstel.resource = viewInfo.image;
+      dstel.format = MakeResourceFormat(viewInfo.format);
 
-      Convert(dstel.swizzle, c.m_ImageView[viewid].componentMapping);
-      dstel.firstMip = c.m_ImageView[viewid].range.baseMipLevel & 0xff;
-      dstel.firstSlice = c.m_ImageView[viewid].range.baseArrayLayer & 0xffff;
-      dstel.numMips = c.m_ImageView[viewid].range.levelCount & 0xff;
-      dstel.numSlices = c.m_ImageView[viewid].range.layerCount & 0xffff;
+      Convert(dstel.swizzle, viewInfo.componentMapping);
+      dstel.firstMip = viewInfo.range.baseMipLevel & 0xff;
+      dstel.firstSlice = viewInfo.range.baseArrayLayer & 0xffff;
+      dstel.numMips = viewInfo.range.levelCount & 0xff;
+      dstel.numSlices = viewInfo.range.layerCount & 0xffff;
 
-      if(c.m_ImageView[viewid].viewType == VK_IMAGE_VIEW_TYPE_3D)
-        dstel.firstSlice = dstel.numSlices = 0;
+      if(viewInfo.viewType == VK_IMAGE_VIEW_TYPE_3D)
+      {
+        if(descriptorType == DescriptorSlotType::StorageImage)
+        {
+          dstel.firstSlice = viewInfo.storageSliceOffset & 0xffff;
+          dstel.numSlices = viewInfo.storageSliceCount & 0xffff;
+        }
+        else
+        {
+          dstel.firstSlice = 0;
+          dstel.numSlices = 0;
+        }
+      }
 
       // cheeky hack, store image layout enum in byteOffset as it's not used for images
       dstel.byteOffset = convert(srcel.imageLayoutOrFormat);
 
-      dstel.minLODClamp = c.m_ImageView[viewid].minLOD;
+      dstel.minLODClamp = viewInfo.minLOD;
 
-      switch(c.m_ImageView[viewid].viewType)
+      switch(viewInfo.viewType)
       {
         case VK_IMAGE_VIEW_TYPE_1D: dstel.textureType = TextureType::Texture1D; break;
         case VK_IMAGE_VIEW_TYPE_1D_ARRAY: dstel.textureType = TextureType::Texture1DArray; break;
         case VK_IMAGE_VIEW_TYPE_2D:
         {
-          if(c.m_Image[c.m_ImageView[viewid].image].samples > VK_SAMPLE_COUNT_1_BIT)
+          if(c.m_Image[viewInfo.image].samples > VK_SAMPLE_COUNT_1_BIT)
             dstel.textureType = TextureType::Texture2DMS;
           else
             dstel.textureType = TextureType::Texture2D;
@@ -2448,7 +2549,7 @@ void VulkanReplay::FillDescriptor(Descriptor &dstel, const DescriptorSetSlot &sr
         }
         case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
         {
-          if(c.m_Image[c.m_ImageView[viewid].image].samples > VK_SAMPLE_COUNT_1_BIT)
+          if(c.m_Image[viewInfo.image].samples > VK_SAMPLE_COUNT_1_BIT)
             dstel.textureType = TextureType::Texture2DMSArray;
           else
             dstel.textureType = TextureType::Texture2DArray;
@@ -2689,7 +2790,13 @@ rdcarray<Descriptor> VulkanReplay::GetDescriptors(ResourceId descriptorStore,
     const DescriptorSetSlot *desc = set.data.binds.empty() ? NULL : set.data.binds[0];
     const DescriptorSetSlot *end = desc + set.data.totalDescriptorCount();
 
-    RDCASSERT(r.offset >= set.data.inlineBytes.size());
+    if(r.offset < set.data.inlineBytes.size())
+    {
+      // can't query descriptors from within inline bytes range - possibly mismatched descriptor
+      // sets or stale state. silently drop this range
+      dst += r.count;
+      continue;
+    }
 
     desc += (r.offset - set.data.inlineBytes.size());
 
@@ -2850,7 +2957,13 @@ rdcarray<SamplerDescriptor> VulkanReplay::GetSamplerDescriptors(ResourceId descr
     const DescriptorSetSlot *desc = set.data.binds.empty() ? NULL : set.data.binds[0];
     const DescriptorSetSlot *end = desc + set.data.totalDescriptorCount();
 
-    RDCASSERT(r.offset >= set.data.inlineBytes.size());
+    if(r.offset < set.data.inlineBytes.size())
+    {
+      // can't query descriptors from within inline bytes range - possibly mismatched descriptor
+      // sets or stale state. silently drop this range
+      dst += r.count;
+      continue;
+    }
 
     desc += (r.offset - set.data.inlineBytes.size());
 
@@ -5527,10 +5640,8 @@ void VulkanReplay::SetProxyBufferData(ResourceId bufid, byte *data, size_t dataS
   VULKANNOTIMP("SetProxyTextureData");
 }
 
-RDResult Vulkan_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IReplayDriver **driver)
+void VulkanEnvSetup()
 {
-  RDCDEBUG("Creating a VulkanReplay replay device");
-
   // disable the layer env var, just in case the user left it set from a previous capture run
   Process::RegisterEnvironmentModification(
       EnvironmentModification(EnvMod::Set, EnvSep::NoSep, RENDERDOC_VULKAN_LAYER_VAR, "0"));
@@ -5583,6 +5694,9 @@ RDResult Vulkan_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IRep
   Process::RegisterEnvironmentModification(
       EnvironmentModification(EnvMod::Set, EnvSep::NoSep, "DISABLE_VK_LAYER_GPUOpen_GRS", "1"));
 
+  Process::RegisterEnvironmentModification(
+      EnvironmentModification(EnvMod::Set, EnvSep::NoSep, "DISABLE_LAYER_NV_PRESENT_1", "1"));
+
   // fpsmon not only has a buggy layer but it also picks an absurdly generic disable environment
   // variable :(. Hopefully no other program picks this, or if it does then it's probably not a
   // bad thing to disable too
@@ -5590,6 +5704,11 @@ RDResult Vulkan_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IRep
       EnvironmentModification(EnvMod::Set, EnvSep::NoSep, "DISABLE_LAYER", "1"));
 
   Process::ApplyEnvironmentModification();
+}
+
+RDResult Vulkan_CreateReplayDevice(RDCFile *rdc, const ReplayOptions &opts, IReplayDriver **driver)
+{
+  RDCDEBUG("Creating a VulkanReplay replay device");
 
   void *module = LoadVulkanLibrary();
 
@@ -5687,6 +5806,7 @@ struct VulkanDriverRegistration
   VulkanDriverRegistration()
   {
     RenderDoc::Inst().RegisterReplayProvider(RDCDriver::Vulkan, &Vulkan_CreateReplayDevice);
+    RenderDoc::Inst().AddEnvSetup(&VulkanEnvSetup);
     RenderDoc::Inst().SetVulkanLayerCheck(&VulkanReplay::CheckVulkanLayer);
     RenderDoc::Inst().SetVulkanLayerInstall(&VulkanReplay::InstallVulkanLayer);
   }

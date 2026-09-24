@@ -1,6 +1,5 @@
 import os
 import traceback
-import copy
 import re
 import datetime
 import renderdoc as rd
@@ -546,6 +545,9 @@ class TestCase:
 
         self.controller = analyse.open_capture(self.capture_filename, opts=self.get_replay_options())
         self.sdfile = self.controller.GetStructuredFile()
+
+        if not self.validate_eventids(self.controller):
+            raise TestFailureException("ERROR: capture doesn't have valid event IDs.")
 
         log.print("Checking capture")
 
@@ -1185,4 +1187,34 @@ class TestCase:
             if not eid in eventIds:
                 log.error(f"ERROR: Missing EventId: {eid}")
                 return False
+        return True
+
+    def check_indirect_action_name_consistency(self, controller: rd.ReplayController) -> str:
+        actions = controller.GetRootActions().copy()
+        sdfile = controller.GetStructuredFile()
+        while len(actions) > 0:
+            action = actions.pop(0)
+            actions += action.children
+            actionName = action.customName if len(action.customName) > 0 else sdfile.chunks[action.events[-1].chunkIndex].name
+            event = None
+            # Action: Indirect sub-command*(<3,3>) : should have event Indirect sub-command({ 3,3 }) as its event
+            if actionName.startswith("Indirect sub-command"):
+                event = action.events[-1]
+            # Action: *Indirect(1) => <3,2> should have Indirect sub-command({ 3,2 }) as previous event
+            if "Indirect(1) => <" in actionName:
+                event = action.events[-2]
+            # Action: [x] argY: Indirect*(<3,3>) : should have event Indirect*({ 3,3 }) as its event
+            if re.match(r"\[[0-9]+\] arg[0-9]+: Indirect.*\(", actionName):
+                event = action.events[-1]
+
+            if event is not None:
+                chunkIndex = event.chunkIndex
+                eventChunk = sdfile.chunks[chunkIndex]
+                eventParameters = analyse.get_event_parameters_text(eventChunk)
+                paramStr = actionName.split("<")[1].split(">")[0]
+                actionParameters = paramStr
+                if actionParameters != eventParameters:
+                    log.error(f"EID:{action.eventId} Indirect action parameters {actionParameters} do not match event {eventParameters}")
+                    return False
+        
         return True

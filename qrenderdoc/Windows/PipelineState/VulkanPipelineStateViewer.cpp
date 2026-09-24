@@ -726,16 +726,18 @@ bool VulkanPipelineStateViewer::setViewDetails(RDTreeWidgetItem *node, const Des
       viewdetails = true;
     }
 
-    if(tex->depth > 1 && ((tex->depth != descriptor.numSlices && descriptor.numSlices > 0) ||
-                          descriptor.firstSlice > 0))
+    uint32_t effectiveDepth = qMax(1U, tex->depth >> descriptor.firstMip);
+
+    if(effectiveDepth > 1 && ((effectiveDepth != descriptor.numSlices && descriptor.numSlices > 0) ||
+                              descriptor.firstSlice > 0))
     {
       if(descriptor.numSlices == 1)
-        text += tr("The texture has %1 3D slices, the view covers slice %2.\n")
-                    .arg(tex->depth)
+        text += tr("The texture has %1 3D slices at first mip, the view covers slice %2.\n")
+                    .arg(effectiveDepth)
                     .arg(descriptor.firstSlice);
       else
-        text += tr("The texture has %1 3D slices, the view covers slices %2-%3.\n")
-                    .arg(tex->depth)
+        text += tr("The texture has %1 3D slices at first mip, the view covers slices %2-%3.\n")
+                    .arg(effectiveDepth)
                     .arg(descriptor.firstSlice)
                     .arg(descriptor.firstSlice + descriptor.numSlices - 1);
 
@@ -2609,7 +2611,25 @@ void VulkanPipelineStateViewer::setState()
     ui->depthBias->setPixmap(QPixmap());
     ui->depthBiasClamp->setPixmap(QPixmap());
     ui->slopeScaledBias->setPixmap(QPixmap());
-    ui->depthBias->setText(Formatter::Format(state.rasterizer.depthBias));
+
+    QString depthBiasText = Formatter::Format(state.rasterizer.depthBias);
+
+    if(state.rasterizer.depthBiasRepresentation == DepthBiasMode::ForceUNorm)
+    {
+      depthBiasText += tr(" (UNorm)");
+    }
+    else if(state.rasterizer.depthBiasRepresentation == DepthBiasMode::One)
+    {
+      depthBiasText += tr(" (Float)");
+    }
+
+    if(state.rasterizer.depthBiasExact)
+    {
+      depthBiasText += tr(" Exact");
+    }
+
+    ui->depthBias->setText(depthBiasText);
+
     ui->depthBiasClamp->setText(Formatter::Format(state.rasterizer.depthBiasClamp));
     ui->slopeScaledBias->setText(Formatter::Format(state.rasterizer.slopeScaledDepthBias));
   }
@@ -4139,16 +4159,19 @@ void VulkanPipelineStateViewer::exportHTML(QXmlStreamWriter &xml, const VKPipe::
     xml.writeStartElement(lit("p"));
     xml.writeEndElement();
 
-    m_Common.exportHTMLTable(xml,
-                             {tr("Depth Bias Enable"), tr("Depth Bias"), tr("Depth Bias Clamp"),
-                              tr("Slope Scaled Bias"), tr("Line Width")},
-                             {
-                                 rs.depthBiasEnable ? tr("Yes") : tr("No"),
-                                 Formatter::Format(rs.depthBias),
-                                 Formatter::Format(rs.depthBiasClamp),
-                                 Formatter::Format(rs.slopeScaledDepthBias),
-                                 Formatter::Format(rs.lineWidth),
-                             });
+    m_Common.exportHTMLTable(
+        xml,
+        {tr("Depth Bias Enable"), tr("Depth Bias"), tr("Depth Bias Representation"),
+         tr("Depth Bias Exact"), tr("Depth Bias Clamp"), tr("Slope Scaled Bias"), tr("Line Width")},
+        {
+            rs.depthBiasEnable ? tr("Yes") : tr("No"),
+            Formatter::Format(rs.depthBias),
+            ToQStr(rs.depthBiasRepresentation),
+            rs.depthBiasExact ? tr("Yes") : tr("No"),
+            Formatter::Format(rs.depthBiasClamp),
+            Formatter::Format(rs.slopeScaledDepthBias),
+            Formatter::Format(rs.lineWidth),
+        });
   }
 
   {

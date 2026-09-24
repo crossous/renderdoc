@@ -81,8 +81,8 @@ void main()
     ssbo.data[6].x = 15;
 
     // write count parameters for indirect count draws, although we might not need these
-    // 1 draw for non-indexed, 3 draws for indexed.
-    ssbo.data[10] = uvec4(1, 3, 0, 0);
+    // 1 draw non-indexed, 3 indexed, 3 non-indexed, 0 indexed
+    ssbo.data[10] = uvec4(1, 3, 3, 0);
 
     // vkCmdDrawIndirectCountKHR()
     ssbo.data[11] = uvec4(3, 4, 3, 4); // draw verts 3..5
@@ -94,6 +94,22 @@ void main()
     ssbo.data[15].x = 200;
     ssbo.data[16] = uvec4(6, 2, 12, 0); // draw indices 12..17
     ssbo.data[17].x = 1;
+
+    // vkCmdDrawIndirectCountKHR()
+    ssbo.data[20] = uvec4(3, 4, 3, 4); // draw verts 3..5
+    ssbo.data[21] = uvec4(3, 2, 6, 2); // draw verts 6..8
+    ssbo.data[22] = uvec4(3, 5, 9, 5); // draw verts 9..11
+
+    // write count parameters for large indirect count draw
+    uint i = 30;
+    ssbo.data[i++] = uvec4(20*3, 0, 0, 0);
+    // vkCmdDrawIndirectCountKHR()
+    for (uint j = 0; j < 20; ++j)
+    {
+      ssbo.data[i++] = uvec4(3, 4, 3, 4); // draw verts 3..5
+      ssbo.data[i++] = uvec4(3, 2, 6, 2); // draw verts 6..8
+      ssbo.data[i++] = uvec4(3, 5, 9, 5); // draw verts 9..11
+    }
   }
 }
 
@@ -104,6 +120,7 @@ void main()
     optDevExts.push_back(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
 
     features.multiDrawIndirect = VK_TRUE;
+    features.drawIndirectFirstInstance = VK_TRUE;
 
     VulkanGraphicsTest::Prepare(argc, argv);
 
@@ -361,9 +378,23 @@ void main()
         // if we have KHR_draw_indirect_count, test it as well
         if(KHR_draw_indirect_count)
         {
-          pushMarker(cmd, "Primary: KHR_draw_indirect_count");
+          pushMarker(cmd, "Primary: Indirect count draws Three & Three");
+          VkViewport viewport = mainWindow->viewport;
+          viewport.x += viewport.width / 2.0f;
+          viewport.y += viewport.height / 2.0f;
+          viewport.width *= 0.5f;
+          viewport.height *= 0.5f;
+          vkCmdSetViewport(cmd, 0, 1, &viewport);
+          vkCmdDrawIndirectCountKHR(cmd, ssbo.buffer, 20 * sizeof(uvec4), ssbo.buffer,
+                                    10 * sizeof(uvec4) + 2 * sizeof(uint32_t), 10, sizeof(uvec4));
+          vkCmdDrawIndexedIndirectCountKHR(cmd, ssbo.buffer, 12 * sizeof(uvec4), ssbo.buffer,
+                                           10 * sizeof(uvec4) + sizeof(uint32_t), 10,
+                                           sizeof(uvec4) * 2);
+          popMarker(cmd);
 
+          pushMarker(cmd, "Primary: KHR_draw_indirect_count");
           pushMarker(cmd, "Primary: Empty count draws");
+          vkCmdSetViewport(cmd, 0, 1, &mainWindow->viewport);
           // empty draws
           vkCmdDrawIndirectCountKHR(cmd, ssbo.buffer, 11 * sizeof(uvec4), ssbo.buffer,
                                     10 * sizeof(uvec4), 0, sizeof(uvec4));
@@ -371,7 +402,7 @@ void main()
                                            10 * sizeof(uvec4) + sizeof(uint32_t), 0,
                                            sizeof(uvec4) * 2);
           vkCmdDrawIndexedIndirectCountKHR(cmd, ssbo.buffer, 12 * sizeof(uvec4), ssbo.buffer,
-                                           10 * sizeof(uvec4) + sizeof(uint32_t) * 2, 10,
+                                           10 * sizeof(uvec4) + sizeof(uint32_t) * 3, 10,
                                            sizeof(uvec4) * 2);
           popMarker(cmd);
 
@@ -514,6 +545,25 @@ void main()
 
       vkCmdExecuteCommands(primary, 1, &dispatch_secondary);
 
+      // IndirectCount draw in primary buffer which a large count in buffer, before execute secondary
+      if(KHR_draw_indirect_count)
+      {
+        vkCmdBeginRenderPass(
+            primary,
+            vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
+            VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(primary, VK_PIPELINE_BIND_POINT_GRAPHICS, drawpipe);
+        vkCmdSetViewport(primary, 0, 1, &mainWindow->viewport);
+        vkCmdSetScissor(primary, 0, 1, &mainWindow->scissor);
+        vkh::cmdBindVertexBuffers(primary, 0, {vb.buffer}, {0});
+        vkCmdBindIndexBuffer(primary, ib.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        vkCmdDrawIndirectCountKHR(primary, ssbo.buffer, 31 * sizeof(uvec4), ssbo.buffer,
+                                  30 * sizeof(uvec4) + 0 * sizeof(uint32_t), 128, sizeof(uvec4));
+        vkCmdEndRenderPass(primary);
+      }
+
       vkCmdBeginRenderPass(
           primary, vkh::RenderPassBeginInfo(mainWindow->rp, mainWindow->GetFB(), mainWindow->scissor),
           VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
@@ -561,7 +611,7 @@ void main()
                                            10 * sizeof(uvec4) + sizeof(uint32_t), 0,
                                            sizeof(uvec4) * 2);
           vkCmdDrawIndexedIndirectCountKHR(cmd, ssbo.buffer, 12 * sizeof(uvec4), ssbo.buffer,
-                                           10 * sizeof(uvec4) + sizeof(uint32_t) * 2, 10,
+                                           10 * sizeof(uvec4) + sizeof(uint32_t) * 3, 10,
                                            sizeof(uvec4) * 2);
           popMarker(cmd);
 
@@ -641,9 +691,9 @@ void main()
         vkCmdExecuteCommands(primary, 1, &count_secondary);
       }
 
-      setMarker(primary, "Secondary: Final");
-
       vkCmdEndRenderPass(primary);
+
+      setMarker(primary, "Secondary: Final");
 
       vkh::cmdPipelineBarrier(
           primary, {},

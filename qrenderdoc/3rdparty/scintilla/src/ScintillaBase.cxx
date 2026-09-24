@@ -288,7 +288,7 @@ void ScintillaBase::AutoCompleteStart(int lenEntered, const char *list) {
 	}
 	rcac.right = rcac.left + widthLB;
 	rcac.bottom = static_cast<XYPOSITION>(Platform::Minimum(static_cast<int>(rcac.top) + heightLB, static_cast<int>(rcPopupBounds.bottom)));
-	ac.lb->SetPositionRelative(rcac, wMain);
+	//ac.lb->SetPositionRelative(rcac, wMain);
 	ac.lb->SetFont(vs.styles[STYLE_DEFAULT].font);
 	unsigned int aveCharWidth = static_cast<unsigned int>(vs.styles[STYLE_DEFAULT].aveCharWidth);
 	ac.lb->SetAverageCharWidth(aveCharWidth);
@@ -901,6 +901,18 @@ sptr_t ScintillaBase::WndProc(unsigned int iMessage, uptr_t wParam, sptr_t lPara
 
 	case SCI_AUTOCGETMAXHEIGHT:
 		return ac.lb->GetVisibleRows();
+
+	case SCI_AUTOCGETRECTLEFT:
+		return ac.lb->GetPosition().left;
+
+	case SCI_AUTOCGETRECTRIGHT:
+		return ac.lb->GetPosition().right;
+
+	case SCI_AUTOCGETRECTTOP:
+		return ac.lb->GetPosition().top;
+
+	case SCI_AUTOCGETRECTBOTTOM:
+		return ac.lb->GetPosition().bottom;
 
 	case SCI_AUTOCSETMAXWIDTH:
 		maxListWidth = static_cast<int>(wParam);

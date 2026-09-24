@@ -201,10 +201,10 @@ void WrappedVulkan::vkDestroyImageView(VkDevice device, VkImageView obj, const V
   if(DescriptorBuffers())
   {
     SCOPED_READLOCK(m_CapTransitionLock);
-    SCOPED_LOCK(m_DeviceAddressResourcesLock);
+    SCOPED_LOCK(m_DeferredDestructLock);
     if(IsActiveCapturing(m_State))
     {
-      m_DeviceAddressResources.DeadImageViews.push_back(obj);
+      m_DeferredDestructResources.DeadImageViews.push_back(obj);
       return;
     }
   }
@@ -310,8 +310,8 @@ void WrappedVulkan::vkDestroyBuffer(VkDevice device, VkBuffer buffer, const VkAl
     SCOPED_READLOCK(m_CapTransitionLock);
     if(IsActiveCapturing(m_State) && GetRecord(buffer)->hasBDA)
     {
-      SCOPED_LOCK(m_DeviceAddressResourcesLock);
-      m_DeviceAddressResources.DeadBuffers.push_back(buffer);
+      SCOPED_LOCK(m_DeferredDestructLock);
+      m_DeferredDestructResources.DeadBuffers.push_back(buffer);
       return;
     }
   }
@@ -370,14 +370,14 @@ void WrappedVulkan::vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR obj,
       deferFakeBackbuffers = IsActiveCapturing(m_State);
       if(deferFakeBackbuffers)
       {
-        SCOPED_LOCK(m_DeviceAddressResourcesLock);
+        SCOPED_LOCK(m_DeferredDestructLock);
         for(size_t i = 0; i < info.images.size(); i++)
         {
           SwapchainInfo::SwapImage &img = info.images[i];
-          m_InternalDeviceAddressResources.DeadImages.push_back(img.userSwapImage);
-          m_InternalDeviceAddressResources.DeadImageViews.push_back(img.view);
+          m_InternalDeferredDestructResources.DeadImages.push_back(img.userSwapImage);
+          m_InternalDeferredDestructResources.DeadImageViews.push_back(img.view);
         }
-        m_InternalDeviceAddressResources.DeadMemories.push_back(info.imageMemory);
+        m_InternalDeferredDestructResources.DeadMemories.push_back(info.imageMemory);
       }
     }
 
@@ -436,10 +436,10 @@ void WrappedVulkan::vkDestroyImage(VkDevice device, VkImage obj, const VkAllocat
   if(DescriptorBuffers())
   {
     SCOPED_READLOCK(m_CapTransitionLock);
-    SCOPED_LOCK(m_DeviceAddressResourcesLock);
+    SCOPED_LOCK(m_DeferredDestructLock);
     if(IsActiveCapturing(m_State))
     {
-      m_DeviceAddressResources.DeadImages.push_back(obj);
+      m_DeferredDestructResources.DeadImages.push_back(obj);
       return;
     }
   }
@@ -449,10 +449,12 @@ void WrappedVulkan::vkDestroyImage(VkDevice device, VkImage obj, const VkAllocat
     m_ForcedReferences.removeOne(GetRecord(obj));
   }
 
+  ResourceId id = GetResID(obj);
+
   VkImage unwrappedObj = Unwrap(obj);
   GetResourceManager()->ReleaseWrappedResource(obj, true);
 
-  EraseImageState(GetResID(obj));
+  EraseImageState(id);
 
   return ObjDisp(device)->DestroyImage(Unwrap(device), unwrappedObj, NULL);
 }
@@ -882,31 +884,37 @@ VkResult WrappedVulkan::vkCreateSampler(VkDevice device, const VkSamplerCreateIn
 void WrappedVulkan::PatchAttachment(VkFramebufferAttachmentImageInfo *att, VkFormat imgFormat,
                                     VkSampleCountFlagBits samples)
 {
+  VkImageUsageFlags2KHR usage = GetImageUsageFlags(att);
+  VkImageCreateFlags2KHR flags = GetImageCreateFlags(att);
+
   // this matches the mutations we do to images, so see vkCreateImage
-  att->usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-  att->usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  att->usage &= ~VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+  usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  usage &= ~VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
 
   if(IsYUVFormat(imgFormat))
-    att->flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
   if(samples != VK_SAMPLE_COUNT_1_BIT)
   {
-    att->usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
-    att->flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
     if(!IsDepthOrStencilFormat(imgFormat))
     {
       if(GetDebugManager() && GetShaderCache()->IsBuffer2MSSupported())
-        att->usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+        usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
     else
     {
-      att->usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+      usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
   }
 
-  att->flags &= ~VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT;
+  flags &= ~VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT;
+
+  SetImageUsageFlags(att, usage);
+  SetImageCreateFlags(att, flags);
 }
 
 template <typename SerialiserType>
@@ -1930,22 +1938,18 @@ bool WrappedVulkan::Serialise_vkCopyImageToImage(SerialiserType &ser, VkDevice d
 
       AddAction(action);
 
-      VulkanActionTreeNode &actionNode = GetActionStack().back()->children.back();
-
+      VulkanEventNode &eventNode = GetLastEventNode();
       if(CopyImageToImageInfo.srcImage == CopyImageToImageInfo.dstImage)
       {
-        actionNode.resourceUsage.push_back(
-            make_rdcpair(GetResID(CopyImageToImageInfo.srcImage),
-                         EventUsage(actionNode.action.eventId, ResourceUsage::Copy)));
+        eventNode.resourceUsage.push_back(
+            make_rdcpair(GetResID(CopyImageToImageInfo.srcImage), ResourceUsage::Copy));
       }
       else
       {
-        actionNode.resourceUsage.push_back(
-            make_rdcpair(GetResID(CopyImageToImageInfo.srcImage),
-                         EventUsage(actionNode.action.eventId, ResourceUsage::CopySrc)));
-        actionNode.resourceUsage.push_back(
-            make_rdcpair(GetResID(CopyImageToImageInfo.dstImage),
-                         EventUsage(actionNode.action.eventId, ResourceUsage::CopyDst)));
+        eventNode.resourceUsage.push_back(
+            make_rdcpair(GetResID(CopyImageToImageInfo.srcImage), ResourceUsage::CopySrc));
+        eventNode.resourceUsage.push_back(
+            make_rdcpair(GetResID(CopyImageToImageInfo.dstImage), ResourceUsage::CopyDst));
       }
     }
   }
@@ -2025,10 +2029,8 @@ bool WrappedVulkan::Serialise_vkCopyImageToMemory(SerialiserType &ser, VkDevice 
 
       AddAction(action);
 
-      VulkanActionTreeNode &actionNode = GetActionStack().back()->children.back();
-
-      actionNode.resourceUsage.push_back(make_rdcpair(
-          GetResID(srcImage), EventUsage(actionNode.action.eventId, ResourceUsage::CopySrc)));
+      VulkanEventNode &eventNode = GetLastEventNode();
+      eventNode.resourceUsage.push_back(make_rdcpair(GetResID(srcImage), ResourceUsage::CopySrc));
     }
   }
 
@@ -2112,10 +2114,8 @@ bool WrappedVulkan::Serialise_vkCopyMemoryToImage(SerialiserType &ser, VkDevice 
 
       AddAction(action);
 
-      VulkanActionTreeNode &actionNode = GetActionStack().back()->children.back();
-
-      actionNode.resourceUsage.push_back(make_rdcpair(
-          GetResID(dstImage), EventUsage(actionNode.action.eventId, ResourceUsage::CopyDst)));
+      VulkanEventNode &eventNode = GetLastEventNode();
+      eventNode.resourceUsage.push_back(make_rdcpair(GetResID(dstImage), ResourceUsage::CopyDst));
     }
   }
 
@@ -2573,6 +2573,8 @@ static ObjData GetObjData(VkObjectType objType, uint64_t object)
     case VK_OBJECT_TYPE_TENSOR_ARM:
     case VK_OBJECT_TYPE_TENSOR_VIEW_ARM:
     case VK_OBJECT_TYPE_DATA_GRAPH_PIPELINE_SESSION_ARM:
+    case VK_OBJECT_TYPE_GPA_SESSION_AMD:
+    case VK_OBJECT_TYPE_SHADER_INSTRUMENTATION_ARM:
     case VK_OBJECT_TYPE_MAX_ENUM: break;
   }
 
@@ -2814,17 +2816,15 @@ bool WrappedVulkan::Serialise_SetCommandAnnotation(SerialiserType &ser, VkComman
 
   if(IsReplayingAndReading())
   {
+    m_LastCmdBufferID = GetResID(cmd);
+
     if(IsLoading(m_State))
     {
       if(!m_RootAnnotation)
         m_RootAnnotation = new SDObject("Event Annotations"_lit, "Event Annotations"_lit);
 
-      ResourceId cmdId = GetResID(cmd);
-
-      PendingAnnotation annot = {m_BakedCmdBufferInfo[cmdId].curEventID, key, valueType,
-                                 valueVectorWidth, value};
-
-      m_BakedCmdBufferInfo[cmdId].annotations.push_back(annot);
+      PendingAnnotation annot = {0, key, valueType, valueVectorWidth, value};
+      m_BakedCmdBufferInfo[m_LastCmdBufferID].pendingAnnotations.push_back(annot);
 
       m_Replay->WriteFrameRecord().frameInfo.containsAnnotations = true;
     }

@@ -653,7 +653,7 @@ VkResult WrappedVulkan::vkCreatePipelineCache(VkDevice device,
       {
         CACHE_THREAD_SERIALISER();
 
-        SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCreatePipelineCache);
+        SCOPED_SERIALISE_CHUNK(VulkanChunk::vkCreatePipelineCache, LARGE_CHUNK_SIZE);
         Serialise_vkCreatePipelineCache(ser, device, &createInfo, NULL, pPipelineCache);
 
         chunk = scope.Get();

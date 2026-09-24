@@ -3,6 +3,9 @@
 
 <PropertyGroup>
   <PythonBase>$(SolutionDir)\qrenderdoc\3rdparty\python</PythonBase>
+  <PySide2Base>$(SolutionDir)\qrenderdoc\3rdparty\pyside</PySide2Base>
+
+	<PySide2Available>1</PySide2Available>
 
   <CustomPythonUsed>0</CustomPythonUsed>
 
@@ -28,10 +31,6 @@
      As a result we use the existance of the .lib, .h and .zip as a key to
      ensure we only use a valid install -->
 
-<!-- We want to keep supporting the old environment variable path for compatibility
-     but encourage users to use the new property page method. So we check for that first
-     to determine PythonOverride, and only fall back to env vars if it's not set. -->
-
 <!-- MSBuild doesn't implement a simple loop so just do this by hand by
      taking advantage of MSBuild evaluating these in-order.
      First we set the number we're testing, then see if we find the files. If
@@ -43,74 +42,88 @@
 <!-- first define the override prefix we're searching against -->
 <PropertyGroup>
 	<PythonOverride>$(VSPythonOverridePath)</PythonOverride>
-	<PythonOverride Condition="'$(VSPythonOverridePath)'=='' AND '$(Platform)'=='Win32'">$(RENDERDOC_PYTHON_PREFIX32)</PythonOverride>
-	<PythonOverride Condition="'$(VSPythonOverridePath)'=='' AND '$(Platform)'=='x64'">$(RENDERDOC_PYTHON_PREFIX64)</PythonOverride>
 </PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>318</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>317</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>316</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>315</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>314</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>313</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>312</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>311</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>310</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>39</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>38</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>37</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>36</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>35</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup><PythonMajorMinorTest>34</PythonMajorMinorTest></PropertyGroup>
-<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
+<PropertyGroup Condition="'$(CustomPythonUsed)'=='0' AND Exists('$(PythonOverride)\include\Python.h') AND Exists('$(PythonOverride)\python$(PythonMajorMinorTest).zip') AND (Exists('$(PythonOverride)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\$(Platform)\python$(PythonMajorMinorTest).lib') OR Exists('$(PythonOverride)\libs\python$(PythonMajorMinorTest).lib'))"><CustomPythonUsed>$(PythonMajorMinorTest)</CustomPythonUsed></PropertyGroup>
 
 <PropertyGroup Condition="'$(CustomPythonUsed)'!='0'">
   <PythonBase>$(PythonOverride)</PythonBase>
+  <PySide2Base>$(PythonOverride)\pyside</PySide2Base>
 
 	<PythonMajorMinor>$(CustomPythonUsed)</PythonMajorMinor>
 
   <!-- these are always in the root, regardless of the installation type -->
 	<PythonIncludeDir>$(PythonBase)\include</PythonIncludeDir>
 	<PythonStandardLibraryZip>$(PythonBase)\python$(PythonMajorMinor).zip</PythonStandardLibraryZip>
-	<PythonInterpDLL>$(PythonBase)\python$(PythonMajorMinor).dll</PythonInterpDLL>
+	<PythonInterpDLL Condition="Exists('$(PythonBase)\python$(PythonMajorMinor).dll')">$(PythonBase)\python$(PythonMajorMinor).dll</PythonInterpDLL>
+	<PythonInterpDLL Condition="Exists('$(PythonBase)\$(Platform)\python$(PythonMajorMinor).dll')">$(PythonBase)\$(Platform)\python$(PythonMajorMinor).dll</PythonInterpDLL>
 
   <!-- for embeddable zip, find these in the root. Otherwise find these in subfolders -->
-	<PythonDLLsDir Condition="Exists('$(PythonOverride)\_ctypes.pyd')">$(PythonBase)</PythonDLLsDir>
-	<PythonDLLsDir Condition="Exists('$(PythonOverride)\DLLs\_ctypes.pyd')">$(PythonBase)\DLLs</PythonDLLsDir>
-	<PythonImportLib Condition="Exists('$(PythonOverride)\python$(PythonMajorMinor).lib')">$(PythonBase)\python$(PythonMajorMinor).lib</PythonImportLib>
-	<PythonImportLib Condition="Exists('$(PythonOverride)\libs\python$(PythonMajorMinor).lib')">$(PythonBase)\libs\python$(PythonMajorMinor).lib</PythonImportLib>
+	<PythonDLLsDir Condition="Exists('$(PythonBase)\_ctypes.pyd')">$(PythonBase)</PythonDLLsDir>
+	<PythonDLLsDir Condition="Exists('$(PythonBase)\DLLs\_ctypes.pyd')">$(PythonBase)\DLLs</PythonDLLsDir>
+	<PythonDLLsDir Condition="Exists('$(PythonBase)\$(Platform)\_ctypes.pyd')">$(PythonBase)\$(Platform)</PythonDLLsDir>
+	<PythonImportLib Condition="Exists('$(PythonBase)\python$(PythonMajorMinor).lib')">$(PythonBase)\python$(PythonMajorMinor).lib</PythonImportLib>
+	<PythonImportLib Condition="Exists('$(PythonBase)\libs\python$(PythonMajorMinor).lib')">$(PythonBase)\libs\python$(PythonMajorMinor).lib</PythonImportLib>
+	<PythonImportLib Condition="Exists('$(PythonBase)\$(Platform)\python$(PythonMajorMinor).lib')">$(PythonBase)\$(Platform)\python$(PythonMajorMinor).lib</PythonImportLib>
+
+	<!-- see if PySide is also available in a subdirectory, this would have to be prepared specifically in the format we expect -->
+	<PySide2Available>0</PySide2Available>
+	<PySide2Available Condition="Exists('$(PySide2Base)\include\PySide2\pyside.h') AND Exists('$(PySide2Base)\$(Platform)\shiboken2.dll')">1</PySide2Available>
 </PropertyGroup>
 
 <Target Name="PythonOverridden" AfterTargets="Build" Condition="'$(CustomPythonUsed)'!='0'">
 	<Message Importance="high" Text="Built against python from $(PythonOverride)" />
+</Target>
+
+<Target Name="PythonOverriddenNoPySide" AfterTargets="Build" Condition="'$(CustomPythonUsed)'!='0' AND '$(PySide2Available)'!='0'">
+	<Message Importance="high" Text="PySide2 found and used from $(PythonOverride)" />
+</Target>
+
+<Target Name="PythonNotOverridden" AfterTargets="Build" Condition="'$(CustomPythonUsed)'=='0' AND $(PythonOverride)==''">
+	<Message Importance="high" Text="Built against default bundled python" />
 </Target>
 
 <Target Name="PythonFailedOverridden" AfterTargets="Build" Condition="'$(CustomPythonUsed)'=='0' AND $(PythonOverride)!=''">

@@ -33,6 +33,21 @@ CaptureViewer Interface
 .. autoclass:: qrenderdoc.CaptureViewer
   :members:
 
+Helpers
+-------
+
+.. autoclass:: qrenderdoc.BufferInterpreter
+  :members:
+
+.. autoclass:: qrenderdoc.PackingRules
+  :members:
+
+.. autoclass:: qrenderdoc.ParsedBufferFormat
+  :members:
+
+.. autoclass:: qrenderdoc.ParseError
+  :members:
+
 Utilities
 ---------
 

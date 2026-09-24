@@ -107,6 +107,8 @@ set(LIB_SUFFIX "" CACHE STRING "Suffix for 'lib' folder in target directory stru
 set(LIB_SUBFOLDER "" CACHE STRING "Subfolder under the 'lib' folder in target directory structure. E.g. set to 'renderdoc' to use /usr/local/lib/renderdoc instead of /usr/local/lib.")
 set(VULKAN_JSON_SUFFIX "" CACHE STRING "Suffix for the vulkan implicit_layer json file. E.g. set to '.x86_64' to use renderdoc_capture.x86_64.json instead of renderdoc_capture.json")
 
+SET(FORCE_PY_VERSION "" CACHE STRING "Force a particular version of python to be searched for")
+
 option(INTERNAL_SELF_CAPTURE "Internal option: enable self-capture" OFF)
 
 set(RDOC_BASE_NAME "renderdoc")
@@ -492,7 +494,15 @@ if(ENABLE_QRENDERDOC OR ENABLE_PYRENDERDOC)
     # Make sure Python 3 is found
     set(Python_ADDITIONAL_VERSIONS 3.18 3.17 3.16 3.15 3.14 3.13 3.12 3.11 3.10 3.9 3.8 3.7 3.6 3.5 3.4)
     if(NOT ${CMAKE_VERSION} VERSION_LESS "3.12")
-        find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+        if(NOT FORCE_PY_VERSION STREQUAL "")
+            message(STATUS "Searching for python version ${FORCE_PY_VERSION}")
+            find_package(Python3 ${FORCE_PY_VERSION} EXACT COMPONENTS Interpreter Development REQUIRED)
+        else()
+            message(STATUS "Searching for any version of python")
+            find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+        endif()
+
         set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
         set(PYTHON_LIBRARY ${Python3_LIBRARIES})
         set(PYTHON_INCLUDE_DIR ${Python3_INCLUDE_DIRS})

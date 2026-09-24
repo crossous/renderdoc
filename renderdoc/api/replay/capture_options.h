@@ -33,16 +33,33 @@ typedef uint8_t byte;
 
 // see renderdoc_app.h RENDERDOC_CaptureOption - make sure any changes here are reflected there, to
 // the options or to the documentation
-DOCUMENT(R"(Sets up configuration and options for optional features either at capture time or at API
+DOCUMENT(R"(
+CaptureOptions()
+CaptureOptions(other: CaptureOptions)
+
+Sets up configuration and options for optional features either at capture time or at API
 initialisation time that the user can enable or disable at will.
 )");
 struct CaptureOptions
 {
-// for convenience, don't export the constructor but allow it within the module
-// for constructing defaults
-#ifdef RENDERDOC_EXPORTS
-  CaptureOptions();
-#endif
+  DOCUMENT("");
+  CaptureOptions()
+  {
+    // since we're reading from all bytes even padding etc in EncodeAsString, memset to 0
+    memset(this, 0, sizeof(CaptureOptions));
+    allowVSync = true;
+    allowFullscreen = true;
+    apiValidation = false;
+    captureCallstacks = false;
+    captureCallstacksOnlyActions = false;
+    delayForDebugger = 0;
+    verifyBufferAccess = false;
+    hookIntoChildren = false;
+    refAllResources = false;
+    captureAllCmdLists = false;
+    debugOutputMute = true;
+    softMemoryLimit = 0;
+  }
 
   DOCUMENT(R"(Encode the current options to a string suitable for passing around between processes.
 

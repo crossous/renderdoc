@@ -2093,7 +2093,31 @@ ResourceFormat MakeResourceFormat(GLenum target, GLenum fmt)
       case eGL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB:
       case eGL_COMPRESSED_SRGB8_ETC2:
       case eGL_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2:
-      case eGL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC: ret.compType = CompType::UNormSRGB; break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_3x3x3_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x3x3_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x3_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x4_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4x4_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x4_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x5_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5x5_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x5_OES:
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x6_OES: ret.compType = CompType::UNormSRGB; break;
       default: break;
     }
 
@@ -2201,10 +2225,76 @@ ResourceFormat MakeResourceFormat(GLenum target, GLenum fmt)
       case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x6_OES: ret.type = ResourceFormatType::ASTC; break;
       // PVRTC
       case eGL_COMPRESSED_SRGB_PVRTC_2BPPV1_EXT:
+        ret.type = ResourceFormatType::PVRTC;
+        ret.SetPVRTC(1, 2);
+        break;
       case eGL_COMPRESSED_SRGB_PVRTC_4BPPV1_EXT:
+        ret.type = ResourceFormatType::PVRTC;
+        ret.SetPVRTC(1, 4);
+        break;
       case eGL_COMPRESSED_SRGB_ALPHA_PVRTC_2BPPV1_EXT:
-      case eGL_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT: ret.type = ResourceFormatType::PVRTC; break;
+        ret.type = ResourceFormatType::PVRTC;
+        ret.SetPVRTC(1, 2);
+        break;
+      case eGL_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT:
+        ret.type = ResourceFormatType::PVRTC;
+        ret.SetPVRTC(1, 4);
+        break;
       default: RDCERR("Unexpected compressed format %#x", fmt); break;
+    }
+
+    // set ASTC shape
+    switch(fmt)
+    {
+      case eGL_COMPRESSED_RGBA_ASTC_4x4_KHR: ret.SetASTC2D({4, 4}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_5x4_KHR: ret.SetASTC2D({5, 4}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_5x5_KHR: ret.SetASTC2D({5, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_6x5_KHR: ret.SetASTC2D({6, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_6x6_KHR: ret.SetASTC2D({6, 6}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_8x5_KHR: ret.SetASTC2D({8, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_8x6_KHR: ret.SetASTC2D({8, 6}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_8x8_KHR: ret.SetASTC2D({8, 8}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_10x5_KHR: ret.SetASTC2D({10, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_10x6_KHR: ret.SetASTC2D({10, 6}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_10x8_KHR: ret.SetASTC2D({10, 8}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_10x10_KHR: ret.SetASTC2D({10, 10}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_12x10_KHR: ret.SetASTC2D({12, 10}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_12x12_KHR: ret.SetASTC2D({12, 12}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_3x3x3_OES: ret.SetASTC3D({3, 3, 3}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_4x3x3_OES: ret.SetASTC3D({4, 3, 3}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_4x4x3_OES: ret.SetASTC3D({4, 4, 3}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_4x4x4_OES: ret.SetASTC3D({4, 4, 4}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_5x4x4_OES: ret.SetASTC3D({5, 4, 4}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_5x5x4_OES: ret.SetASTC3D({5, 5, 4}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_5x5x5_OES: ret.SetASTC3D({5, 5, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_6x5x5_OES: ret.SetASTC3D({6, 5, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_6x6x5_OES: ret.SetASTC3D({6, 6, 5}); break;
+      case eGL_COMPRESSED_RGBA_ASTC_6x6x6_OES: ret.SetASTC3D({6, 6, 6}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR: ret.SetASTC2D({4, 4}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR: ret.SetASTC2D({5, 4}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR: ret.SetASTC2D({5, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR: ret.SetASTC2D({6, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR: ret.SetASTC2D({6, 6}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR: ret.SetASTC2D({8, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR: ret.SetASTC2D({8, 6}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR: ret.SetASTC2D({8, 8}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR: ret.SetASTC2D({10, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR: ret.SetASTC2D({10, 6}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR: ret.SetASTC2D({10, 8}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR: ret.SetASTC2D({10, 10}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR: ret.SetASTC2D({12, 10}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR: ret.SetASTC2D({12, 12}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_3x3x3_OES: ret.SetASTC3D({3, 3, 3}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x3x3_OES: ret.SetASTC3D({4, 3, 3}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x3_OES: ret.SetASTC3D({4, 4, 3}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x4_OES: ret.SetASTC3D({4, 4, 4}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4x4_OES: ret.SetASTC3D({5, 4, 4}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x4_OES: ret.SetASTC3D({5, 5, 4}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x5_OES: ret.SetASTC3D({5, 5, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5x5_OES: ret.SetASTC3D({6, 5, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x5_OES: ret.SetASTC3D({6, 6, 5}); break;
+      case eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x6_OES: ret.SetASTC3D({6, 6, 6}); break;
+      default: break;
     }
 
     return ret;
@@ -2484,11 +2574,136 @@ GLenum MakeGLFormat(ResourceFormat fmt)
       case ResourceFormatType::D32S8: ret = eGL_DEPTH32F_STENCIL8; break;
       case ResourceFormatType::D16S8: return eGL_NONE;
       case ResourceFormatType::ASTC:
-        RDCWARN("ASTC can't be decoded unambiguously");
+        if(fmt.ASTCDimension() == 2)
+        {
+          rdcpair<uint32_t, uint32_t> shape = fmt.ASTC2DBlock();
+          if(fmt.compType == CompType::UNorm)
+          {
+            if(shape.first == 4 && shape.second == 4)
+              return eGL_COMPRESSED_RGBA_ASTC_4x4_KHR;
+            if(shape.first == 5 && shape.second == 4)
+              return eGL_COMPRESSED_RGBA_ASTC_5x4_KHR;
+            if(shape.first == 5 && shape.second == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_5x5_KHR;
+            if(shape.first == 6 && shape.second == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_6x5_KHR;
+            if(shape.first == 6 && shape.second == 6)
+              return eGL_COMPRESSED_RGBA_ASTC_6x6_KHR;
+            if(shape.first == 8 && shape.second == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_8x5_KHR;
+            if(shape.first == 8 && shape.second == 6)
+              return eGL_COMPRESSED_RGBA_ASTC_8x6_KHR;
+            if(shape.first == 8 && shape.second == 8)
+              return eGL_COMPRESSED_RGBA_ASTC_8x8_KHR;
+            if(shape.first == 10 && shape.second == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_10x5_KHR;
+            if(shape.first == 10 && shape.second == 6)
+              return eGL_COMPRESSED_RGBA_ASTC_10x6_KHR;
+            if(shape.first == 10 && shape.second == 8)
+              return eGL_COMPRESSED_RGBA_ASTC_10x8_KHR;
+            if(shape.first == 10 && shape.second == 10)
+              return eGL_COMPRESSED_RGBA_ASTC_10x10_KHR;
+            if(shape.first == 12 && shape.second == 10)
+              return eGL_COMPRESSED_RGBA_ASTC_12x10_KHR;
+            if(shape.first == 12 && shape.second == 12)
+              return eGL_COMPRESSED_RGBA_ASTC_12x12_KHR;
+          }
+          else
+          {
+            if(shape.first == 4 && shape.second == 4)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR;
+            if(shape.first == 5 && shape.second == 4)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR;
+            if(shape.first == 5 && shape.second == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR;
+            if(shape.first == 6 && shape.second == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR;
+            if(shape.first == 6 && shape.second == 6)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR;
+            if(shape.first == 8 && shape.second == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR;
+            if(shape.first == 8 && shape.second == 6)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR;
+            if(shape.first == 8 && shape.second == 8)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR;
+            if(shape.first == 10 && shape.second == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR;
+            if(shape.first == 10 && shape.second == 6)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR;
+            if(shape.first == 10 && shape.second == 8)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR;
+            if(shape.first == 10 && shape.second == 10)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR;
+            if(shape.first == 12 && shape.second == 10)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR;
+            if(shape.first == 12 && shape.second == 12)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR;
+          }
+        }
+        else
+        {
+          rdcfixedarray<uint32_t, 3> shape = fmt.ASTC3DBlock();
+          if(fmt.compType == CompType::UNorm)
+          {
+            if(shape[0] == 3 && shape[1] == 3 && shape[2] == 3)
+              return eGL_COMPRESSED_RGBA_ASTC_3x3x3_OES;
+            if(shape[0] == 4 && shape[1] == 3 && shape[2] == 3)
+              return eGL_COMPRESSED_RGBA_ASTC_4x3x3_OES;
+            if(shape[0] == 4 && shape[1] == 4 && shape[2] == 3)
+              return eGL_COMPRESSED_RGBA_ASTC_4x4x3_OES;
+            if(shape[0] == 4 && shape[1] == 4 && shape[2] == 4)
+              return eGL_COMPRESSED_RGBA_ASTC_4x4x4_OES;
+            if(shape[0] == 5 && shape[1] == 4 && shape[2] == 4)
+              return eGL_COMPRESSED_RGBA_ASTC_5x4x4_OES;
+            if(shape[0] == 5 && shape[1] == 5 && shape[2] == 4)
+              return eGL_COMPRESSED_RGBA_ASTC_5x5x4_OES;
+            if(shape[0] == 5 && shape[1] == 5 && shape[2] == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_5x5x5_OES;
+            if(shape[0] == 6 && shape[1] == 5 && shape[2] == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_6x5x5_OES;
+            if(shape[0] == 6 && shape[1] == 6 && shape[2] == 5)
+              return eGL_COMPRESSED_RGBA_ASTC_6x6x5_OES;
+            if(shape[0] == 6 && shape[1] == 6 && shape[2] == 6)
+              return eGL_COMPRESSED_RGBA_ASTC_6x6x6_OES;
+          }
+          else
+          {
+            if(shape[0] == 3 && shape[1] == 3 && shape[2] == 3)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_3x3x3_OES;
+            if(shape[0] == 4 && shape[1] == 3 && shape[2] == 3)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x3x3_OES;
+            if(shape[0] == 4 && shape[1] == 4 && shape[2] == 3)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x3_OES;
+            if(shape[0] == 4 && shape[1] == 4 && shape[2] == 4)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x4_OES;
+            if(shape[0] == 5 && shape[1] == 4 && shape[2] == 4)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4x4_OES;
+            if(shape[0] == 5 && shape[1] == 5 && shape[2] == 4)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x4_OES;
+            if(shape[0] == 5 && shape[1] == 5 && shape[2] == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x5_OES;
+            if(shape[0] == 6 && shape[1] == 5 && shape[2] == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5x5_OES;
+            if(shape[0] == 6 && shape[1] == 6 && shape[2] == 5)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x5_OES;
+            if(shape[0] == 6 && shape[1] == 6 && shape[2] == 6)
+              return eGL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x6_OES;
+          }
+        }
         return eGL_NONE;
       case ResourceFormatType::PVRTC:
-        RDCWARN("PVRTC can't be decoded unambiguously");
-        return eGL_NONE;
+        if(fmt.PVRTCBpp() == 2)
+        {
+          if(fmt.compCount == 3)
+            return eGL_COMPRESSED_SRGB_PVRTC_2BPPV1_EXT;
+          return eGL_COMPRESSED_SRGB_ALPHA_PVRTC_2BPPV1_EXT;
+        }
+        else
+        {
+          if(fmt.compCount == 3)
+            return eGL_COMPRESSED_SRGB_PVRTC_4BPPV1_EXT;
+          return eGL_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT;
+        }
       case ResourceFormatType::S8: ret = eGL_STENCIL_INDEX8; break;
       case ResourceFormatType::A8: ret = eGL_ALPHA8_EXT; break;
       case ResourceFormatType::Undefined: return eGL_NONE;
@@ -2980,10 +3195,6 @@ TEST_CASE("GL formats", "[format][gl]")
         continue;
 
       ResourceFormat fmt = MakeResourceFormat(eGL_TEXTURE_2D, f);
-
-      // we don't support ASTC/PVRTC formats currently
-      if(fmt.type == ResourceFormatType::ASTC || fmt.type == ResourceFormatType::PVRTC)
-        continue;
 
       GLenum glf = MakeGLFormat(fmt);
 

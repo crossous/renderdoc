@@ -327,6 +327,18 @@ rdcstr DoStringise(const CullMode &el)
 }
 
 template <>
+rdcstr DoStringise(const DepthBiasMode &el)
+{
+  BEGIN_ENUM_STRINGISE(DepthBiasMode)
+  {
+    STRINGISE_ENUM_CLASS(Default);
+    STRINGISE_ENUM_CLASS(ForceUNorm);
+    STRINGISE_ENUM_CLASS(One);
+  }
+  END_ENUM_STRINGISE();
+}
+
+template <>
 rdcstr DoStringise(const ConservativeRaster &el)
 {
   BEGIN_ENUM_STRINGISE(ConservativeRaster)

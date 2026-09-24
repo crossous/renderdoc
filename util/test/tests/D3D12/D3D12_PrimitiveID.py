@@ -81,20 +81,20 @@ class D3D12_PrimitiveID(rdtest.TestCase):
 
             y = 40 + i * 150
             # Draw 1: No GS, PS without prim
-            action = test_marker.next
+            action = test_marker.nextAction
             success &= self.test_action(action, 100, y, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
             # Draw 2: No GS, PS with prim
-            action = action.next
+            action = action.nextAction
             success &= self.test_action(action, 300, y, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
             # Draw 3: GS, PS without prim
             y = 125 + i * 150
-            action = action.next
+            action = action.nextAction
             success &= self.test_action(action, 125, y, rd.ReplayController.NoPreference, [0], [0, 1, 0, 1])
 
             # Draw 4: GS, PS with prim
-            action = action.next
+            action = action.nextAction
             success &= self.test_action(action, 325, y, 2, [2], [0.5, 1, 0, 1])
             success &= self.test_action(action, 325, y, 3, [3], [0.75, 1, 0, 1])
             # No expected output here, since it's nondeterministic which primitive gets selected
