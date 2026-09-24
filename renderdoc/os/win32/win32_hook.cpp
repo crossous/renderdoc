@@ -921,32 +921,39 @@ static void InitHookData()
     s_HookData = new CachedHookData;
 
     RDCASSERT(s_HookData->DllHooks.empty());
-    s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
-        FunctionHook("LoadLibraryA", NULL, &Hooked_LoadLibraryA));
-    s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
-        FunctionHook("LoadLibraryW", NULL, &Hooked_LoadLibraryW));
-    s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
-        FunctionHook("LoadLibraryExA", NULL, &Hooked_LoadLibraryExA));
-    s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
-        FunctionHook("LoadLibraryExW", NULL, &Hooked_LoadLibraryExW));
-    s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
-        FunctionHook("GetProcAddress", NULL, &Hooked_GetProcAddress));
 
-    for(const char *apiset :
-        {"api-ms-win-core-libraryloader-l1-1-0.dll", "api-ms-win-core-libraryloader-l1-1-1.dll",
-         "api-ms-win-core-libraryloader-l1-1-2.dll", "api-ms-win-core-libraryloader-l1-2-0.dll",
-         "api-ms-win-core-libraryloader-l1-2-1.dll"})
+    // The loader functions are registered under kernel32 and its api-set aliases, but they are
+    // applied to whichever module imports them - so the decision has to be made here, before any
+    // module has been processed. Hook.DLL.kernel32 == 0 means: leave the loader completely alone.
+    if(Hook_DLL_kernel32() != HookMode_Disabled)
     {
-      s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+      s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
           FunctionHook("LoadLibraryA", NULL, &Hooked_LoadLibraryA));
-      s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+      s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
           FunctionHook("LoadLibraryW", NULL, &Hooked_LoadLibraryW));
-      s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+      s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
           FunctionHook("LoadLibraryExA", NULL, &Hooked_LoadLibraryExA));
-      s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+      s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
           FunctionHook("LoadLibraryExW", NULL, &Hooked_LoadLibraryExW));
-      s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+      s_HookData->DllHooks["kernel32.dll"].FunctionHooks.push_back(
           FunctionHook("GetProcAddress", NULL, &Hooked_GetProcAddress));
+
+      for(const char *apiset :
+          {"api-ms-win-core-libraryloader-l1-1-0.dll", "api-ms-win-core-libraryloader-l1-1-1.dll",
+           "api-ms-win-core-libraryloader-l1-1-2.dll", "api-ms-win-core-libraryloader-l1-2-0.dll",
+           "api-ms-win-core-libraryloader-l1-2-1.dll"})
+      {
+        s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+            FunctionHook("LoadLibraryA", NULL, &Hooked_LoadLibraryA));
+        s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+            FunctionHook("LoadLibraryW", NULL, &Hooked_LoadLibraryW));
+        s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+            FunctionHook("LoadLibraryExA", NULL, &Hooked_LoadLibraryExA));
+        s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+            FunctionHook("LoadLibraryExW", NULL, &Hooked_LoadLibraryExW));
+        s_HookData->DllHooks[apiset].FunctionHooks.push_back(
+            FunctionHook("GetProcAddress", NULL, &Hooked_GetProcAddress));
+      }
     }
 
     GetModuleHandleEx(
