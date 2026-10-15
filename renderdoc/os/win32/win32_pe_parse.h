@@ -1,3 +1,3 @@
 #pragma once
 
-DWORD GetFunctionRVA(const wchar_t *fileName, const char *functionName);
+DWORD GetFunctionRVA(const wchar_t *fileName, const char *functionName, bool optional = false);

@@ -1014,6 +1014,14 @@ void LibraryHooks::RegisterFunctionHook(const char *libraryName, const FunctionH
       if(!_stricmp(libraryName, s.dll))
       {
         hookMode = s.mode();
+        // A launcher or optional injection adapter can override a known DLL's hook mode for
+        // this process without editing the user's shared settings. Restrict values to the
+        // existing modes and leave the configured mode intact for malformed overrides.
+        rdcstr variable = "RENDERDOC_HOOK_MODE_" + strupper(rdcstr(s.dll));
+        variable = variable.substr(0, variable.size() - 4);
+        rdcstr overrideMode = Process::GetEnvVariable(variable);
+        if(overrideMode.size() == 1 && overrideMode[0] >= '0' && overrideMode[0] <= '2')
+          hookMode = uint32_t(overrideMode[0] - '0');
         break;
       }
     }

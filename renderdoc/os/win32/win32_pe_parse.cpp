@@ -91,6 +91,12 @@ static void ParsePERva(const wchar_t* fileName)
                                : ((PIMAGE_NT_HEADERS32)pNtHeaders)
                                      ->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
                                      .VirtualAddress;
+  DWORD exportDirSize = is64Bit ? ((PIMAGE_NT_HEADERS64)pNtHeaders)
+                                      ->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
+                                      .Size
+                                : ((PIMAGE_NT_HEADERS32)pNtHeaders)
+                                      ->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
+                                      .Size;
 
   if(exportDirRVA == 0)
   {
@@ -125,11 +131,16 @@ static void ParsePERva(const wchar_t* fileName)
     char *pFunctionName = (char *)(fileData.data() + RvaToFileOffset(fileData, pNames[i]));
     DWORD rva = pFunctions[pNameOrdinals[i]];
 
+    // A forwarded export points to text in the export directory, not callable code in this
+    // module. Remote injection cannot call module base + that RVA.
+    if(rva >= exportDirRVA && uint64_t(rva) - exportDirRVA < exportDirSize)
+      rva = 0;
+
     rvaTable.insert(std::make_pair(pFunctionName, rva));
   }
 }
 
-DWORD GetFunctionRVA(const wchar_t* fileName, const char* functionName)
+DWORD GetFunctionRVA(const wchar_t* fileName, const char* functionName, bool optional)
 {
   try
   {
@@ -143,13 +154,18 @@ DWORD GetFunctionRVA(const wchar_t* fileName, const char* functionName)
     auto &rvaTable = ite->second;
     auto rvaIte = rvaTable.find(functionName);
     if(rvaIte == rvaTable.end())
+    {
+      if(optional)
+        return 0;
       throw std::runtime_error("Function not found");
+    }
 
     return rvaIte->second;
   }
   catch (const std::exception &e)
   {
-    RDCERR("Parse PE error: %s. dll: %s, function: %s", e.what(), fileName, functionName);
+    if(!optional)
+      RDCERR("Parse PE error: %s. dll: %ls, function: %s", e.what(), fileName, functionName);
     return NULL;
   }
 }
