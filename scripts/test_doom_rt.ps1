@@ -12,7 +12,8 @@ param(
     [string]$Python = 'C:\Python314\python.exe',
     [string]$Runtime = '',
     [ValidateRange(30, 600)][int]$TimeoutSeconds = 150,
-    [switch]$Validate
+    [switch]$Validate,
+    [switch]$RestoreASCreationOrder
 )
 $ErrorActionPreference = 'Stop'
 $rtRoot = Split-Path -Parent $PSScriptRoot
@@ -32,6 +33,7 @@ $rtArgs = @(
     '--verify-rt-events'
 )
 if ($Validate) { $rtArgs += '--validate' }
+if ($RestoreASCreationOrder) { $rtArgs += '--restore-as-creation-order' }
 # These are file paths and fixed options. Windows paths cannot contain quotes.
 $rtArgumentString = ($rtArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
 $rtProcess = Start-Process -FilePath $rtPython -ArgumentList $rtArgumentString `

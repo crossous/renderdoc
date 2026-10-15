@@ -13,6 +13,8 @@ parser.add_argument('output')
 parser.add_argument('--structured-only', action='store_true')
 parser.add_argument('--validate', action='store_true')
 parser.add_argument('--single-submit', action='store_true')
+parser.add_argument('--restore-as-creation-order', action='store_true',
+                    help='Enable the optional AS backing-storage replay compatibility setting')
 parser.add_argument('--verify-rt-events', action='store_true',
                     help='Replay each TraceRays event separately and require at least one')
 args = parser.parse_args()
@@ -21,8 +23,13 @@ rd.SetDebugLogFile(os.path.abspath(os.path.join(args.output, 'renderdoc.log')))
 single_submit_setting = rd.SetConfigSetting('Vulkan_Debug_SingleSubmitFlushing')
 original_single_submit = single_submit_setting.data.basic.b
 single_submit_setting.data.basic.b = args.single_submit
+as_order_setting = rd.SetConfigSetting('Vulkan_Hack_RestoreASInCreationOrder')
+original_as_order = as_order_setting.data.basic.b
+as_order_setting.data.basic.b = args.restore_as_creation_order
 report = {'capture': os.path.abspath(args.capture), 'complete': False,
-          'single_submit': args.single_submit, 'api_validation': args.validate}
+          'single_submit': args.single_submit, 'api_validation': args.validate,
+          'restore_as_creation_order': args.restore_as_creation_order,
+          'original_as_creation_order': original_as_order}
 
 def save_report():
     with open(os.path.join(args.output, 'replay-report.json'), 'w') as f:
@@ -109,6 +116,7 @@ except Exception as error:
     raise
 finally:
     single_submit_setting.data.basic.b = original_single_submit
+    as_order_setting.data.basic.b = original_as_order
     log = os.path.join(args.output, 'renderdoc.log')
     if os.path.isfile(log):
         shutil.copyfile(log, log + '.retained')

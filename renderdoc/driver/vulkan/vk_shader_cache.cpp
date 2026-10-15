@@ -255,8 +255,6 @@ struct VkPipeCacheHeader
 
 VulkanShaderCache::VulkanShaderCache(WrappedVulkan *driver)
 {
-  RDCLOG("VKPROBE SC-ENTER this=%p driver=%p physdev=%p dev=%p", (void *)this, (void *)driver, (void *)driver->GetPhysDev(), (void *)driver->GetDev());
-
   // Load shader cache, if present
   bool success = LoadShaderCache("vkshaders.cache", m_ShaderCacheMagic, m_ShaderCacheVersion,
                                  m_ShaderCache, VulkanShaderCacheCallbacks);
@@ -266,14 +264,12 @@ VulkanShaderCache::VulkanShaderCache(WrappedVulkan *driver)
 
   m_pDriver = driver;
   m_Device = driver->GetDev();
-  RDCLOG("VKPROBE SC-AFTER-DEV this=%p physdev=%p pd8=%p", (void *)this, (void *)driver->GetPhysDev(), *(void **)((char *)driver->GetPhysDev() + 8));
 
-  RDCLOG("VKPROBE SC-SETCACHE");
   SetCaching(true);
 
   const VkDriverInfo &driverVersion = driver->GetDriverInfo();
   const VkPhysicalDeviceFeatures &enabledFeatures = driver->GetDeviceEnabledFeatures();
-  const VkPhysicalDeviceFeatures &availFeatures = driver->GetDeviceAvailableFeatures();  RDCLOG("VKPROBE SC-DEFINES");
+  const VkPhysicalDeviceFeatures &availFeatures = driver->GetDeviceAvailableFeatures();
 
   rdcstr globalDefines = "#define HAS_BIT_CONVERSION 1\n";
   if(driverVersion.TexelFetchBrokenDriver())
@@ -282,7 +278,8 @@ VulkanShaderCache::VulkanShaderCache(WrappedVulkan *driver)
     globalDefines += "#define METAL_BACKEND\n";
 
   rdcspv::CompilationSettings compileSettings;
-  compileSettings.lang = rdcspv::InputLanguage::VulkanGLSL;  RDCLOG("VKPROBE SC-PRE-TOOLS physdevDisp=%p", (void *)(*(void **)((char *)(void *)driver->GetPhysDev() + 8)));
+  compileSettings.lang = rdcspv::InputLanguage::VulkanGLSL;
+
   uint32_t toolCount = 0;
   if(ObjDisp(driver->GetPhysDev())->GetPhysicalDeviceToolProperties != NULL)
   {

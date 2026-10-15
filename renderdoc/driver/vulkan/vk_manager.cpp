@@ -25,6 +25,12 @@
 #include "vk_manager.h"
 #include <algorithm>
 #include "vk_core.h"
+#include "core/settings.h"
+
+RDOC_CONFIG(bool, Vulkan_Hack_RestoreASInCreationOrder, false,
+            "Restore same-type acceleration structures in handle creation order during replay. "
+            "This can help captures with reused AS backing storage, but may restore stale data "
+            "if an application rebuilt an older handle later. Reopen the capture after changing.");
 
 // debugging logging for barriers
 #if 0
@@ -1047,7 +1053,8 @@ rdcarray<ResourceId> VulkanResourceManager::InitialContentResources()
 {
   rdcarray<ResourceId> resources =
       ResourceManager<VulkanResourceManagerConfiguration>::InitialContentResources();
-  std::sort(resources.begin(), resources.end(), [this](ResourceId a, ResourceId b) {
+  const bool creationOrder = IsReplayMode(m_State) && Vulkan_Hack_RestoreASInCreationOrder();
+  std::sort(resources.begin(), resources.end(), [this, creationOrder](ResourceId a, ResourceId b) {
     const InitialContentData &aData = m_InitialContents[a].data;
     const InitialContentData &bData = m_InitialContents[b].data;
 
@@ -1071,10 +1078,9 @@ rdcarray<ResourceId> VulkanResourceManager::InitialContentResources()
       if(aBLAS != bBLAS)
         return aBLAS;
 
-      // Restore older handles before newer ones when applications reuse AS
-      // backing storage. An arbitrary order can overwrite the current BLAS
-      // with an older structure before a TLAS dereferences its address.
-      return a < b;
+      // Creation order is only a compatibility heuristic for reused backing
+      // storage; it does not necessarily match the last GPU write order.
+      return creationOrder && a < b;
     }
 
     return aData.type < bData.type;

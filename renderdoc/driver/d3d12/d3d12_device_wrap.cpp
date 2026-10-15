@@ -2634,39 +2634,6 @@ HRESULT WrappedID3D12Device::CheckFeatureSupport(D3D12_FEATURE Feature, void *pF
     return hr;
   }
 
-  // custom diagnostic: report the capability values the application actually receives for the
-  // features an engine probes during graphics init, so we can see which one makes it bail out
-  if(dolog)
-  {
-    if(Feature == D3D12_FEATURE_FEATURE_LEVELS &&
-       FeatureSupportDataSize == sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS))
-    {
-      D3D12_FEATURE_DATA_FEATURE_LEVELS *fl =
-          (D3D12_FEATURE_DATA_FEATURE_LEVELS *)pFeatureSupportData;
-      RDCLOG("EXITTRACE/D3D12: FEATURE_LEVELS -> MaxSupportedFeatureLevel=0x%x (asked for %u levels)",
-             (uint32_t)fl->MaxSupportedFeatureLevel, fl->NumFeatureLevels);
-    }
-    else if(Feature == D3D12_FEATURE_ARCHITECTURE1 &&
-            FeatureSupportDataSize == sizeof(D3D12_FEATURE_DATA_ARCHITECTURE1))
-    {
-      D3D12_FEATURE_DATA_ARCHITECTURE1 *arch =
-          (D3D12_FEATURE_DATA_ARCHITECTURE1 *)pFeatureSupportData;
-      RDCLOG("EXITTRACE/D3D12: ARCHITECTURE1 -> TileBasedRenderer=%u UMA=%u CacheCoherentUMA=%u",
-             (uint32_t)arch->TileBasedRenderer, (uint32_t)arch->UMA,
-             (uint32_t)arch->CacheCoherentUMA);
-    }
-    else if(Feature == D3D12_FEATURE_D3D12_OPTIONS &&
-            FeatureSupportDataSize == sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))
-    {
-      D3D12_FEATURE_DATA_D3D12_OPTIONS *opts =
-          (D3D12_FEATURE_DATA_D3D12_OPTIONS *)pFeatureSupportData;
-      RDCLOG("EXITTRACE/D3D12: OPTIONS -> ResourceBindingTier=%u TiledResourcesTier=%u "
-             "MaxGPUVirtualAddressBitsPerResource=%u",
-             (uint32_t)opts->ResourceBindingTier, (uint32_t)opts->TiledResourcesTier,
-             opts->MaxGPUVirtualAddressBitsPerResource);
-    }
-  }
-
   if(Feature == D3D12_FEATURE_SHADER_MODEL)
   {
     D3D12_FEATURE_DATA_SHADER_MODEL *model = (D3D12_FEATURE_DATA_SHADER_MODEL *)pFeatureSupportData;

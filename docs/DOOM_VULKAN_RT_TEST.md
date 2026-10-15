@@ -15,7 +15,7 @@
 - `1db315dba`：修复 AS 初始状态排序。
 - 后续提交：保存自动回归工具及本记录。
 
-原快照中的 D3D12 日志、路径改名、崩溃服务、shader cache 等改动仍保留，未由此次 Vulkan 测试证明其通用正确性。尤其 `if(true) return` 关闭崩溃服务属于诊断能力变化，不应称为普通通用修复。
+原快照包含 D3D12 日志、路径改名、崩溃服务、shader cache 等临时改动；主干合并审核已撤销它们，详见下面的审核结论。
 
 ## 为什么注入后光追变灰
 
@@ -73,7 +73,8 @@ SHA-256：`6d6f1bdce538654731221ba36e448e69d29d210869c675751b658c5ef5878658`。
 ```powershell
 & scripts\test_doom_rt.ps1 `
   -Capture build-doom-rt-test\B-normal-rt\doom-forced_frame2026.rdc `
-  -Output build-doom-rt-test\B-normal-rt\my-retest
+  -Output build-doom-rt-test\B-normal-rt\my-retest `
+  -RestoreASCreationOrder
 ```
 
 加 `-Validate` 启用 Vulkan validation；可用 `-Python`、`-Runtime`、`-TimeoutSeconds` 指定运行时与时限。该命令只回放已有文件，不启动游戏或改动全局注入。报告记录 single-submit 选项；默认明确关闭，退出前恢复原值。
@@ -114,3 +115,20 @@ SHA-256：`6d6f1bdce538654731221ba36e448e69d29d210869c675751b658c5ef5878658`。
 再次运行自动回归成功，三个 RT 事件通过。启动 `x64/Release/q_render_soco_doc.exe` 并确认它加载的 `renderdoc.dll` SHA-256 与上述修复版一致；GUI 约 42 秒后成功加载，状态栏显示 `doom-forced_frame2026.rdc loaded`，事件树可见 `vkCmdTraceRaysKHR`。GUI 显示 68 个 capture issues，不能视为无警告捕获。
 
 同目录创建 `build-doom-rt-test/B-normal-rt/用修复版打开_frame2026.lnk`，显式启动该修复版并传入捕获路径。未替换官方安装文件或改动 `.rdc` 全局关联。此次为用户查看保留了已加载的修复版窗口。
+
+## 主干合并审核（2026-10-15）
+
+- 恢复 Vulkan 多实例桥接默认开启，保持模拟器等应用的原有功能。
+- 撤销全部 VKPROBE/EXITTRACE 临时日志及裸指针探测。
+- 撤销配置目录、文件关联查找、临时目录、符号缓存和 DLL 版本资源的无关改名。原有配置继续从 RenderDoc 目录读取。
+- 撤销关闭崩溃服务的临时代码。服务启动使用 fork 的 `render_soco_doccmd.exe`；官方及自定义命令工具均避免递归创建服务，ready event 保持与服务端一致。
+- 撤销 shader cache 空文件句柄补丁：StreamReader 构造函数已经处理 NULL，不能用该补丁的注释推断原代码必然空指针崩溃。
+- 保留一致的 AS 类型排序：AS 在普通资源之前，BLAS 在 TLAS/generic/无 metadata 之前。
+- 同类 AS 的创建顺序仅通过 `Vulkan_Hack_RestoreASInCreationOrder` 启用，默认 false，仅作用于 replay，捕获序列化不使用该启发式。设置后重新打开捕获；本记录中的 DOOM 光追文件需要开启此项。
+- Settings → Core → Config Editor → Vulkan → Hack → RestoreASInCreationOrder 可编辑该兼容项。无需游戏名称或版本判断；不暴露未支持的 NV mesh/OMM。
+- 游戏精确版本探测只保留在独立测试脚本，未加入注入运行时。
+- 修正自定义回放器的同目录/x86 上级目录查找。注册表查找仍保留原有 RenderDoc 文件关联。
+
+Windows 出包继续使用 `scripts/build_win.bat`，委托 PowerShell 执行。`-Rebuild` 使用两架构完整 Release 重建和已验证的 LTCG 回退；`-PackageOnly` 用于构建成功后的独立出包。旧产物移至本次日志目录，不随意删除。包按运行依赖清单生成，含 Python 回放模块、两套 Agility SDK、x86 注入依赖和已有 Android APK；APK 不在此 Windows 构建中重编。包检查两架构 CLI 的完整源码 commit，并逐文件解压和比较 SHA-256。
+
+本次审核不承诺全部游戏兼容，也不表示 NV mesh/OMM 或光追 shader 单步调试已实现。光追回归以真实 TraceRays 事件和最终导出图像为依据。
