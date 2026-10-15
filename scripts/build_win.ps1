@@ -9,9 +9,15 @@ Read docs/CUSTOM_RELEASE_BUILD.md before running.
 [CmdletBinding()]
 param([switch]$Rebuild, [switch]$PackageOnly)
 $ErrorActionPreference = 'Stop'
-# Import before MSBuild so file hashing/compression do not depend on module auto-loading.
-Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
-Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop
+# Use framework hashing and ZIP APIs to avoid shell module auto-loading dependencies.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function Get-ReleaseHash([string]$Path) {
+    $releaseHashStream = [IO.File]::OpenRead($Path)
+    $releaseHashAlgorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return [BitConverter]::ToString($releaseHashAlgorithm.ComputeHash($releaseHashStream)).Replace('-', '')
+    } finally { $releaseHashAlgorithm.Dispose(); $releaseHashStream.Dispose() }
+}
 $releaseRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $releaseLogs = Join-Path $releaseRoot ("build-windows-release\" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $releaseLogs -Force | Out-Null
@@ -109,7 +115,7 @@ $releaseAndroid = @()
 foreach ($releaseABI in @('arm32', 'arm64')) {
     $releaseAPK = Join-Path $releaseRoot "build-android-$releaseABI\bin\org.renderdoc.renderdoccmd.$releaseABI.apk"
     Copy-ReleaseFile $releaseAPK (Join-Path $release64 "plugins\android\org.renderdoc.renderdoccmd.$releaseABI.apk")
-    $releaseAndroid += @{ abi = $releaseABI; rebuilt = $false; sha256 = (Get-FileHash $releaseAPK).Hash }
+    $releaseAndroid += @{ abi = $releaseABI; rebuilt = $false; sha256 = (Get-ReleaseHash $releaseAPK) }
 }
 foreach ($releaseCLIPath in @('render_soco_doccmd.exe', 'x86\render_soco_doccmd.exe')) {
     $releaseCLI = & (Join-Path $release64 $releaseCLIPath) version 2>&1 | Out-String
@@ -118,7 +124,7 @@ foreach ($releaseCLIPath in @('render_soco_doccmd.exe', 'x86\render_soco_doccmd.
     }
 }
 $releaseFiles = @(Get-ChildItem -LiteralPath $release64 -Recurse -File | ForEach-Object {
-    @{ path = $_.FullName.Substring($release64.Length + 1); bytes = $_.Length; sha256 = (Get-FileHash $_.FullName).Hash }
+    @{ path = $_.FullName.Substring($release64.Length + 1); bytes = $_.Length; sha256 = (Get-ReleaseHash $_.FullName) }
 })
 @{ version = $releaseVersion; commit = $releaseCommit; windows = @('x86', 'x64');
     ltCG = $false; android = $releaseAndroid; files = $releaseFiles } |
@@ -126,8 +132,7 @@ $releaseFiles = @(Get-ChildItem -LiteralPath $release64 -Recurse -File | ForEach
 $releasePackage = Join-Path $releaseRoot "package\RenderSocoDoc_${releaseVersion}_64"
 Copy-Item -LiteralPath $release64 -Destination $releasePackage -Recurse
 $releaseZip = "$releasePackage.zip"
-Compress-Archive -LiteralPath $releasePackage -DestinationPath $releaseZip
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::CreateFromDirectory($releasePackage, $releaseZip, [IO.Compression.CompressionLevel]::Optimal, $true)
 $releaseArchive = [IO.Compression.ZipFile]::OpenRead($releaseZip)
 $releaseHasher = [Security.Cryptography.SHA256]::Create()
 try {
@@ -141,11 +146,11 @@ try {
             $releaseHash = [BitConverter]::ToString($releaseHasher.ComputeHash($releaseStream)).Replace('-', '')
             $releaseRelative = $releaseEntry.FullName.Substring($releaseEntry.FullName.IndexOf('/') + 1)
             $releaseOriginal = Join-Path $releasePackage $releaseRelative
-            if ($releaseHash -ne (Get-FileHash -LiteralPath $releaseOriginal).Hash) {
+            if ($releaseHash -ne (Get-ReleaseHash $releaseOriginal)) {
                 throw "ZIP content mismatch: $($releaseEntry.FullName)"
             }
         } finally { $releaseStream.Dispose() }
     }
 } finally { $releaseHasher.Dispose(); $releaseArchive.Dispose() }
 Write-Host "Validated package: $releaseZip"
-Write-Host "Commit: $releaseCommit; bytes: $((Get-Item $releaseZip).Length); SHA256: $((Get-FileHash $releaseZip).Hash)"
+Write-Host "Commit: $releaseCommit; bytes: $((Get-Item $releaseZip).Length); SHA256: $(Get-ReleaseHash $releaseZip)"
