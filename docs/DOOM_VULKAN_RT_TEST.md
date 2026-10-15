@@ -1,5 +1,9 @@
 # DOOM: The Dark Ages — Vulkan 光追截帧验证
 
+最新可选启动适配与 frame1650 回放修复见文末“独立启动适配与配置解析修复”，使用说明在
+[`doom_capture/README.md`](../doom_capture/README.md)。早期记录中的“游戏 patch 未进入运行时”
+指当时的主干合并范围；现在的游戏版本判断仅在独立、可选的适配 DLL 中。
+
 测试日期：2026-10-15。分支：`codex/doom-vulkan-raytracing`。
 
 ## 结论与范围
@@ -158,3 +162,55 @@ Windows 出包继续使用 `scripts/build_win.bat`，委托 PowerShell 执行。
 使用当前安装包，直接通过 `cmd /d /s /c` 启动相同 EXE，传入 `+set r_allowRayTracingOnOlderGPUs 1 +set r_omms 0 +set r_pathtracingEnabled 1`。此轮不经过 Steam UI，没有修改 Steam launch options 或游戏内存。只读观察约 3.18 秒 `r_pathtracingEnabled=1`，但 older=0、omms=1；约 8.32 秒 device 已创建、RT/PT=0、AS 入口仍为空，约 13.76 秒退出。转储仍为 `DOOMTheDarkAges+0xc89688` 返回的空指针执行异常。
 
 结论：`+set` 确实能够设置部分 CVAR，当前测试未能通过命令行完成另外两个启动调整。`cmd /c` 用于包装启动，不会自行改变游戏对 CVAR 的处理。本轮未单独测试 DeepSeek 的 denoiser 参数，也不否定旧修改版下该组关闭 PT 参数有效的观察。测试已恢复并校验游戏配置和 profile；运行时与 Steam 设置未修改。证据位于 `build-doom-startup-review/20261015-commandline/`。
+
+## 独立启动适配与配置解析修复（2026-10-15）
+
+分支 `codex/doom-capture-bootstrap` 在主干 `1c8c26186` 上提供可选 `doom_capture.dll`。
+精确 EXE hash 和 PE/IAT 校验通过后，在 `vkCreateInstance` 前设置上述游戏 RAM CVAR，
+随后加载同目录标准 `system_load.dll`。通过真实 INTERNAL 转发函数保留注入配置与 target
+control。默认核心没有游戏名判断，也没有重新暴露未支持的 Vulkan 扩展。
+
+D3D12/DXGI 的本进程 IAT hook override 使本轮标题场景及 UI 正常显示，避免 inline
+捕获 NVIDIA Vulkan 内部 presenter 的已观察路径。未宣称所有黑屏情况均已解释。
+非 DOOM D3D11 triangle 通过该可选 DLL 的注入、截帧、回放与绿色三角 PNG 均通过。
+
+新文件：`build-doom-bootstrap/pt-adapter-iat-v2/doom-bootstrap_frame1650.rdc`，
+4,826,328,565 字节，SHA-256
+`e73936a6ff774428e8cec3d5d550672cd3aee593c8f191cd62a01292f6e9e0a5`。
+包含 1,187 次 AS create、4 次 AS build、2 次 AS copy、1 次 RT pipeline create、
+3 次 `vkCmdTraceRaysKHR`。同一文件开启 AS 创建顺序恢复成功；关闭后约 90 秒复现
+用户相同的 `vk_core.cpp:510 / VK_ERROR_DEVICE_LOST`。
+
+用户 GUI 失败的直接原因进一步定位为配置读写缺陷，而不是漏勾选开关：
+`Hook_DLL_ws2_32` 被 `_` 分割为 `Hook/DLL/ws2/32`，导出为非法 `<32>` XML 元素。
+旧 `importXMLConfig` 未检查解析返回值，接受半截树，导致后面的 Inject/NV/Vulkan
+配置丢失并被默认值重写。AS 开关即使保存为 true，下次启动仍被读为 false。
+
+通用修复保留公开设置路径，将非法 XML 元素名用 `<node name="32">` 属性存储并解码。
+对已知旧 ws2/32 块执行迁移后要求整个 XML 成功解析；其他 XML、根节点、读入错误
+保留原文件并阻止本进程后续保存。修复还移除 import 重复构造造成的对象泄漏。
+没有把 AS 兼容项改为全局默认 true。所有 CONFIG_AUDIT 临时日志已移除。
+
+自动配置回归通过：旧文件中非法节点后的 Inject/NV/Vulkan 值完整迁移；保存后新进程
+读回 AS true 和 socket hook 值；非法 XML、错误根节点不会被保存覆盖；首次无配置
+能生成合法文件。证据：`build-doom-bootstrap/config-xml-regression-v1/`。
+回归脚本结束恢复原用户配置，此后用修复安装版持久开启 AS 项，新进程确认 true。
+
+Release x64 `renderdoc.dll` 和 `system_load.dll` 构建成功，关闭 LTCG，并覆盖到
+`C:/RenderSocoDoc`；之前安装文件备份在 `installed-before-config-fix/`。
+安装文件 SHA-256：
+
+- renderdoc.dll：`b3da64f501648e8491f22c81d663be11d448cb922766733764494a683d388c92`
+- system_load.dll：`ff38a4a5e870bd3c17ede850b83579906bd871c6f62ff36edae6c9dea7759c12`
+
+安装版自动回放不传强制 AS 参数、使用真实保存配置通过，初始化 10.25 秒，分别执行
+EID 1240（256×1×1）、11316（768×432×1）、11331（3840×2160×1），并导出
+present 12955（resource 21703）。报告 `complete=true`、RT events=3、host exit=0。
+GUI 日志确认 AS true 与 renderer 创建成功，窗口状态明确显示
+`doom-bootstrap_frame1650.rdc loaded. Capture has 68 issues. 68 Unread.`，事件树可见
+`vkCmdTraceRaysKHR`。证据：`build-doom-bootstrap/config-fixed-replay/`。
+
+非 DOOM D3D11 新回归：`build-doom-bootstrap/config-fixed-non-doom-d3d11/`。
+该结果仍仅覆盖标题帧，不代表关卡、长时间稳定性或其他驱动通过。既有 capture issues
+与 map range assertions 尚未全部解决。本轮没有重新生成完整发行包，也没有合并或
+推送独立适配分支。当前安装目录是更新版；早期 `package` 内容仍是旧版。

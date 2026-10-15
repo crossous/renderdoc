@@ -13,8 +13,11 @@ parser.add_argument('output')
 parser.add_argument('--structured-only', action='store_true')
 parser.add_argument('--validate', action='store_true')
 parser.add_argument('--single-submit', action='store_true')
-parser.add_argument('--restore-as-creation-order', action='store_true',
-                    help='Enable the optional AS backing-storage replay compatibility setting')
+as_order_options = parser.add_mutually_exclusive_group()
+as_order_options.add_argument('--restore-as-creation-order', action='store_true', default=None,
+                              help='Enable the optional AS backing-storage replay compatibility setting')
+as_order_options.add_argument('--no-restore-as-creation-order', dest='restore_as_creation_order',
+                              action='store_false', help='Explicitly disable AS creation-order restore')
 parser.add_argument('--verify-rt-events', action='store_true',
                     help='Replay each TraceRays event separately and require at least one')
 args = parser.parse_args()
@@ -25,10 +28,11 @@ original_single_submit = single_submit_setting.data.basic.b
 single_submit_setting.data.basic.b = args.single_submit
 as_order_setting = rd.SetConfigSetting('Vulkan_Hack_RestoreASInCreationOrder')
 original_as_order = as_order_setting.data.basic.b
-as_order_setting.data.basic.b = args.restore_as_creation_order
+if args.restore_as_creation_order is not None:
+    as_order_setting.data.basic.b = args.restore_as_creation_order
 report = {'capture': os.path.abspath(args.capture), 'complete': False,
           'single_submit': args.single_submit, 'api_validation': args.validate,
-          'restore_as_creation_order': args.restore_as_creation_order,
+          'restore_as_creation_order': as_order_setting.data.basic.b,
           'original_as_creation_order': original_as_order}
 
 def save_report():

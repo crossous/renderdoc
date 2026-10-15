@@ -100,9 +100,31 @@ static void saveSDObject(const SDObject &value, pugi::xml_node obj)
   }
 }
 
+static bool IsConfigXMLName(const rdcinflexiblestr &name)
+{
+  if(name.empty())
+    return false;
+
+  for(size_t i = 0; i < name.size(); i++)
+  {
+    char c = name.c_str()[i];
+    if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')
+      continue;
+    if(i > 0 && ((c >= '0' && c <= '9') || c == '-' || c == '.'))
+      continue;
+    return false;
+  }
+  return true;
+}
+
 static void Config2XML(pugi::xml_node &parent, const SDObject &child)
 {
-  pugi::xml_node obj = parent.append_child(child.name.c_str());
+  // Path components can begin with a digit (e.g. Hook_DLL_ws2_32). Preserve the
+  // public setting path, but store names that are not XML element names in an attribute.
+  bool validName = IsConfigXMLName(child.name);
+  pugi::xml_node obj = parent.append_child(validName ? child.name.c_str() : "node");
+  if(!validName)
+    obj.append_attribute("name") = child.name.c_str();
 
   if(child.type.name == "category"_lit)
   {
@@ -160,8 +182,11 @@ static SDBasic getType(const char *typeStr)
 
 static SDObject *XML2Config(pugi::xml_node &obj)
 {
+  rdcstr name = obj.name();
+  if(name == "node" && obj.attribute("name"))
+    name = obj.attribute("name").as_string();
   SDObject *ret =
-      new SDObject(rdcstr(obj.name()), obj.attribute("type") ? "setting"_lit : "category"_lit);
+      new SDObject(name, obj.attribute("type") ? "setting"_lit : "category"_lit);
 
   if(ret->type.name == "category"_lit)
   {
@@ -241,16 +266,57 @@ static SDObject *XML2Config(pugi::xml_node &obj)
   return ret;
 }
 
-static SDObject *importXMLConfig(StreamReader &stream)
+static SDObject *importXMLConfig(StreamReader &stream, bool &recoveredLegacy)
 {
   rdcstr buf;
   buf.resize((size_t)stream.GetSize());
-  stream.Read(buf.data(), buf.size());
+  if(stream.IsErrored() || !stream.Read(buf.data(), buf.size()))
+    return NULL;
 
   pugi::xml_document doc;
-  doc.load_string(buf.c_str(), pugi::parse_default | pugi::parse_comments);
+  pugi::xml_parse_result result =
+      doc.load_string(buf.c_str(), pugi::parse_default | pugi::parse_comments);
+
+  if(!result)
+  {
+    // Older custom builds emitted an invalid <32> element for ws2_32.dll.
+    // Repair only this known legacy block, then require the entire file to parse.
+    int start = buf.find("<ws2>");
+    int end = start >= 0 ? buf.find("</ws2>", start) : -1;
+    if(end >= 0)
+    {
+      rdcstr block = buf.substr(start, end - start);
+      const rdcstr legacyOpen = "<32 type=\"UnsignedInteger\">";
+      if(block.contains(legacyOpen) && block.contains("</32>"))
+      {
+        block.replace(block.find(legacyOpen), legacyOpen.size(),
+                      "<node name=\"32\" type=\"UnsignedInteger\">");
+        block.replace(block.find("</32>"), 5, "</node>");
+        buf.erase(start, end - start);
+        buf.insert(start, block);
+        result = doc.load_string(buf.c_str(), pugi::parse_default | pugi::parse_comments);
+        if(result)
+        {
+          recoveredLegacy = true;
+          RDCWARN("Recovered legacy ws2_32.dll setting with an invalid XML element name");
+        }
+      }
+    }
+  }
+
+  if(!result)
+  {
+    RDCERR("Could not parse config XML at byte %lld: %s. The original file will be preserved.",
+           (long long)result.offset, result.description());
+    return NULL;
+  }
 
   pugi::xml_node root = doc.child("config");
+  if(!root)
+  {
+    RDCERR("Config XML has no config root. The original file will be preserved.");
+    return NULL;
+  }
 
   SDObject *ret = new SDObject("config"_lit, "config"_lit);
 
@@ -258,9 +324,16 @@ static SDObject *importXMLConfig(StreamReader &stream)
   {
     for(pugi::xml_node child = root.first_child(); child; child = child.next_sibling())
     {
+      if(child.type() == pugi::node_comment)
+        continue;
       SDObject *childObj = XML2Config(child);
       if(childObj)
-        ret->AddAndOwnChild(XML2Config(child));
+        ret->AddAndOwnChild(childObj);
+      else
+      {
+        delete ret;
+        return NULL;
+      }
     }
   }
 
@@ -471,16 +544,29 @@ void RenderDoc::ProcessConfig()
   RDCLOG("Loading config from %s", confFile.c_str());
 
   SDObject *loadedConfig = NULL;
+  bool recoveredLegacy = false;
+  if(!FileIO::exists(confFile))
+    loadedConfig = new SDObject("config"_lit, "config"_lit);
+  else
   {
     StreamReader reader(FileIO::fopen(confFile, FileIO::ReadBinary));
 
-    loadedConfig = importXMLConfig(reader);
+    loadedConfig = importXMLConfig(reader, recoveredLegacy);
+  }
+
+  if(!loadedConfig)
+  {
+    m_ConfigLoadFailed = true;
+    RDCERR("Failed to load config from %s. Using defaults without overwriting the file.",
+           confFile.c_str());
+    return;
   }
 
   // iterate through the current config, and update any values that are found in the loaded config.
   // returns true if the loaded config is out of date (i.e. there's a value we have which isn't
   // present at all, or the descriptions in the loaded config are old).
   bool outofDate = ::MergeConfigValues(rdcstr(), m_Config, loadedConfig, false);
+  outofDate |= recoveredLegacy;
 
   // in the replay application, write it back out again if it's out of date. This
   // refreshes the config without changing any customised values and means the user can always edit
@@ -514,6 +600,11 @@ void RenderDoc::ProcessConfig()
 
 void RenderDoc::SaveConfigSettings()
 {
+  if(m_ConfigLoadFailed)
+  {
+    RDCERR("Cannot save settings after a config load failure. Repair the config file and restart.");
+    return;
+  }
   if(IsReplayApp())
   {
     rdcstr confFile = FileIO::GetAppFolderFilename("renderdoc.conf");
