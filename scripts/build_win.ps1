@@ -3,11 +3,12 @@
 Build Windows Release and package only runtime dependencies.
 .DESCRIPTION
 Use -Rebuild for a clean release, or -PackageOnly after successful builds.
+Use -Doom on the dedicated adapter branch to include the opt-in x64 DOOM DLL.
 Android APKs are reused from existing Android builds, not rebuilt here.
 Read docs/CUSTOM_RELEASE_BUILD.md before running.
 #>
 [CmdletBinding()]
-param([switch]$Rebuild, [switch]$PackageOnly)
+param([switch]$Rebuild, [switch]$PackageOnly, [switch]$Doom)
 $ErrorActionPreference = 'Stop'
 # Use framework hashing and ZIP APIs to avoid shell module auto-loading dependencies.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -30,6 +31,12 @@ $releaseVersion = "$releaseMajor.$releaseMinor"
 $releaseCommit = (& git -C $releaseRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE) { throw 'Cannot resolve build commit.' }
 if (& git -C $releaseRoot status --porcelain --untracked-files=no) { throw 'Commit tracked changes before building a package.' }
+$releaseDoomProject = Join-Path $releaseRoot 'doom_capture\doom_capture.vcxproj'
+$releaseDoomDLL = Join-Path $releaseRoot 'build-doom-bootstrap\bin\doom_capture.dll'
+$releaseDoomBuildRecord = Join-Path $releaseRoot 'build-doom-bootstrap\bin\build-record.json'
+if ($Doom -and -not (Test-Path -LiteralPath $releaseDoomProject -PathType Leaf)) {
+    throw 'The DOOM adapter is only available on its dedicated branch.'
+}
 
 if (-not $PackageOnly) {
     $releaseTarget = if ($Rebuild) { 'Rebuild' } else { 'Build' }
@@ -49,7 +56,29 @@ if (-not $PackageOnly) {
             }
             Write-Host "$releasePlatform Release build passed."
         }
+        if ($Doom) {
+            $releaseDoomLog = Join-Path $releaseLogs 'doom-adapter.log'
+            Write-Host "Building opt-in x64 DOOM adapter ($releaseTarget); log: $releaseDoomLog"
+            & $releaseMSBuild $releaseDoomProject "/t:$releaseTarget" /m:1 /nologo /v:quiet /fl `
+                "/flp:logfile=$releaseDoomLog;verbosity=normal" `
+                '/p:Configuration=Release;Platform=x64;PreferredToolArchitecture=x64' `
+                *> (Join-Path $releaseLogs 'doom-adapter-console.log')
+            if ($LASTEXITCODE) { throw "DOOM adapter build failed; see $releaseDoomLog" }
+            @{ commit = $releaseCommit; sha256 = (Get-ReleaseHash $releaseDoomDLL) } |
+                ConvertTo-Json | Set-Content -LiteralPath $releaseDoomBuildRecord -Encoding UTF8
+            Write-Host 'DOOM adapter build passed.'
+        }
     } finally { $env:CL_MPCount = $releaseOldMP }
+}
+if ($Doom) {
+    if (-not (Test-Path -LiteralPath $releaseDoomBuildRecord -PathType Leaf)) {
+        throw 'Build the DOOM adapter through this script before packaging it.'
+    }
+    $releaseDoomBuilt = Get-Content -LiteralPath $releaseDoomBuildRecord -Raw | ConvertFrom-Json
+    if ($releaseDoomBuilt.commit -ne $releaseCommit -or
+        $releaseDoomBuilt.sha256 -ne (Get-ReleaseHash $releaseDoomDLL)) {
+        throw 'DOOM adapter build record does not match this source commit or DLL.'
+    }
 }
 
 # Preserve prior output; verify the final absolute paths before moving directories.
@@ -117,6 +146,12 @@ foreach ($releaseABI in @('arm32', 'arm64')) {
     Copy-ReleaseFile $releaseAPK (Join-Path $release64 "plugins\android\org.renderdoc.renderdoccmd.$releaseABI.apk")
     $releaseAndroid += @{ abi = $releaseABI; rebuilt = $false; sha256 = (Get-ReleaseHash $releaseAPK) }
 }
+if ($Doom) {
+    Copy-ReleaseFile $releaseDoomDLL (Join-Path $release64 'doom_capture.dll')
+    Copy-ReleaseFile (Join-Path $releaseRoot 'doom_capture\doom_capture.ini') (Join-Path $release64 'doom_capture.ini')
+    Copy-ReleaseFile (Join-Path $releaseRoot 'doom_capture\README.md') (Join-Path $release64 'DOOM-adapter-README.md')
+    Copy-ReleaseFile (Join-Path $releaseRoot 'doom_capture\使用说明.txt') (Join-Path $release64 'DOOM-使用说明.txt')
+}
 foreach ($releaseCLIPath in @('render_soco_doccmd.exe', 'x86\render_soco_doccmd.exe')) {
     $releaseCLI = & (Join-Path $release64 $releaseCLIPath) version 2>&1 | Out-String
     if ($LASTEXITCODE -or -not $releaseCLI.Contains($releaseCommit) -or -not $releaseCLI.Contains($releaseVersion)) {
@@ -127,9 +162,14 @@ $releaseFiles = @(Get-ChildItem -LiteralPath $release64 -Recurse -File | ForEach
     @{ path = $_.FullName.Substring($release64.Length + 1); bytes = $_.Length; sha256 = (Get-ReleaseHash $_.FullName) }
 })
 @{ version = $releaseVersion; commit = $releaseCommit; windows = @('x86', 'x64');
+    variant = $(if ($Doom) { 'doom' } else { 'standard' });
+    doomAdapter = $(if ($Doom) { @{ arch = 'x64'; defaultInjection = $false;
+        sha256 = $releaseDoomBuilt.sha256;
+        expectedExeSHA256 = 'b7aece5fe2842035efd9036a1049edd53ee5efa25564811e20c39ca18362c018' } } else { $null });
     ltCG = $false; android = $releaseAndroid; files = $releaseFiles } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $release64 'package-manifest.json') -Encoding UTF8
-$releasePackage = Join-Path $releaseRoot "package\RenderSocoDoc_${releaseVersion}_64"
+$releaseVariantSuffix = if ($Doom) { '_DOOM' } else { '' }
+$releasePackage = Join-Path $releaseRoot "package\RenderSocoDoc_${releaseVersion}${releaseVariantSuffix}_64"
 Copy-Item -LiteralPath $release64 -Destination $releasePackage -Recurse
 $releaseZip = "$releasePackage.zip"
 [IO.Compression.ZipFile]::CreateFromDirectory($releasePackage, $releaseZip, [IO.Compression.CompressionLevel]::Optimal, $true)

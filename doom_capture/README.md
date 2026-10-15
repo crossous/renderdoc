@@ -33,6 +33,22 @@ Read `../docs/CUSTOM_RELEASE_BUILD.md` in full before building. Build the ordina
 Release x64 `renderdoc.vcxproj` and `renderdoc_no_export.vcxproj`, then this
 standalone project with VS 2022 MSBuild:
 
+The complete DOOM variant is generated through the repository's normal Windows
+build entry point on this branch:
+
+```powershell
+& scripts\build_win.bat -Doom
+```
+
+It builds x86/x64 Release plus this x64 adapter and writes
+`package/RenderSocoDoc_1.46_DOOM_64.zip`. Use `-Rebuild -Doom` for a clean build,
+or `-PackageOnly -Doom` only after this script has built the same source commit.
+The manifest records the source commit, variant, DLL hashes and supported EXE
+hash. The adapter remains opt-in; follow the included Chinese usage guide.
+Without `-Doom`, the standard package has no game adapter files.
+
+To build only the adapter for development:
+
 ```powershell
 & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' `
   doom_capture\doom_capture.vcxproj /t:Build /m:1 /nologo /v:minimal `

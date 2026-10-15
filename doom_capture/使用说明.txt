@@ -1,0 +1,50 @@
+DOOM 黑暗时代截帧版 RenderSocoDoc 1.46
+
+本包包含标准 RenderSocoDoc 运行时和可选 doom_capture.dll。
+DOOM 适配必须手动启用；普通注入默认行为保持不变。
+
+一、安装与启用
+1. 把整个包解压/复制到固定目录，例如 C:\RenderSocoDoc。保留 x86、D3D12、qtplugins、plugins 等子目录。
+2. 完全退出 DOOM，打开这个目录的 q_render_soco_doc.exe。
+3. Settings → Core → Config Editor → Inject → CustomDLLPath：填写本目录 doom_capture.dll 的完整路径。
+   安装到 C:\RenderSocoDoc 时填 C:\RenderSocoDoc\doom_capture.dll。
+4. Vulkan → Hack → RestoreASInCreationOrder：设为 true。保存设置，退出并重启 RDC。
+5. 同目录 doom_capture.ini 已设 EnablePathTracing=1、UseIATHooks=1；一般无需修改。
+
+二、从 Steam 启动并截帧
+1. 在 Launch Application 页的 Executable Path 填 DOOMTheDarkAges.exe 的实际路径。
+   本机路径为 D:\Steam\steamapps\common\DOOMTheDarkAges\DOOMTheDarkAges.exe。
+2. 勾选 Enable Global Hook，保持 RDC 开着。
+3. 从 Steam 正常启动 DOOM。不需要手工传入适配用的三个 CVAR；先清掉旧的实验启动参数。
+4. 确认 Vulkan overlay 和场景/UI 正常，进入想检查的场景，按 F12 截帧，等捕获完成。
+5. 通过游戏捕获连接窗口打开捕获，并把 .rdc 保存到固定位置。
+6. 使用本包的 q_render_soco_doc.exe 打开文件。双击 .rdc 的默认关联可能仍指向官方版。
+7. 测试结束取消 Global Hook。截其他游戏前清空 CustomDLLPath 并重启 RDC。
+
+三、原理与范围
+doom_capture.dll 校验 DOOM EXE 的完整 SHA-256，在 vkCreateInstance 前调整进程 RAM 中的：
+r_allowRayTracingOnOlderGPUs=1、r_omms=0、r_pathtracingEnabled=1。
+这使验证过的游戏版本启用已有的 KHR 光追路径；不修改磁盘 EXE，不提供 NV mesh/OMM 捕获支持。
+适配加载同目录标准 system_load.dll，真实光追调用仍走普通 Vulkan 捕获路径。
+UseIATHooks=1 临时设置本进程 D3D12/DXGI IAT hooks，避免 inline 捕获驱动内部呈现路径。
+EnablePathTracing=0 会保留游戏当前 PT CVAR，1 则请求启用 PT。
+必须在游戏 GPU 初始化之前注入；游戏已运行后再附加无法完成启动调整。
+
+RestoreASInCreationOrder 只影响 replay，处理本次捕获中复用加速结构存储的恢复顺序。
+它是可选兼容策略，默认 false；并非所有游戏的最终 AS 写入顺序都等于句柄创建顺序。
+本包修复了旧配置 <32> 非法 XML 导致 Vulkan 开关保存后仍被忽略的问题。
+
+支持校验的 EXE SHA-256：
+b7aece5fe2842035efd9036a1049edd53ee5efa25564811e20c39ca18362c018
+游戏更新后若 hash 不同，DLL 会拒绝游戏 patch，并把原因写入同目录 doom_capture-进程ID.log。
+已验证本机 RTX 5060 Ti / 616.56 驱动的标题帧捕获、三个 TraceRays 事件和最终图像回放。
+用户已确认可以自行启动截帧。关卡长期稳定性、其他驱动/显卡/EXE 版本仍需实际验证。
+已有 68 条 capture issues 尚未全部解决；本方案不包含光追 shader 单步调试。
+
+源码分工：
+v1.x：通用 Vulkan AS 恢复兼容设置、配置持久化修复、自定义 DLL 控制协议及进程 hook-mode overrides。
+codex/doom-capture-bootstrap：DOOM 专用源码、INI、使用说明及 build_win.bat -Doom 打包入口。
+精确编译提交、所有文件大小与 SHA-256 见 package-manifest.json。
+
+原理和测试记录：
+https://kurogame.feishu.cn/docx/AItYdtqPNovMbBxq2DJcLoWqnDX
