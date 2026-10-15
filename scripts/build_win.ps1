@@ -144,7 +144,8 @@ try {
         $releaseStream = $releaseEntry.Open()
         try {
             $releaseHash = [BitConverter]::ToString($releaseHasher.ComputeHash($releaseStream)).Replace('-', '')
-            $releaseRelative = $releaseEntry.FullName.Substring($releaseEntry.FullName.IndexOf('/') + 1)
+            $releaseEntryPath = $releaseEntry.FullName.Replace('\', '/')
+            $releaseRelative = $releaseEntryPath.Substring($releaseEntryPath.IndexOf('/') + 1)
             $releaseOriginal = Join-Path $releasePackage $releaseRelative
             if ($releaseHash -ne (Get-ReleaseHash $releaseOriginal)) {
                 throw "ZIP content mismatch: $($releaseEntry.FullName)"
