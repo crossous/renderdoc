@@ -9,6 +9,9 @@ Read docs/CUSTOM_RELEASE_BUILD.md before running.
 [CmdletBinding()]
 param([switch]$Rebuild, [switch]$PackageOnly)
 $ErrorActionPreference = 'Stop'
+# Import before MSBuild so file hashing/compression do not depend on module auto-loading.
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
+Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop
 $releaseRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $releaseLogs = Join-Path $releaseRoot ("build-windows-release\" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $releaseLogs -Force | Out-Null
