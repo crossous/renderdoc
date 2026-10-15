@@ -422,7 +422,10 @@ void WrappedVulkan::vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buff
   // if we have cached memory requirements, use them. These were fetched at create time (which is
   // still valid, they don't change over the lifetime of the resource) and may be slightly more
   // pessimistic for the case of external memory bound resources. See vkCreateBuffer/vkCreateImage
-      ObjDisp(device)->GetBufferMemoryRequirements(Unwrap(device), Unwrap(buffer), pMemoryRequirements);
+  if(IsCaptureMode(m_State) && GetRecord(buffer)->resInfo)
+    *pMemoryRequirements = GetRecord(buffer)->resInfo->memreqs;
+  else
+    ObjDisp(device)->GetBufferMemoryRequirements(Unwrap(device), Unwrap(buffer), pMemoryRequirements);
 }
 
 void WrappedVulkan::vkGetImageMemoryRequirements(VkDevice device, VkImage image,
@@ -431,7 +434,10 @@ void WrappedVulkan::vkGetImageMemoryRequirements(VkDevice device, VkImage image,
   // if we have cached memory requirements, use them. These were fetched at create time (which is
   // still valid, they don't change over the lifetime of the resource) and may be slightly more
   // pessimistic for the case of external memory bound resources. See vkCreateBuffer/vkCreateImage
-      ObjDisp(device)->GetImageMemoryRequirements(Unwrap(device), Unwrap(image), pMemoryRequirements);
+  if(IsCaptureMode(m_State) && GetRecord(image)->resInfo)
+    *pMemoryRequirements = GetRecord(image)->resInfo->memreqs;
+  else
+    ObjDisp(device)->GetImageMemoryRequirements(Unwrap(device), Unwrap(image), pMemoryRequirements);
 
   // AMD can have some variability in the returned size, so we need to pad the reported size to
   // allow for this. The variability isn't quite clear, but for now we assume aligning size to
@@ -614,6 +620,8 @@ void WrappedVulkan::vkGetBufferMemoryRequirements2(VkDevice device,
   // if we have cached memory requirements, use them. These were fetched at create time (which is
   // still valid, they don't change over the lifetime of the resource) and may be slightly more
   // pessimistic for the case of external memory bound resources. See vkCreateBuffer/vkCreateImage
+  if(IsCaptureMode(m_State) && GetRecord(pInfo->buffer)->resInfo)
+    pMemoryRequirements->memoryRequirements = GetRecord(pInfo->buffer)->resInfo->memreqs;
 }
 
 void WrappedVulkan::vkGetImageMemoryRequirements2(VkDevice device,
@@ -627,6 +635,8 @@ void WrappedVulkan::vkGetImageMemoryRequirements2(VkDevice device,
   // if we have cached memory requirements, use them. These were fetched at create time (which is
   // still valid, they don't change over the lifetime of the resource) and may be slightly more
   // pessimistic for the case of external memory bound resources. See vkCreateBuffer/vkCreateImage
+  if(IsCaptureMode(m_State) && GetRecord(pInfo->image)->resInfo)
+    pMemoryRequirements->memoryRequirements = GetRecord(pInfo->image)->resInfo->memreqs;
 
   // don't do remapping here on replay.
   if(IsReplayMode(m_State))
@@ -888,23 +898,16 @@ void WrappedVulkan::vkGetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice
 
 #undef DISABLE_EDS3_FEATURE
 
-  // FORK FIX: this used to force accelerationStructureHostCommands and
-  // accelerationStructureIndirectBuild to VK_FALSE on every feature query. Engines that build their
-  // top-level acceleration structure with indirect builds query this feature, see VK_FALSE and take
-  // their hard failure path - a ray-tracing application force-terminates with the "tlasAllocation" error
-  // (its function table even resolves vkCmdBuildAccelerationStructuresIndirectKHR at startup).
-  // Report the device's real capabilities instead of masking them, otherwise the engine refuses to
-  // run at all on hardware that supports ray tracing perfectly well.
+  // we don't want to report support for acceleration structure host commands
   VkPhysicalDeviceAccelerationStructureFeaturesKHR *accStruct =
       (VkPhysicalDeviceAccelerationStructureFeaturesKHR *)FindNextStruct(
           pFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
 
-  if(accStruct)
+  if(accStruct && accStruct->accelerationStructureHostCommands)
   {
-    RDCLOG("AS features: accelStruct=%d hostCommands=%d indirectBuild=%d captureReplay=%d",
-           (int)accStruct->accelerationStructure, (int)accStruct->accelerationStructureHostCommands,
-           (int)accStruct->accelerationStructureIndirectBuild,
-           (int)accStruct->accelerationStructureCaptureReplay);
+    RDCWARN("Disabling support for acceleration structure host commands and indirect builds");
+    accStruct->accelerationStructureHostCommands = VK_FALSE;
+    accStruct->accelerationStructureIndirectBuild = VK_FALSE;
   }
 }
 
@@ -1350,8 +1353,6 @@ void WrappedVulkan::vkGetAccelerationStructureBuildSizesKHR(
 
   ObjDisp(device)->GetAccelerationStructureBuildSizesKHR(Unwrap(device), buildType, &unwrapped,
                                                          pMaxPrimitiveCounts, pSizeInfo);
-
-
 }
 
 VkDeviceAddress WrappedVulkan::vkGetAccelerationStructureDeviceAddressKHR(
@@ -1366,19 +1367,7 @@ void WrappedVulkan::vkGetDeviceAccelerationStructureCompatibilityKHR(
     VkDevice device, const VkAccelerationStructureVersionInfoKHR *pVersionInfo,
     VkAccelerationStructureCompatibilityKHR *pCompatibility)
 {
-  // FORK FIX: this used to hard-code INCOMPATIBLE for every query. Engines use it to decide
-  // whether an acceleration structure is usable, and answering INCOMPATIBLE unconditionally makes
-  // them abort (verified: a ray-tracing application self-kills with the "tlasAllocation" error right
-  // after this path). Forward the query to the driver and report the real answer instead.
-  PFN_vkGetDeviceAccelerationStructureCompatibilityKHR pfnCompat =
-      ObjDisp(device)->GetDeviceAccelerationStructureCompatibilityKHR;
-  if(pfnCompat == NULL)
-  {
-    *pCompatibility = VK_ACCELERATION_STRUCTURE_COMPATIBILITY_COMPATIBLE_KHR;
-    return;
-  }
-
-  pfnCompat(Unwrap(device), pVersionInfo, pCompatibility);
+  *pCompatibility = VK_ACCELERATION_STRUCTURE_COMPATIBILITY_INCOMPATIBLE_KHR;
 }
 
 VkResult WrappedVulkan::vkGetShaderBinaryDataEXT(VkDevice device, VkShaderEXT shader,

@@ -5058,25 +5058,10 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
           &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
   if(accFeatures && accFeatures->accelerationStructure)
   {
-    // FORK FIX: only request capture replay when the device really reports it; forcing it on
-    // hardware that lacks it makes vkCreateDevice fail and the engine then aborts.
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR availAccStruct = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
-    VkPhysicalDeviceFeatures2 availAccBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    availAccBase.pNext = &availAccStruct;
-    ObjDisp(physicalDevice)->GetPhysicalDeviceFeatures2(Unwrap(physicalDevice), &availAccBase);
+    accFeatures->accelerationStructureCaptureReplay = VK_TRUE;
+    m_AccelerationStructures = true;
 
-    accFeatures->accelerationStructureCaptureReplay =
-        availAccStruct.accelerationStructureCaptureReplay ? VK_TRUE : VK_FALSE;
-    // FORK: keep acceleration structures enabled for the application (its capability check
-    // needs it), but do NOT turn on RenderDoc's global-BDA bookkeeping for them. That path marks
-    // ALL memory as BDA and force-flushes every persistently mapped buffer, retaining copies -
-    // which blows up video memory until the engine pops 'Failed to allocate video memory'
-    // (observed: repeated 'Persistent map flush forced' up to 3.4 GiB, then allocation failure).
-    m_AccelerationStructures = false;
-
-    RDCLOG("Acceleration structures enabled (captureReplay=%d)",
-           (int)accFeatures->accelerationStructureCaptureReplay);
+    RDCLOG("Acceleration structures enabled, ALL MEMORY WILL BE MARKED AS BDA");
   }
 
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR *rtpFeatures =
@@ -5084,15 +5069,7 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
           &createInfo, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
   if(rtpFeatures && rtpFeatures->rayTracingPipeline)
   {
-    // FORK FIX: same as above.
-    VkPhysicalDeviceRayTracingPipelineFeaturesKHR availRTP = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
-    VkPhysicalDeviceFeatures2 availRTPBase = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    availRTPBase.pNext = &availRTP;
-    ObjDisp(physicalDevice)->GetPhysicalDeviceFeatures2(Unwrap(physicalDevice), &availRTPBase);
-
-    rtpFeatures->rayTracingPipelineShaderGroupHandleCaptureReplay =
-        availRTP.rayTracingPipelineShaderGroupHandleCaptureReplay ? VK_TRUE : VK_FALSE;
+    rtpFeatures->rayTracingPipelineShaderGroupHandleCaptureReplay = VK_TRUE;
   }
 
   VkPhysicalDeviceDescriptorBufferFeaturesEXT *descBufFeatures =

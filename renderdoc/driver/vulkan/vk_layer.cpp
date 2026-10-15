@@ -425,21 +425,9 @@ VK_LAYER_RENDERDOC_CaptureEnumerateInstanceExtensionProperties(
 
 // proc addr routines
 
-// FORK FIX: applications routinely query the ray-tracing entry points by name before they enable
-// the corresponding extensions, cache the result and then call it without a NULL check. Answering
-// NULL there is legal but turns into a jump to address 0 in those applications, so this family is
-// resolved against our own dispatch tables instead - which also keeps the calls visible to capture
-// rather than handing the raw driver pointer straight through.
-static bool IsEarlyQueriedEntryPoint(const char *pName)
-{
-  return pName != NULL && (strstr(pName, "AccelerationStructure") != NULL ||
-                           strstr(pName, "RayTracing") != NULL || strstr(pName, "TraceRays") != NULL);
-}
-
 VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
 VK_LAYER_RENDERDOC_CaptureGetDeviceProcAddr(VkDevice device, const char *pName)
 {
-
   if(!strcmp("vkGetDeviceProcAddr", pName))
     return (PFN_vkVoidFunction)&VK_LAYER_RENDERDOC_CaptureGetDeviceProcAddr;
   if(!strcmp("vkCreateDevice", pName))
@@ -467,10 +455,6 @@ VK_LAYER_RENDERDOC_CaptureGetDeviceProcAddr(VkDevice device, const char *pName)
     HookInitVulkanInstanceExts();
   }
 
-  // FORK FIX: same as the instance path, see IsEarlyQueriedEntryPoint.
-  if(IsEarlyQueriedEntryPoint(pName))
-    return GetDeviceDispatchTable(device)->GetDeviceProcAddr(Unwrap(device), pName);
-
   // unknown or not-enabled functions must return NULL
   return NULL;
 }
@@ -481,7 +465,6 @@ VK_LAYER_RENDERDOC_Capture_layerGetPhysicalDeviceProcAddr(VkInstance instance, c
 VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
 VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr(VkInstance instance, const char *pName)
 {
-
   // if name is NULL undefined is returned, let's return NULL
   if(pName == NULL)
     return NULL;
@@ -502,7 +485,6 @@ VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr(VkInstance instance, const char *p
 
   if(instance == VK_NULL_HANDLE)
     return NULL;
-
 
   if(!strcmp("vkEnumerateDeviceLayerProperties", pName))
     return (PFN_vkVoidFunction)&VK_LAYER_RENDERDOC_CaptureEnumerateDeviceLayerProperties;
@@ -561,10 +543,6 @@ VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr(VkInstance instance, const char *p
   HookInitVulkanDeviceExts();
 
   HookInitVulkanInstanceExts_PhysDev();
-
-  // FORK FIX: see IsEarlyQueriedEntryPoint.
-  if(IsEarlyQueriedEntryPoint(pName))
-    return GetInstanceDispatchTable(instance)->GetInstanceProcAddr(Unwrap(instance), pName);
 
   // all other functions must return NULL so that GIPA can be used with NULL checks sensibly for
   // missing functionality

@@ -8785,20 +8785,9 @@ void WrappedVulkan::vkCmdBuildAccelerationStructuresKHR(
     for(uint32_t i = 0; i < infoCount; ++i)
       unwrappedInfos[i] = *UnwrapStructAndChain(m_State, memory, &pInfos[i]);
 
-    // FORK FIX: during engine startup the acceleration-structure entry points can still be NULL in
-    // the dispatch chain (the engine queries and calls them before the extension is enabled).
-    // Forwarding to a NULL pointer is an instant rip=0 crash, so skip the call in that window -
-    // once the device is fully set up the same command goes through and is captured normally.
-    PFN_vkCmdBuildAccelerationStructuresKHR pfnCmdBuildAS =
-        ObjDisp(commandBuffer)->CmdBuildAccelerationStructuresKHR;
-    if(pfnCmdBuildAS == NULL)
-    {
-      RDCWARN("FORK: vkCmdBuildAccelerationStructuresKHR dispatch is NULL - skipping this call");
-      return;
-    }
-
-    SERIALISE_TIME_CALL(pfnCmdBuildAS(Unwrap(commandBuffer), infoCount, unwrappedInfos,
-                                      ppBuildRangeInfos));
+    SERIALISE_TIME_CALL(ObjDisp(commandBuffer)
+                            ->CmdBuildAccelerationStructuresKHR(Unwrap(commandBuffer), infoCount,
+                                                                unwrappedInfos, ppBuildRangeInfos));
   }
 
   if(IsCaptureMode(m_State))
