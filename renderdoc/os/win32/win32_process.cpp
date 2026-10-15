@@ -421,7 +421,10 @@ void InjectFunctionCall(HANDLE hProcess, const wchar_t* dllPath, uintptr_t rende
   // Always resolve function RVA from the actual remote DLL file on disk, because the local DLL
   // (renderdoc.dll) and the remote DLL (system_load.dll) may have different export layouts
   // even in Development builds, due to RENDERDOC_NO_EXPORTS changing linker output.
-  uintptr_t func_remote = renderdoc_remote + GetFunctionRVA(dllPath, funcName);
+  DWORD functionRVA = GetFunctionRVA(dllPath, funcName);
+  if(functionRVA == 0)
+    return;
+  uintptr_t func_remote = renderdoc_remote + functionRVA;
 
   void *remoteMem = VirtualAllocEx(hProcess, NULL, dataLen, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
   SIZE_T numWritten;
@@ -1030,9 +1033,10 @@ rdcpair<RDResult, uint32_t> Process::InjectIntoProcess(uint32_t pid,
           rdoc_dll);
     }
   }
-  else if(isCustomDLL)
+  else if(isCustomDLL && GetFunctionRVA(renderdocPath, "INTERNAL_GetTargetControlIdent", true) == 0)
   {
-    // Custom DLL injected successfully - skip INTERNAL_* calls since the DLL doesn't have them
+    // Arbitrary injection DLLs have no target-control protocol. Capture runtimes and bootstrap
+    // adapters that export it still need their options, capture path and connection ident.
     std::cout << "Custom DLL injected successfully: " << customDLL.c_str() << std::endl;
   }
   else
