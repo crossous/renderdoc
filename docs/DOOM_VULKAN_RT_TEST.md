@@ -6,6 +6,8 @@
 
 本机已经捕获包含真实 `vkCmdTraceRaysKHR` 的帧，并在修复加速结构恢复顺序后回放成功，能够导出最终画面。捕获来自标题场景；没有完成实际关卡、长时间运行、其他显卡或其他驱动的验证。
 
+**发行包的普通全局注入启动未通过。** 后续实测确认，不进行下面的独立游戏 RAM 调整时，游戏启动会调用未初始化的 KHR AS 接口而崩溃。`RestoreASInCreationOrder` 只影响回放，不能解决启动问题。此前出包验证覆盖了已有 DOOM 捕获的回放及 Vulkan/D3D11 demo，但漏测撤销实验调整后的 DOOM 全局注入启动；不能将那些通过结果视为 DOOM 开箱截帧通过。
+
 这不是通过一个 RenderDoc 设置就能开箱使用的方案。游戏的能力门槛与 RenderDoc 的回放正确性是两个问题：前者这次通过独立、限时、仅修改进程 RAM 的实验验证，后者有代码修复。进程内实验不写 EXE，不作为默认产品行为提交。
 
 ## 分支维护
@@ -132,3 +134,19 @@ SHA-256：`6d6f1bdce538654731221ba36e448e69d29d210869c675751b658c5ef5878658`。
 Windows 出包继续使用 `scripts/build_win.bat`，委托 PowerShell 执行。`-Rebuild` 使用两架构完整 Release 重建和已验证的 LTCG 回退；`-PackageOnly` 用于构建成功后的独立出包。旧产物移至本次日志目录，不随意删除。包按运行依赖清单生成，含 Python 回放模块、两套 Agility SDK、x86 注入依赖和已有 Android APK；APK 不在此 Windows 构建中重编。包检查两架构 CLI 的完整源码 commit，并逐文件解压和比较 SHA-256。
 
 本次审核不承诺全部游戏兼容，也不表示 NV mesh/OMM 或光追 shader 单步调试已实现。光追回归以真实 TraceRays 事件和最终导出图像为依据。
+
+## 发行包全局注入启动崩溃复查（2026-10-15）
+
+用户安装 `7b6b75e169d6a8391db5a8e642781e8f051d05a1` 发行包后启动崩溃。再次比较安装文件与包 manifest，38 个运行文件的哈希均一致；游戏加载的是 `C:\RenderSocoDoc\system_load.dll`，没有重复加载 `renderdoc.dll`。此次没有修改或重新构建运行时，也没有推送远端。
+
+两份用户 BugSplat 转储及一次不修改内存的启动复现均为执行空地址的 `0xc0000005`，返回地址 `DOOMTheDarkAges+0xc89688`。对应调用是游戏 RVA `0xc89682` 间接调用 RVA `0x494bf88` 中的 `vkGetAccelerationStructureBuildSizesKHR` 指针，用于分配 TLAS；不是加速结构初始状态回放阶段的设备丢失。
+
+只读观察显示，约 6.46 秒 RT/PT 标志变为 0，约 6.84 秒 Vulkan device 非空，但 create/build/size AS 指针始终为 0，约 11.34 秒游戏退出。反汇编确认 RVA `0xc1ab31` 检查 RT 标志，非 1 时跳过整组 RT 入口获取。因此不能把此次空指针归因于 `vkGetDeviceProcAddr` 返回 NULL：游戏没有执行对应查询。结合前面的 NVIDIA 能力门槛分析，NV mesh 扩展被过滤会让本版本游戏关闭 RT 初始化，后续却继续进入 TLAS 分配。
+
+使用同一安装 DLL、同一全局注入配置的独立 RAM 对照重新设置 `r_allowRayTracingOnOlderGPUs=1`、`r_omms=0`、`r_pathtracingEnabled=1`，RT/PT 保持 1，AS 入口指向 RenderDoc 自身的 `hooked_vkCreateAccelerationStructureKHR` / `hooked_vkGetAccelerationStructureBuildSizesKHR`，观察 40 秒未复现该启动崩溃，随后可连接 target control。此次没有新捕获，不作为新一轮完整 capture/replay 或关卡稳定性通过；日志中仍有已有的 map range assertions。
+
+同组对照未分别隔离三个 CVAR，不能据此宣称其中某一个单独足以解决全部启动问题。RAM 实验仍不属于产品功能，不写 EXE。测试已停止自建游戏与调试器进程，并按哈希恢复本地游戏配置和 profile；原有 GUI 与全局注入 helper 保留。
+
+后续产品适配应提供真实支持的能力路径：实现所需扩展的捕获/回放，或找到游戏公开支持的 KHR 回退设置。单独增加“返回非 NULL”或无条件暴露未支持的 NV mesh/OMM 不能完成适配，也不符合主干兼容性要求。
+
+证据目录：`build-doom-startup-review/20261015-154211/`。包含用户转储、`cdb.log` / `previous-cdb.log` / `reproduced-cdb.log`、`proc-xrefs.txt`、`rt-api-condition.txt`、`observed-startup.jsonl`、`ram-control.jsonl`、`wrapper-symbols.log` 与 `startup-and-control.log`。该目录及进程实验脚本均忽略，不进入发行包。
