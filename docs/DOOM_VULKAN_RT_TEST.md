@@ -106,3 +106,11 @@ SHA-256：`6d6f1bdce538654731221ba36e448e69d29d210869c675751b658c5ef5878658`。
 ## 本机恢复
 
 测试结束恢复并按 SHA-256 校验 installed `system_load.dll`（`eadebb7512805d25564834195b119a855214c27dd5553743b68307496e90f300`）、manifest、SystemLoad 与 RenderDoc 配置、游戏 local config 和 profile settings；两套 LoadAppInit_DLLs 恢复备份值 1，AppInit_DLLs 字符串保持原样。保留用户原有 GUI 与全局注入 helper；没有残留本次游戏、demo 或 replay host。
+
+## 双击打开失败的复查
+
+2026-10-15 后续复查：本机 `.rdc` 文件关联为 `RenderDoc.RDCCapture.1`，启动 `C:\Program Files\RenderDoc\qrenderdoc.exe`。它没有上述 AS 排序修复，因此同一文件仍可能停在约 15% 并报 replay 失败。
+
+再次运行自动回归成功，三个 RT 事件通过。启动 `x64/Release/q_render_soco_doc.exe` 并确认它加载的 `renderdoc.dll` SHA-256 与上述修复版一致；GUI 约 42 秒后成功加载，状态栏显示 `doom-forced_frame2026.rdc loaded`，事件树可见 `vkCmdTraceRaysKHR`。GUI 显示 68 个 capture issues，不能视为无警告捕获。
+
+同目录创建 `build-doom-rt-test/B-normal-rt/用修复版打开_frame2026.lnk`，显式启动该修复版并传入捕获路径。未替换官方安装文件或改动 `.rdc` 全局关联。此次为用户查看保留了已加载的修复版窗口。
