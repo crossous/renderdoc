@@ -800,6 +800,7 @@ private:
   SDObject *FindConfigSetting(const rdcstr &name);
 
   SDObject *m_Config = NULL;
+  bool m_ConfigLoadFailed = false;
 };
 
 struct DriverRegistration
