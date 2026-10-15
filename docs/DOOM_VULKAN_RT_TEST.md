@@ -25,7 +25,7 @@
 
 RenderDoc 隐藏尚不支持捕获的 `VK_NV_mesh_shader` 和 `VK_EXT_opacity_micromap`。本版本游戏在 NVIDIA 分支要求 NV mesh，或 `r_allowRayTracingOnOlderGPUs != 0`，才会允许 RT；PT 还有其他能力与开关条件。这个门槛使 KHR RT 可用的机器在注入后仍被游戏判为不可用。
 
-独立进程内实验设置：`r_allowRayTracingOnOlderGPUs=1`、`r_omms=0`、`r_pathtracingEnabled=1`。得到 RT/PT support=1，游戏启用 KHR RT。普通命令行和本地配置对该零售版受限制 CVAR 没有效果；不能把普通 `+set` 描述为已经验证可用的办法。
+独立进程内实验设置：`r_allowRayTracingOnOlderGPUs=1`、`r_omms=0`、`r_pathtracingEnabled=1`。得到 RT/PT support=1，游戏启用 KHR RT。普通 `+set` 测试中，`r_allowRayTracingOnOlderGPUs` 和 `r_omms` 未保持目标值；但 `r_pathtracingEnabled` 可以生效，不能笼统说命令行 CVAR 均无效。现有证据未区分前两个值被忽略还是被后续初始化覆盖，也未验证单靠 Steam 启动参数能完成这组启动调整。
 
 用于只读检查的脚本要求精确 EXE SHA-256：
 `b7aece5fe2842035efd9036a1049edd53ee5efa25564811e20c39ca18362c018`。
@@ -150,3 +150,11 @@ Windows 出包继续使用 `scripts/build_win.bat`，委托 PowerShell 执行。
 后续产品适配应提供真实支持的能力路径：实现所需扩展的捕获/回放，或找到游戏公开支持的 KHR 回退设置。单独增加“返回非 NULL”或无条件暴露未支持的 NV mesh/OMM 不能完成适配，也不符合主干兼容性要求。
 
 证据目录：`build-doom-startup-review/20261015-154211/`。包含用户转储、`cdb.log` / `previous-cdb.log` / `reproduced-cdb.log`、`proc-xrefs.txt`、`rt-api-condition.txt`、`observed-startup.jsonl`、`ram-control.jsonl`、`wrapper-symbols.log` 与 `startup-and-control.log`。该目录及进程实验脚本均忽略，不进入发行包。
+
+## 命令行参数的范围复查（2026-10-15）
+
+用户指出 DeepSeek 曾通过 Steam 的 `cmd /c "%command% +set r_pathtracingEnabled 0 +set r_pathtracingDenoiserMode 0"` 获得有效结果。关闭路径追踪参数的效果不能代替开启 RT 所需能力路径的验证；也不能据此前测试将所有 CVAR 判为不支持命令行。
+
+使用当前安装包，直接通过 `cmd /d /s /c` 启动相同 EXE，传入 `+set r_allowRayTracingOnOlderGPUs 1 +set r_omms 0 +set r_pathtracingEnabled 1`。此轮不经过 Steam UI，没有修改 Steam launch options 或游戏内存。只读观察约 3.18 秒 `r_pathtracingEnabled=1`，但 older=0、omms=1；约 8.32 秒 device 已创建、RT/PT=0、AS 入口仍为空，约 13.76 秒退出。转储仍为 `DOOMTheDarkAges+0xc89688` 返回的空指针执行异常。
+
+结论：`+set` 确实能够设置部分 CVAR，当前测试未能通过命令行完成另外两个启动调整。`cmd /c` 用于包装启动，不会自行改变游戏对 CVAR 的处理。本轮未单独测试 DeepSeek 的 denoiser 参数，也不否定旧修改版下该组关闭 PT 参数有效的观察。测试已恢复并校验游戏配置和 profile；运行时与 Steam 设置未修改。证据位于 `build-doom-startup-review/20261015-commandline/`。
