@@ -25,6 +25,12 @@
 #include "vk_manager.h"
 #include <algorithm>
 #include "vk_core.h"
+#include "core/settings.h"
+
+RDOC_CONFIG(bool, Vulkan_Hack_RestoreASInCreationOrder, false,
+            "Restore same-type acceleration structures in handle creation order during replay. "
+            "This can help captures with reused AS backing storage, but may restore stale data "
+            "if an application rebuilt an older handle later. Reopen the capture after changing.");
 
 // debugging logging for barriers
 #if 0
@@ -1047,22 +1053,10 @@ rdcarray<ResourceId> VulkanResourceManager::InitialContentResources()
 {
   rdcarray<ResourceId> resources =
       ResourceManager<VulkanResourceManagerConfiguration>::InitialContentResources();
-  std::sort(resources.begin(), resources.end(), [this](ResourceId a, ResourceId b) {
+  const bool creationOrder = IsReplayMode(m_State) && Vulkan_Hack_RestoreASInCreationOrder();
+  std::sort(resources.begin(), resources.end(), [this, creationOrder](ResourceId a, ResourceId b) {
     const InitialContentData &aData = m_InitialContents[a].data;
     const InitialContentData &bData = m_InitialContents[b].data;
-
-    // Always sort BLASs before TLASs, as a TLAS holds device addresses for it's BLASs
-    // and we make sure those addresses are valid.  There's no good handling for the generic types,
-    // so we just assume it is a TLAS
-    if(aData.accelerationStructureInfo && bData.accelerationStructureInfo)
-    {
-      const VkAccelerationStructureTypeKHR aType = aData.accelerationStructureInfo->type;
-      const VkAccelerationStructureTypeKHR bType = bData.accelerationStructureInfo->type;
-      if(aType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR &&
-         (bType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR ||
-          bType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR))
-        return true;
-    }
 
     // serialise ASs first to allow reallocation.
     // since the enum is serialised we couldn't change the order so we do this by hand
@@ -1070,6 +1064,24 @@ rdcarray<ResourceId> VulkanResourceManager::InitialContentResources()
     int bASSort = bData.type == eResAccelerationStructureKHR ? 0 : 1;
     if(aASSort != bASSort)
       return aASSort < bASSort;
+
+    if(aData.type == eResAccelerationStructureKHR)
+    {
+      // A TLAS dereferences its BLAS device addresses. Treat generic or missing
+      // build metadata as TLAS so the comparator is consistent for every AS.
+      const bool aBLAS = aData.accelerationStructureInfo &&
+                         aData.accelerationStructureInfo->type ==
+                             VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+      const bool bBLAS = bData.accelerationStructureInfo &&
+                         bData.accelerationStructureInfo->type ==
+                             VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+      if(aBLAS != bBLAS)
+        return aBLAS;
+
+      // Creation order is only a compatibility heuristic for reused backing
+      // storage; it does not necessarily match the last GPU write order.
+      return creationOrder && a < b;
+    }
 
     return aData.type < bData.type;
   });
