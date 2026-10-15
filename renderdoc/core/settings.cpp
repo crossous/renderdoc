@@ -466,7 +466,7 @@ CONFIG_SUPPORT_TYPE(rdcarray<rdcstr>)
 
 void RenderDoc::ProcessConfig()
 {
-  rdcstr confFile = FileIO::GetAppFolderFilename("renderdoc.conf");
+  rdcstr confFile = FileIO::GetAppFolderFilename("systemload.conf");
 
   RDCLOG("Loading config from %s", confFile.c_str());
 
@@ -516,7 +516,7 @@ void RenderDoc::SaveConfigSettings()
 {
   if(IsReplayApp())
   {
-    rdcstr confFile = FileIO::GetAppFolderFilename("renderdoc.conf");
+    rdcstr confFile = FileIO::GetAppFolderFilename("systemload.conf");
 
     bool success = false;
 

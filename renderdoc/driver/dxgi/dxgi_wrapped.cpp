@@ -1301,6 +1301,10 @@ HRESULT WrappedIDXGIFactory::CreateSwapChainForHwnd(
       *ppSwapChain = new WrappedIDXGISwapChain4(*ppSwapChain, hWnd, wrapDevice);
     }
 
+    // custom diagnostic: a failed swapchain creation is a classic reason for an engine to bail
+    // out of startup, and it is otherwise invisible in the log
+    RDCLOG("EXITTRACE/DXGI: CreateSwapChainForHwnd(hwnd=%#p) -> %s", hWnd, ToStr(ret).c_str());
+
     return ret;
   }
   else

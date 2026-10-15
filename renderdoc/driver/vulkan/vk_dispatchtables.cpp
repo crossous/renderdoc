@@ -190,6 +190,20 @@ void InitDeviceExtensionTables(VkDevice device, InstanceDeviceInfo *info)
   CheckDeviceExts();
 
   HookInitVulkanDeviceExts();
+  // FORK FIX: the extension-enable conditions above leave the whole ray-tracing /
+  // acceleration-structure family NULL in the device dispatch table when the app queried the
+  // entry points before enabling the extension (verified with a ray-tracing application). Our hooked
+  // entry points forward through this table, so a NULL here turns into a call to address 0.
+  // Do a second pass that ignores the conditions and only fills entries that are still empty.
+#undef HookInitExtension
+#define HookInitExtension(cond, func)  \
+  {                                    \
+    if(table->func == NULL)            \
+    {                                  \
+      DeviceGPA(func);                 \
+    }                                  \
+  }
+  HookInitVulkanDeviceExts();
 }
 
 #undef DeviceGPA

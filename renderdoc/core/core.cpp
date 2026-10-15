@@ -56,7 +56,7 @@ RDOC_DEBUG_CONFIG(bool, Capture_Debug_SnapshotDiagnosticLog, false,
 RDOC_CONFIG(bool, Capture_IncludeExtendedThumbnail, false,
             "Save the thumbnail unresized and losslessly encoded during capture.");
 
-RDOC_CONFIG(bool, Vulkan_Hack_BridgeMultipleCapturers, true,
+RDOC_CONFIG(bool, Vulkan_Hack_BridgeMultipleCapturers, false,
             "Capture all Vulkan instances in a process together. This is needed for emulators "
             "which render and present on separate Vulkan instances.");
 
@@ -528,9 +528,9 @@ void RenderDoc::RecreateCrashHandler()
   FileIO::GetExecutableFilename(exename);
   exename = strlower(exename);
 
-  // only create crash handler when we're not in renderdoccmd (to prevent infinite loop as
-  // the crash handler itself launches renderdoccmd)
-  if(exename.contains("renderdoccmd"))
+  // only create crash handler when we're not in our own cmd tool (to prevent infinite loop as
+  // the crash handler itself launches that tool)
+  if(exename.contains("soco_doccmd"))
     return;
 
 #if ENABLED(RDOC_WIN32)
@@ -695,7 +695,7 @@ void RenderDoc::Initialise()
   {
     rdcstr capture_filename;
 
-    const rdcstr base = IsReplayApp() ? "RenderDoc" : "RenderDoc_app";
+    const rdcstr base = IsReplayApp() ? "SysLoad" : "SysLoad_app";
 
     FileIO::GetDefaultFiles(base, capture_filename, m_LoggingFilename, m_Target);
 

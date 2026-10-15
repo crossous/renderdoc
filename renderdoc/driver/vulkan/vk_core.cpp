@@ -2314,8 +2314,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           }
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       if(!strcmp(ext.extensionName, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
@@ -2342,8 +2345,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           }
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       if(!strcmp(ext.extensionName, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
@@ -2502,8 +2508,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           return false;
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       if(!strcmp(ext.extensionName, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
@@ -2530,8 +2539,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           }
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       if(!strcmp(ext.extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME))
@@ -2559,8 +2571,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           }
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       if(!strcmp(ext.extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
@@ -2589,8 +2604,11 @@ VkResult WrappedVulkan::FilterDeviceExtensionProperties(VkPhysicalDevice physDev
           }
         }
 
-        // if it wasn't supported, remove the extension
-        return true;
+        // FORK FIX: never remove ray-tracing extensions from the app-visible device extension
+        // list. Engines treat a missing VK_KHR_acceleration_structure / ray tracing pipeline as
+        // 'this machine cannot do ray tracing' and take their hard failure path. Keep the real
+        // capability visible so the engine enables ray tracing.
+        return false;
       }
 
       // not an extension with conditional support, don't remove

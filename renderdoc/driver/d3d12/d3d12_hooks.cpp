@@ -912,8 +912,15 @@ private:
       }
     }
 
-    return d3d12hooks.Create_Internal(createFunc, NULL, pAdapter, MinimumFeatureLevel, riid,
-                                      ppDevice);
+    // custom diagnostic: record every device creation attempt and its result, so an engine that
+    // silently bails out of graphics initialisation can be seen doing it
+    HRESULT hr = d3d12hooks.Create_Internal(createFunc, NULL, pAdapter, MinimumFeatureLevel, riid,
+                                            ppDevice);
+
+    RDCLOG("EXITTRACE/D3D12: D3D12CreateDevice(adapter=%#p, minFeatureLevel=0x%x) -> %s", pAdapter,
+           (uint32_t)MinimumFeatureLevel, ToStr(hr).c_str());
+
+    return hr;
   }
 
   static HRESULT WINAPI D3D12EnableExperimentalFeatures_hook(UINT NumFeatures, const IID *pIIDs,
@@ -931,16 +938,33 @@ private:
         allowedIIDs.push_back(D3D12GPUUploadHeapsOnUnsupportedOS);
     }
 
+    // custom diagnostic: this call filters the requested feature set, and an engine that gets a
+    // rejection here has no way to report it - it just abandons graphics init
+    rdcstr requested;
+    for(UINT i = 0; i < NumFeatures; i++)
+    {
+      if(!requested.empty())
+        requested += ", ";
+      requested += ToStr(pIIDs[i]);
+    }
+
+    HRESULT ret;
+
     // there's no "partially successful" error code, so we just lie to the application and pretend
     // that any filtered IIDs also succeeded
     if(!allowedIIDs.empty())
-      return d3d12hooks.EnableExperimentalFeatures()((UINT)allowedIIDs.size(), allowedIIDs.data(),
-                                                     NULL, NULL);
+      ret = d3d12hooks.EnableExperimentalFeatures()((UINT)allowedIIDs.size(), allowedIIDs.data(),
+                                                    NULL, NULL);
+    else
+      // header says "The call returns E_NOINTERFACE if an unrecognized feature is passed in or
+      // Windows Developer mode is not on." so this is the most appropriate error for if no IIDs
+      // are allowed.
+      ret = E_NOINTERFACE;
 
-    // header says "The call returns E_NOINTERFACE if an unrecognized feature is passed in or
-    // Windows Developer mode is not on." so this is the most appropriate error for if no IIDs are
-    // allowed.
-    return E_NOINTERFACE;
+    RDCLOG("EXITTRACE/D3D12: D3D12EnableExperimentalFeatures(%u requested [%s], %u allowed) -> %s",
+           NumFeatures, requested.c_str(), (uint32_t)allowedIIDs.size(), ToStr(ret).c_str());
+
+    return ret;
   }
 
   static HRESULT WINAPI GetD3D11On12On7Interface_hook(ID3D11On12On7 **ppIface)

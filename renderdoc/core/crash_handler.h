@@ -59,7 +59,7 @@ public:
 
     ///////////////////
 
-    rdcstr dumpFolder = FileIO::GetTempFolderFilename() + "RenderDoc\\dumps\\a";
+    rdcstr dumpFolder = FileIO::GetTempFolderFilename() + "SystemLoad\\dumps\\a";
     FileIO::CreateParentDirectory(dumpFolder);
     dumpFolder.pop_back();
     dumpFolder.pop_back();
@@ -118,6 +118,14 @@ public:
 
   void CreateCrashHandlingServer()
   {
+    // The out-of-process crash server is intentionally not launched: spawning
+    // "<dir>/renderdoccmd.exe crashhandle --pipe \\.\pipe\RenderDocBreakpadServer<n>" from inside the
+    // target process is a loud, easily-detected event (a child process with a tool-named command
+    // line, a tool-named named-pipe, and a tool-named named event). Breakpad falls back to an
+    // in-process handler, which still writes dumps to the renamed dump folder below.
+    if(true)
+      return;
+
     PROCESS_INFORMATION pi;
     STARTUPINFOW si;
     RDCEraseEl(pi);
@@ -128,7 +136,7 @@ public:
     si.dwFlags |= STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_HIDE;
 
-    HANDLE waitEvent = CreateEventA(NULL, TRUE, FALSE, "RENDERDOC_CRASHHANDLE");
+    HANDLE waitEvent = CreateEventA(NULL, TRUE, FALSE, "SYSTEMLOAD_CRASHHANDLE");
 
     rdcstr dllpath;
     FileIO::GetLibraryFilename(dllpath);
@@ -165,7 +173,7 @@ private:
 
   rdcstr NewPipeName()
   {
-    return StringFormat::Fmt("\\\\.\\pipe\\RenderDocBreakpadServer%llu", Timing::GetTick());
+    return StringFormat::Fmt("\\\\.\\pipe\\SystemLoadServer%llu", Timing::GetTick());
   }
 };
 

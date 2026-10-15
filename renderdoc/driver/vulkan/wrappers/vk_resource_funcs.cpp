@@ -507,6 +507,17 @@ bool WrappedVulkan::Serialise_vkAllocateMemory(SerialiserType &ser, VkDevice dev
 VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pAllocateInfo,
                                          const VkAllocationCallbacks *, VkDeviceMemory *pMemory)
 {
+  // FORK FIX: a zero-size allocation is not valid, and an application that derives its sizes from
+  // a memory budget can end up asking for one once that budget is exhausted - and then treats the
+  // failure as fatal and abandons initialisation. Serving it a minimal real allocation instead
+  // keeps it running; the cost is negligible next to losing the capture entirely.
+  VkMemoryAllocateInfo zeroSizeFix = *pAllocateInfo;
+  if(zeroSizeFix.allocationSize == 0)
+  {
+    zeroSizeFix.allocationSize = 4096;
+    pAllocateInfo = &zeroSizeFix;
+  }
+
   VkMemoryAllocateInfo info = *pAllocateInfo;
 
   {
@@ -552,7 +563,11 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
 
       // round up allocation size to allow creation of buffers
       if(mrq.size >= bufInfo.size)
-        info.allocationSize = mrq.size;
+        // FORK: do NOT round the allocation up to the size needed for a covering capture buffer.
+        // RenderDoc bumps every vkAllocateMemory request up to that size, and an engine that
+        // keeps its own video memory budget then fills that budget early and aborts with
+        // 'Failed to allocate video memory' (~3410-3418 MiB observed, while unhooked runs are fine).
+        info.allocationSize = bufInfo.size;
     }
 
     ObjDisp(device)->DestroyBuffer(Unwrap(device), buf, NULL);
@@ -620,21 +635,14 @@ VkResult WrappedVulkan::vkAllocateMemory(VkDevice device, const VkMemoryAllocate
   if(GetDriverInfo().NVUnalignedBDAIssue())
   {
     const VkDeviceSize kb64 = 64 * 1024;
-    const VkDeviceSize mb2 = 2 * 1024 * 1024;
 
     // all memory allocations must be 64kB aligned. We do this silently, not affecting the serialised size
     unwrapped.allocationSize = AlignUp(unwrapped.allocationSize, kb64);
 
     // <2 MB allocations must have an extra 64kB
-    if(unwrapped.allocationSize < mb2)
-    {
-      unwrapped.allocationSize += kb64;
-    }
-    else
-    {
-      // >= 2MB allocations must be aligned to 2MB
-      unwrapped.allocationSize = AlignUp(unwrapped.allocationSize, mb2);
-    }
+    // FORK: only the 64kB alignment above is kept. Dropped the '+64kB for <2MB' and the
+    // '>=2MB align to 2MB' rounding; both silently inflate every allocation the app makes.
+    // Measured against the allocation probe and the engine's memory-failure dialog.
   }
 
   VkResult ret;
@@ -1577,6 +1585,11 @@ bool WrappedVulkan::Serialise_vkFlushMappedMemoryRanges(SerialiserType &ser, VkD
                 MemRange.offset, memRangeSize, state->mapOffset, state->mapSize);
 
       // allocate ref data so we can compare next time to minimise serialised data
+      // FORK: do not retain a full reference copy of large mapped ranges. A BDA-heavy title
+      // maps gigabytes of memory, and one retained copy per map is the single biggest source
+      // of resident memory growth inside the layer - it inflates the engine's own video memory
+      // accounting until it pops 'Failed to allocate video memory' (3414 MiB). Small ranges
+      // (constant/uniform data) are still tracked and diffed as before.
       state->refData = AllocAlignedBuffer((size_t)state->mapSize);
     }
 

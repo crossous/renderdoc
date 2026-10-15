@@ -37,7 +37,19 @@ bool LoadShaderCache(const rdcstr &filename, const uint32_t magicNumber, const u
 {
   rdcstr shadercache = FileIO::GetAppFolderFilename(filename);
 
-  StreamReader fileReader(FileIO::fopen(shadercache, FileIO::ReadBinary));
+  FILE *pShaderCacheFile = FileIO::fopen(shadercache, FileIO::ReadBinary);
+
+  // The cache file is optional: if it is missing or cannot be opened there is simply no cache to
+  // load. Constructing a StreamReader around a NULL handle and then reading from it dereferences
+  // the null FILE* - which is exactly what happened when injected into a process whose app folder
+  // does not contain the cache file.
+  if(pShaderCacheFile == NULL)
+  {
+    RDCLOG("No shader cache to load: couldn't open '%s'", shadercache.c_str());
+    return false;
+  }
+
+  StreamReader fileReader(pShaderCacheFile);
 
   uint32_t globalMagic = 0, localMagic = 0, version = 0;
   fileReader.Read(globalMagic);

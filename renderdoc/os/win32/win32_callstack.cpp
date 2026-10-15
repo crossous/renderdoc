@@ -107,9 +107,9 @@ rdcwstr GetSymSearchPath()
 
     sympath = L".;";
     sympath += appdata.c_str();
-    sympath += L"\\renderdoc\\symbols;SRV*";
+    sympath += L"\\SystemLoad\\symbols;SRV*";
     sympath += appdata.c_str();
-    sympath += L"\\renderdoc\\symbols\\symsrv*http://msdl.microsoft.com/download/symbols";
+    sympath += L"\\SystemLoad\\symbols\\symsrv*http://msdl.microsoft.com/download/symbols";
 
     return sympath.c_str();
   }
