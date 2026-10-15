@@ -1051,25 +1051,31 @@ rdcarray<ResourceId> VulkanResourceManager::InitialContentResources()
     const InitialContentData &aData = m_InitialContents[a].data;
     const InitialContentData &bData = m_InitialContents[b].data;
 
-    // Always sort BLASs before TLASs, as a TLAS holds device addresses for it's BLASs
-    // and we make sure those addresses are valid.  There's no good handling for the generic types,
-    // so we just assume it is a TLAS
-    if(aData.accelerationStructureInfo && bData.accelerationStructureInfo)
-    {
-      const VkAccelerationStructureTypeKHR aType = aData.accelerationStructureInfo->type;
-      const VkAccelerationStructureTypeKHR bType = bData.accelerationStructureInfo->type;
-      if(aType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR &&
-         (bType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR ||
-          bType == VkAccelerationStructureTypeKHR::VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR))
-        return true;
-    }
-
     // serialise ASs first to allow reallocation.
     // since the enum is serialised we couldn't change the order so we do this by hand
     int aASSort = aData.type == eResAccelerationStructureKHR ? 0 : 1;
     int bASSort = bData.type == eResAccelerationStructureKHR ? 0 : 1;
     if(aASSort != bASSort)
       return aASSort < bASSort;
+
+    if(aData.type == eResAccelerationStructureKHR)
+    {
+      // A TLAS dereferences its BLAS device addresses. Treat generic or missing
+      // build metadata as TLAS so the comparator is consistent for every AS.
+      const bool aBLAS = aData.accelerationStructureInfo &&
+                         aData.accelerationStructureInfo->type ==
+                             VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+      const bool bBLAS = bData.accelerationStructureInfo &&
+                         bData.accelerationStructureInfo->type ==
+                             VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+      if(aBLAS != bBLAS)
+        return aBLAS;
+
+      // Restore older handles before newer ones when applications reuse AS
+      // backing storage. An arbitrary order can overwrite the current BLAS
+      // with an older structure before a TLAS dereferences its address.
+      return a < b;
+    }
 
     return aData.type < bData.type;
   });
