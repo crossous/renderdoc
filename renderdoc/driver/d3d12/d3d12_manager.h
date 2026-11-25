@@ -708,10 +708,13 @@ struct D3D12ResourceRecord : public ResourceRecord
 
   struct MapData
   {
-    MapData() : refcount(0), realPtr(NULL), shadowPtr(NULL) {}
+    MapData() : refcount(0), realPtr(NULL), shadowPtr(NULL), retainedNativeMap(false) {}
     int32_t refcount;
     byte *realPtr;
     byte *shadowPtr;
+    // An optional tool-owned nested Map keeps the CPU pointer valid after application Unmap.
+    // Application Map counts remain separate, and the native reference ends on destruction.
+    bool retainedNativeMap;
   };
 
   MapData *m_Maps;

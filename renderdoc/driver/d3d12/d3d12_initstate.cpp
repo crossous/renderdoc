@@ -243,6 +243,8 @@ bool D3D12ResourceManager::Prepare_InitialState(ID3D12DeviceChild *res)
         return true;
       }
 
+      // Only ordinary UPLOAD resources are fixed in GENERIC_READ. CPU-visible GPU_UPLOAD
+      // resources can use other states and must retain the normal transition handling.
       const bool isUploadHeap = (heapProps.Type == D3D12_HEAP_TYPE_UPLOAD);
 
       desc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -1092,11 +1094,9 @@ bool D3D12ResourceManager::Serialise_InitialState(SerialiserType &ser, ResourceI
 
         SetInitialContents(id, initContents);
       }
-      else if(heapProps.Type == D3D12_HEAP_TYPE_UPLOAD || isCPUCopyHeap)
+      else if(IsD3D12UploadHeap(heapProps.Type) || isCPUCopyHeap)
       {
-        // if destination is on the upload heap, it's impossible to copy via the device,
-        // so we have to CPU copy. To save time and make a more optimal copy, we just keep the data
-        // CPU-side
+        // Keep initial contents CPU-side for resources restored through their CPU mapping.
         mappedBuffer = NULL;
 
         D3D12InitialContents initContents(D3D12InitialContents::Copy, type);
@@ -1840,11 +1840,9 @@ void D3D12ResourceManager::Create_InitialState(ResourceId id, ID3D12DeviceChild 
                                 heapProps.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) &&
                                heapProps.MemoryPoolPreference == D3D12_MEMORY_POOL_L0;
 
-    if(heapProps.Type == D3D12_HEAP_TYPE_UPLOAD || isCPUCopyHeap)
+    if(IsD3D12UploadHeap(heapProps.Type) || isCPUCopyHeap)
     {
-      // if destination is on the upload heap, it's impossible to copy via the device,
-      // so we have to CPU copy. To save time and make a more optimal copy, we just keep the data
-      // CPU-side
+      // Keep initial contents CPU-side for resources restored through their CPU mapping.
       D3D12InitialContents initContents(D3D12InitialContents::Copy, type);
       uint64_t size = RDCMAX(resDesc.Width, 64ULL);
       initContents.srcData = AllocAlignedBuffer(size);
@@ -1990,10 +1988,8 @@ void D3D12ResourceManager::Apply_InitialState(ID3D12DeviceChild *res, D3D12Initi
            heapProps.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) &&
           heapProps.MemoryPoolPreference == D3D12_MEMORY_POOL_L0;
 
-      // if destination is on the upload heap, it's impossible to copy via the device,
-      // so we have to CPU copy. We assume that we detected this case above and never uploaded a
-      // device copy in the first place, and just kept the data CPU-side to source from.
-      if(heapProps.Type == D3D12_HEAP_TYPE_UPLOAD || isCPUCopyHeap)
+      // CPU-mappable upload resources use the source bytes kept by the initial-state paths above.
+      if(IsD3D12UploadHeap(heapProps.Type) || isCPUCopyHeap)
       {
         byte *src = data.srcData, *dst = NULL;
 

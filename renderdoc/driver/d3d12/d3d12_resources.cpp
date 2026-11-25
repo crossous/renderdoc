@@ -23,12 +23,15 @@
  ******************************************************************************/
 
 #include "d3d12_resources.h"
+#include "core/settings.h"
 #include "driver/shaders/dxbc/dxbc_reflect.h"
 #include "driver/shaders/dxil/dxil_metadata.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_rootsig.h"
 #include "d3d12_shader_cache.h"
+
+RDOC_EXTERN_CONFIG(bool, D3D12_Capture_RetainUploadMappings);
 
 GPUAddressRangeTracker WrappedID3D12Resource::m_Addresses;
 std::map<WrappedID3D12PipelineState::DXBCKey, WrappedID3D12Shader *> WrappedID3D12Shader::m_Shaders;
@@ -235,16 +238,22 @@ WrappedID3D12Resource::~WrappedID3D12Resource()
     D3D12ResourceRecord::MapData *map = GetResourceRecord()->m_Maps;
     size_t mapcount = GetResourceRecord()->m_MapsCount;
 
-    // may not have a map if e.g. no pointer was requested
     for(size_t i = 0; i < mapcount; i++)
     {
-      if(map[i].refcount > 0)
+      if(map[i].refcount > 0 || map[i].retainedNativeMap)
       {
-        m_pDevice->Unmap(this, (UINT)i, map[i].realPtr, NULL);
+        // NULL-only maps have a native lifetime but no CPU pointer to snapshot.
+        if(map[i].realPtr)
+          m_pDevice->Unmap(this, (UINT)i, map[i].realPtr, NULL);
+
+        if(map[i].retainedNativeMap)
+          m_pReal->Unmap((UINT)i, NULL);
 
         FreeAlignedBuffer(map[i].shadowPtr);
+        map[i].refcount = 0;
         map[i].realPtr = NULL;
         map[i].shadowPtr = NULL;
+        map[i].retainedNativeMap = false;
       }
     }
   }
@@ -371,30 +380,53 @@ size_t WrappedID3D12Resource::DeleteOverlappingAccStructsInRangeAtOffset(D3D12Bu
 HRESULT STDMETHODCALLTYPE WrappedID3D12Resource::Map(UINT Subresource,
                                                      const D3D12_RANGE *pReadRange, void **ppData)
 {
-  // don't care about maps without returned pointers - we'll just intercept the WriteToSubresource
-  // calls
-  if(ppData == NULL)
-    return m_pReal->Map(Subresource, pReadRange, ppData);
+  D3D12ResourceRecord *record = GetResourceRecord();
+  if(!record)
+    return m_pReal->Map(Subresource, ppData ? NULL : pReadRange, ppData);
+
+  // Map/Unmap are thread-safe. Keep the native lifetime and our bookkeeping in the same
+  // critical section, including maps which don't request a pointer.
+  SCOPED_LOCK(record->m_MapLock);
 
   void *mapPtr = NULL;
 
-  // pass a NULL range as we might want to read from the whole range
-  HRESULT hr = m_pReal->Map(Subresource, NULL, &mapPtr);
+  // Request read access to the whole mapping when obtaining a pointer for capture.
+  // NULL-pointer maps retain their original range and still count towards the lifetime.
+  HRESULT hr = m_pReal->Map(Subresource, ppData ? NULL : pReadRange, ppData ? &mapPtr : NULL);
 
-  *ppData = mapPtr;
+  if(ppData)
+    *ppData = mapPtr;
 
-  if(SUCCEEDED(hr) && GetResourceRecord())
+  if(SUCCEEDED(hr) && Subresource < record->m_MapsCount)
   {
-    SCOPED_LOCK(GetResourceRecord()->m_MapLock);
+    D3D12ResourceRecord::MapData &map = record->m_Maps[Subresource];
 
-    D3D12ResourceRecord::MapData *map = GetResourceRecord()->m_Maps;
-
-    map[Subresource].realPtr = (byte *)mapPtr;
-    map[Subresource].refcount++;
-
-    // on the first map, register this so we can flush any updates in case it's left persistent
-    if(map[Subresource].refcount == 1)
+    map.refcount++;
+    if(mapPtr && !map.retainedNativeMap && IsCaptureMode(m_pDevice->GetState()) &&
+       D3D12_Capture_RetainUploadMappings())
+    {
+      D3D12_HEAP_PROPERTIES properties = {};
+      m_pReal->GetHeapProperties(&properties, NULL);
+      // Ordinary UPLOAD buffers are permanently GENERIC_READ, so retaining CPU mappings does
+      // not create the resource-state issues of GPU_UPLOAD or mappable custom/texture resources.
+      if(properties.Type == D3D12_HEAP_TYPE_UPLOAD &&
+         m_pReal->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+      {
+        HRESULT retained = m_pReal->Map(Subresource, NULL, NULL);
+        if(SUCCEEDED(retained))
+          map.retainedNativeMap = true;
+        else
+          RDCWARN("Could not retain upload mapping for %s: %s", ToStr(GetResourceID()).c_str(),
+                  ToStr(retained).c_str());
+      }
+    }
+    // The first pointer may arrive after NULL-pointer maps. Register it once while the native
+    // mapping remains valid, including any optional tool-owned reference.
+    if(mapPtr && !map.realPtr)
+    {
+      map.realPtr = (byte *)mapPtr;
       m_pDevice->Map(this, Subresource);
+    }
   }
 
   return hr;
@@ -402,28 +434,33 @@ HRESULT STDMETHODCALLTYPE WrappedID3D12Resource::Map(UINT Subresource,
 
 void STDMETHODCALLTYPE WrappedID3D12Resource::Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange)
 {
-  if(GetResourceRecord())
+  D3D12ResourceRecord *record = GetResourceRecord();
+  if(record)
   {
-    D3D12ResourceRecord::MapData *map = GetResourceRecord()->m_Maps;
+    SCOPED_LOCK(record->m_MapLock);
 
+    if(Subresource < record->m_MapsCount)
     {
-      SCOPED_LOCK(GetResourceRecord()->m_MapLock);
+      D3D12ResourceRecord::MapData &map = record->m_Maps[Subresource];
 
-      // may not have a ref at all if e.g. no pointer was requested
-      if(map[Subresource].refcount >= 1)
+      if(map.refcount > 0)
       {
-        map[Subresource].refcount--;
+        map.refcount--;
 
-        if(map[Subresource].refcount == 0)
+        if(map.refcount == 0 && !map.retainedNativeMap)
         {
-          m_pDevice->Unmap(this, Subresource, map[Subresource].realPtr, pWrittenRange);
+          if(map.realPtr)
+            m_pDevice->Unmap(this, Subresource, map.realPtr, pWrittenRange);
 
-          FreeAlignedBuffer(map[Subresource].shadowPtr);
-          map[Subresource].realPtr = NULL;
-          map[Subresource].shadowPtr = NULL;
+          FreeAlignedBuffer(map.shadowPtr);
+          map.realPtr = NULL;
+          map.shadowPtr = NULL;
         }
       }
     }
+
+    m_pReal->Unmap(Subresource, pWrittenRange);
+    return;
   }
 
   return m_pReal->Unmap(Subresource, pWrittenRange);

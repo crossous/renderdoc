@@ -700,6 +700,77 @@ After interop is enabled you will need to reload any capture.</string>
            </widget>
           </item>
           <item row="6" column="0" colspan="2">
+           <widget class="QGroupBox" name="D3D12_CaptureSettings">
+            <property name="title">
+             <string>Direct3D 12 Capture</string>
+            </property>
+            <layout class="QVBoxLayout" name="D3D12_CaptureSettingsLayout">
+             <item>
+              <widget class="QCheckBox" name="D3D12_RetainUploadMappings">
+               <property name="toolTip">
+                <string>Capture updates made through cached CPU pointers after application Unmap. Applies to ordinary UPLOAD buffers; their CPU mappings are kept until the resource is released.</string>
+               </property>
+               <property name="text">
+                <string>Retain UPLOAD buffer mappings</string>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="D3D12_RetainUploadMappingsDescription">
+               <property name="text">
+                <string>Enable before launching or injecting the application, then capture again. May increase capture time and memory use.</string>
+               </property>
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="7" column="0" colspan="2">
+           <widget class="QGroupBox" name="D3D12_ReplaySettings">
+            <property name="title">
+             <string>Direct3D 12 Replay</string>
+            </property>
+            <layout class="QVBoxLayout" name="D3D12_ReplaySettingsLayout">
+             <item>
+              <widget class="QCheckBox" name="D3D12_PreserveUploadHeaps">
+               <property name="toolTip">
+                <string>Keep large committed UPLOAD buffers in system memory instead of promoting them to device-local memory. Reduces VRAM use but may slow replay. Reload the capture after changing this setting.</string>
+               </property>
+               <property name="text">
+                <string>Preserve UPLOAD heaps during replay</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="D3D12_SkipDiscardPattern">
+               <property name="toolTip">
+                <string>Omit RenderDoc's diagnostic fill for discarded or undefined contents while retaining the application's discard calls and barriers. Undefined data will no longer show the diagnostic pattern. Reload the capture after changing this setting.</string>
+               </property>
+               <property name="text">
+                <string>Skip discard diagnostic patterns</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="D3D12_ReplaySettingsDescription">
+               <property name="text">
+                <string>Reload the capture after changing these replay options.</string>
+               </property>
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="8" column="0" colspan="2">
            <spacer name="verticalSpacer_2">
             <property name="orientation">
              <enum>Qt::Vertical</enum>

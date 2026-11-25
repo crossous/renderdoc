@@ -37,6 +37,15 @@
 // new versions come out we typedef it here when we don't need the specific interface
 using ID3D12GraphicsCommandListX = ID3D12GraphicsCommandList10;
 
+// Return byte-exact differences within 64 KiB pages, skipping unchanged pages.
+rdcarray<D3D12_RANGE> D3D12GetMappedWriteRanges(const byte *data, const byte *ref, size_t size);
+
+inline bool IsD3D12UploadHeap(D3D12_HEAP_TYPE type)
+{
+  // Classify CPU upload access, not the allowed resource states of these heap types.
+  return type == D3D12_HEAP_TYPE_UPLOAD || type == D3D12_HEAP_TYPE_GPU_UPLOAD;
+}
+
 // replay only class for handling marker regions
 struct D3D12MarkerRegion
 {

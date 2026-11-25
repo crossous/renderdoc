@@ -30,6 +30,43 @@
 #include "d3d12_manager.h"
 #include "d3d12_resources.h"
 
+rdcarray<D3D12_RANGE> D3D12GetMappedWriteRanges(const byte *data, const byte *ref, size_t size)
+{
+  rdcarray<D3D12_RANGE> ranges;
+  if(size == 0)
+    return ranges;
+
+  if(!ref)
+  {
+    ranges.push_back({0, size});
+    return ranges;
+  }
+
+  // Bound the unchanged gaps included in a write. A single FindDiffRange for a large mapping
+  // would serialize everything between two distant edits and cache that entire span on replay.
+  const size_t pageSize = 64 * 1024;
+  bool previousChanged = false;
+  for(size_t begin = 0; begin < size;)
+  {
+    const size_t end = begin + RDCMIN(pageSize, size - begin);
+    size_t diffStart = 0, diffEnd = 0;
+    if(FindDiffRange((void *)(data + begin), (void *)(ref + begin), end - begin, diffStart, diffEnd))
+    {
+      if(previousChanged)
+        ranges.back().End = begin + diffEnd;
+      else
+        ranges.push_back({begin + diffStart, begin + diffEnd});
+      previousChanged = true;
+    }
+    else
+    {
+      previousChanged = false;
+    }
+    begin = end;
+  }
+  return ranges;
+}
+
 RDOC_CONFIG(bool, D3D12_Debug_EnableGPUVA, false,
             "Enable GPU Validation when enabling D3D12 validation.");
 

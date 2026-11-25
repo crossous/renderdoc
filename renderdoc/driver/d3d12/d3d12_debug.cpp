@@ -24,6 +24,7 @@
 
 #include "d3d12_debug.h"
 #include "common/shader_cache.h"
+#include "core/settings.h"
 #include "data/resource.h"
 #include "driver/dx/official/d3dcompiler.h"
 #include "driver/dxgi/dxgi_common.h"
@@ -40,6 +41,8 @@
 #include "d3d12_shader_cache.h"
 
 #include "data/hlsl/hlsl_cbuffers.h"
+
+RDOC_EXTERN_CONFIG(bool, D3D12_Replay_SkipDiscardPattern);
 
 inline static D3D12_ROOT_PARAMETER1 cbvParam(D3D12_SHADER_VISIBILITY vis, UINT space, UINT reg)
 {
@@ -1372,6 +1375,9 @@ void D3D12DebugManager::FillWithDiscardPattern(ID3D12GraphicsCommandListX *cmd,
 {
   RDCASSERT(type == DiscardType::DiscardCall || type == DiscardType::UndefinedTransition);
 
+  if(D3D12_Replay_SkipDiscardPattern())
+    return;
+
   D3D12MarkerRegion marker(
       cmd, StringFormat::Fmt("FillWithDiscardPattern %s", ToStr(GetResID(res)).c_str()));
 
@@ -1387,39 +1393,31 @@ void D3D12DebugManager::FillWithDiscardPattern(ID3D12GraphicsCommandListX *cmd,
   if(desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
   {
     // ignore rects, they are only allowed with 2D resources
-    size_t size = (size_t)desc.Width;
+    const uint64_t size = desc.Width;
+    const size_t patternSize = 1024 * 1024;
 
-    ID3D12Resource *patternBuf = NULL;
-
-    // if we have discard buffers, try the last one, it's the biggest we have
-    if(!m_DiscardBuffers.empty())
-    {
-      patternBuf = m_DiscardBuffers.back();
-
-      // if it's not big enough, don't use it
-      if(patternBuf->GetDesc().Width < size)
-        patternBuf = NULL;
-    }
-
-    // if we don't have a buffer, make one that's big enough and use that
-    if(patternBuf == NULL)
+    // The buffer pattern repeats every four bytes. Reuse one bounded source for every discard
+    // instead of allocating and retaining a resource-sized upload buffer for each larger size.
+    if(m_DiscardBuffers.empty())
     {
       bytebuf pattern;
-      // make at least 1K at a time to prevent too much incremental updates if we encounter buffers
-      // of different sizes
-      pattern.resize(AlignUp<size_t>(size, 1024U));
+      pattern.resize(patternSize);
 
       uint32_t value = 0xD15CAD3D;
 
       for(size_t i = 0; i < pattern.size(); i += 4)
         memcpy(&pattern[i], &value, sizeof(uint32_t));
 
-      patternBuf = MakeCBuffer(pattern.size());
+      ID3D12Resource *patternBuf = MakeCBuffer(pattern.size());
+      if(!patternBuf)
+        return;
 
+      SetObjName(patternBuf, "Buffer discard pattern (1 MiB)");
+      FillBuffer(patternBuf, 0, pattern.data(), pattern.size());
       m_DiscardBuffers.push_back(patternBuf);
-
-      FillBuffer(patternBuf, 0, pattern.data(), size);
     }
+
+    ID3D12Resource *patternBuf = m_DiscardBuffers.back();
 
     D3D12_RESOURCE_BARRIER b = {};
     b.Type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
@@ -1427,7 +1425,12 @@ void D3D12DebugManager::FillWithDiscardPattern(ID3D12GraphicsCommandListX *cmd,
     cmd->ResourceBarrier(1, &b);
 
     // fill the destination with a copy from the pattern buffer
-    cmd->CopyBufferRegion(res, 0, patternBuf, 0, size);
+    for(uint64_t offset = 0; offset < size;)
+    {
+      const uint64_t copySize = RDCMIN(uint64_t(patternSize), size - offset);
+      cmd->CopyBufferRegion(res, offset, patternBuf, 0, copySize);
+      offset += copySize;
+    }
 
     cmd->ResourceBarrier(1, &b);
 

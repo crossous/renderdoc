@@ -2225,17 +2225,18 @@ RDResult ReplayController::PostCreateInit(IReplayDriver *device, RDCFile *rdc)
   GCNISA::CacheSupport(m_APIProps.pipelineType);
 
   RDResult result = m_pDevice->ReadLogInitialisation(rdc, false);
-  FatalErrorCheck();
+  // A failed initial load may not have a complete structured file or resource list yet.
+  // Return the failure directly: making a dummy driver requires those to be complete.
+  m_FatalError = m_pDevice->FatalErrorCheck();
   if(m_FatalError != ResultCode::Succeeded)
     return m_FatalError;
+  if(result != ResultCode::Succeeded)
+    return result;
 
   m_pDevice->SetPipelineStates(&m_D3D11PipelineState, &m_D3D12PipelineState, &m_GLPipelineState,
                                &m_VulkanPipelineState);
 
   GCNISA::GetTargets(m_APIProps.pipelineType, m_pDevice->GetDriverInfo(), m_GCNTargets);
-
-  if(result != ResultCode::Succeeded)
-    return result;
 
   m_Buffers = m_pDevice->GetBuffers();
   FatalErrorCheck();

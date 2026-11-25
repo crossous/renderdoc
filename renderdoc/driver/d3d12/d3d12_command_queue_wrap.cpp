@@ -1032,9 +1032,6 @@ void WrappedID3D12CommandQueue::ExecuteCommandListsInternal(UINT NumCommandLists
         // here AND serialise them there, but we'll play it safe.
         res->LockMaps();
 
-        size_t diffStart = 0, diffEnd = 0;
-        bool found = true;
-
         byte *ref = res->GetShadow(subres);
         byte *data = res->GetMap(subres);
 
@@ -1069,28 +1066,21 @@ void WrappedID3D12CommandQueue::ExecuteCommandListsInternal(UINT NumCommandLists
             data = queueReadback.readbackMapped;
           }
 
-          if(ref)
-            found = FindDiffRange(data, ref, size, diffStart, diffEnd);
-          else
-            diffEnd = size;
+          rdcarray<D3D12_RANGE> ranges = D3D12GetMappedWriteRanges(data, ref, size);
 
-          if(found)
+          if(!ranges.empty())
           {
-            RDCLOG("Persistent map flush forced for %s (%llu -> %llu)",
-                   ToStr(res->GetResourceID()).c_str(), (uint64_t)diffStart, (uint64_t)diffEnd);
-
-            D3D12_RANGE range = {diffStart, diffEnd};
-
             if(ref == NULL)
-            {
               res->AllocShadow(subres, size);
 
-              ref = res->GetShadow(subres);
-            }
+            // Update the shadow from serialized bytes, not another read of the live mapping.
+            for(const D3D12_RANGE &range : ranges)
+            {
+              RDCLOG("Persistent map flush forced for %s (%llu -> %llu)",
+                     ToStr(res->GetResourceID()).c_str(), (uint64_t)range.Begin, (uint64_t)range.End);
 
-            // passing true here asks the serialisation function to update the shadow pointer for
-            // this resource
-            m_pDevice->MapDataWrite(res, subres, data, range, true);
+              m_pDevice->MapDataWrite(res, subres, data, range, true);
+            }
 
             GetResourceManager()->MarkDirtyResource(res->GetResourceID());
           }

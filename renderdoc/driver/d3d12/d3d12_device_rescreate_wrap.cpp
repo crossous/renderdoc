@@ -23,9 +23,14 @@
  ******************************************************************************/
 
 #include "d3d12_device.h"
+#include "core/settings.h"
 #include "driver/dxgi/dxgi_common.h"
-#include "d3d12_resources.h"
 #include "d3d12_api_monitor.h"
+#include "d3d12_resources.h"
+
+RDOC_CONFIG(bool, D3D12_Replay_PreserveUploadHeaps, false,
+            "Keep committed UPLOAD buffers of at least 1 MiB in system memory instead of "
+            "promoting them to device-local memory. Uses less VRAM but may make replay slower.");
 
 bool WrappedID3D12Device::Serialise_CreateResource(
     D3D12Chunk chunkType, ID3D12Heap *pHeap, UINT64 HeapOffset, D3D12_HEAP_PROPERTIES &props,
@@ -55,7 +60,7 @@ bool WrappedID3D12Device::Serialise_CreateResource(
     // place large resources in local memory so that initial contents and maps can
     // be cached and copied on the GPU instead of memcpy'd from the CPU every time.
     // smaller resources it's better to just leave them as upload and map into them
-    if(desc.Width >= 1024 * 1024)
+    if(desc.Width >= 1024 * 1024 && !D3D12_Replay_PreserveUploadHeaps())
     {
       RDCLOG("Remapping committed resource %s from upload to default for efficient replay",
              ToStr(pResource).c_str());

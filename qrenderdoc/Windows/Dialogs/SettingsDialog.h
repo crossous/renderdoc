@@ -77,6 +77,9 @@ private slots:
 
   // core
   void on_configEditor_clicked();
+  void on_D3D12_RetainUploadMappings_toggled(bool checked);
+  void on_D3D12_PreserveUploadHeaps_toggled(bool checked);
+  void on_D3D12_SkipDiscardPattern_toggled(bool checked);
   void on_chooseSearchPaths_clicked();
   void on_chooseIgnores_clicked();
   void on_ExternalTool_RGPIntegration_toggled(bool checked);
@@ -139,6 +142,8 @@ private:
   void addProcessor(const ShaderProcessingTool &disasm);
   bool editTool(int existing, ShaderProcessingTool &disasm);
   void updateCaptureDialogOptionalSettings();
+  void updateD3D12Settings();
+  void setD3D12Setting(const char *name, bool checked);
 
   ReplayOptionsSelector *m_ReplayOptions;
 

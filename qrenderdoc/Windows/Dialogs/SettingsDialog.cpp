@@ -27,6 +27,7 @@
 #include <math.h>
 #include <QFontDatabase>
 #include <QKeyEvent>
+#include <QSignalBlocker>
 #include <QTextEdit>
 #include <QToolButton>
 #include "Code/Interface/QRDInterface.h"
@@ -242,6 +243,8 @@ SettingsDialog::SettingsDialog(ICaptureContext &ctx, QWidget *parent)
   {
     ui->ExternalTool_RGPIntegration->setEnabled(false);
   }
+
+  updateD3D12Settings();
 
   if(const SDObject *setting = RENDERDOC_GetConfigSetting("Android.SDKDirPath"))
   {
@@ -646,6 +649,49 @@ void SettingsDialog::on_configEditor_clicked()
   RDDialog::show(&editor);
 
   RENDERDOC_SaveConfigSettings();
+
+  updateD3D12Settings();
+}
+
+void SettingsDialog::updateD3D12Settings()
+{
+  auto refresh = [](QCheckBox *checkbox, const char *name) {
+    const SDObject *setting = RENDERDOC_GetConfigSetting(name);
+    // Refreshing the core config must not save settings or re-trigger a toggle handler.
+    QSignalBlocker blocker(checkbox);
+    checkbox->setEnabled(setting != NULL);
+    checkbox->setChecked(setting && setting->AsBool());
+  };
+  refresh(ui->D3D12_RetainUploadMappings, "D3D12.Capture.RetainUploadMappings");
+  refresh(ui->D3D12_PreserveUploadHeaps, "D3D12.Replay.PreserveUploadHeaps");
+  refresh(ui->D3D12_SkipDiscardPattern, "D3D12.Replay.SkipDiscardPattern");
+}
+
+void SettingsDialog::setD3D12Setting(const char *name, bool checked)
+{
+  if(m_Init)
+    return;
+
+  if(SDObject *setting = RENDERDOC_SetConfigSetting(name))
+  {
+    setting->data.basic.b = checked;
+    RENDERDOC_SaveConfigSettings();
+  }
+}
+
+void SettingsDialog::on_D3D12_RetainUploadMappings_toggled(bool checked)
+{
+  setD3D12Setting("D3D12.Capture.RetainUploadMappings", checked);
+}
+
+void SettingsDialog::on_D3D12_PreserveUploadHeaps_toggled(bool checked)
+{
+  setD3D12Setting("D3D12.Replay.PreserveUploadHeaps", checked);
+}
+
+void SettingsDialog::on_D3D12_SkipDiscardPattern_toggled(bool checked)
+{
+  setD3D12Setting("D3D12.Replay.SkipDiscardPattern", checked);
 }
 
 void SettingsDialog::on_chooseSearchPaths_clicked()

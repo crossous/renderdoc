@@ -52,6 +52,14 @@ RDOC_EXTERN_CONFIG(bool, Replay_Debug_SingleThreadedCompilation);
 RDOC_DEBUG_CONFIG(bool, D3D12_Debug_SingleSubmitFlushing, false,
                   "Every command buffer is submitted and fully flushed to the GPU, to narrow down "
                   "the source of problems.");
+RDOC_CONFIG(bool, D3D12_Capture_RetainUploadMappings, false,
+            "Retain a tool-owned nested Map for CPU-mapped ordinary UPLOAD buffers and track "
+            "them at submissions until destruction. Supports writes through cached CPU pointers "
+            "after application Unmap without scanning never-mapped resources. Retains CPU "
+            "virtual addresses and may add mapped flush overhead.");
+RDOC_CONFIG(bool, D3D12_Replay_SkipDiscardPattern, false,
+            "Omit diagnostic fills for discarded or undefined contents while preserving discard "
+            "calls and barriers. Undefined data will no longer show the diagnostic pattern.");
 RDOC_DEBUG_CONFIG(bool, D3D12_Debug_RT_Overlay, false, "Add some RT tracking to the overlay.");
 RDOC_EXTERN_CONFIG(bool, D3D12_Debug_RT_Auditing);
 
@@ -2143,23 +2151,14 @@ void WrappedID3D12Device::Unmap(ID3D12Resource *Resource, UINT Subresource, byte
     capframe = IsActiveCapturing(m_State);
   }
 
-  D3D12_RANGE range = {0, (SIZE_T)map.totalSize};
-
-  // unfortunately this can't be trusted - e.g. imgui maps/unmaps with empty written range. We have
-  // to assume the worst and assume it's all modified
-#if 0
-  if(pWrittenRange)
-  {
-    range = *pWrittenRange;
-
-    // clamp end if it's lower than begin
-    if(range.End < range.Begin)
-      range.End = range.Begin;
-  }
-#endif
-
   if(capframe)
-    MapDataWrite(Resource, Subresource, mapPtr, range, false);
+  {
+    // If submissions already established a shadow, save only subsequent changes at Unmap.
+    // Without a shadow the complete mapping is still required. Do not trust pWrittenRange.
+    byte *ref = GetWrapped(Resource)->GetShadow(Subresource);
+    for(const D3D12_RANGE &write : D3D12GetMappedWriteRanges(mapPtr, ref, size_t(map.totalSize)))
+      MapDataWrite(Resource, Subresource, mapPtr, write, false);
+  }
 }
 
 template <typename SerialiserType>
@@ -4067,6 +4066,11 @@ void WrappedID3D12Device::DumpDREDPageFault(const D3D12_DRED_PAGE_FAULT_OUTPUT &
 void WrappedID3D12Device::DumpDRED(D3D12_AUTO_BREADCRUMB_NODE *node,
                                    D3D12_DRED_BREADCRUMB_CONTEXT *contexts, UINT numContexts)
 {
+  if(!node)
+  {
+    RDCLOG("No DRED breadcrumbs available");
+    return;
+  }
   rdcstr cmdName = "";
   rdcstr qName = "";
 
@@ -4084,18 +4088,23 @@ void WrappedID3D12Device::DumpDRED(D3D12_AUTO_BREADCRUMB_NODE *node,
   }
 
   if(node->pCommandQueueDebugNameA)
-    qName = node->pCommandListDebugNameA;
+    qName = node->pCommandQueueDebugNameA;
   else if(node->pCommandQueueDebugNameW)
     qName = StringFormat::Wide2UTF8(node->pCommandQueueDebugNameW);
 
   if(qName.empty() && node->pCommandQueue)
   {
     ID3D12CommandQueue *q =
-        (ID3D12CommandQueue *)GetResourceManager()->GetWrapper(node->pCommandList);
+        (ID3D12CommandQueue *)GetResourceManager()->GetWrapper(node->pCommandQueue);
     if(q)
       qName = ToStr(GetResID(q));
   }
 
+  if(!node->pLastBreadcrumbValue || !node->pCommandHistory)
+  {
+    RDCLOG("DRED node has no command history");
+    return;
+  }
   uint32_t lastExecuted = *node->pLastBreadcrumbValue;
   D3D12_DRED_BREADCRUMB_CONTEXT *ctx = contexts;
 
@@ -4107,7 +4116,7 @@ void WrappedID3D12Device::DumpDRED(D3D12_AUTO_BREADCRUMB_NODE *node,
     {
       RDCLOG("  [%u]: %s -- %ls", i, ToStr(node->pCommandHistory[i]).c_str(), ctx->pContextString);
       // sometimes get duplicates?
-      while(ctx->BreadcrumbIndex == i)
+      while(numContexts > 0 && ctx->BreadcrumbIndex == i)
       {
         ctx++;
         numContexts--;
@@ -4152,8 +4161,8 @@ void WrappedID3D12Device::CheckHRESULT(const char *file, int line, HRESULT hr)
       if(dred1)
       {
         dred1->GetAutoBreadcrumbsOutput1(&DredAutoBreadcrumbsOutput1);
-        SAFE_RELEASE(dred1);
         DumpDRED(DredAutoBreadcrumbsOutput1.pHeadAutoBreadcrumbNode);
+        SAFE_RELEASE(dred1);
       }
       else
       {
@@ -4170,7 +4179,7 @@ void WrappedID3D12Device::CheckHRESULT(const char *file, int line, HRESULT hr)
   {
     if(m_OOMHandler)
     {
-      RDCLOG("Ignoring out of memory error at %s:%d that will be handled");
+      RDCLOG("Ignoring out of memory error at %s:%d that will be handled", file, line);
     }
     else
     {
