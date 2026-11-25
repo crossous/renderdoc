@@ -3,11 +3,12 @@
 Build Windows Release and package only runtime dependencies.
 .DESCRIPTION
 Use -Rebuild for a clean release, or -PackageOnly after successful builds.
+Use -AllowDirty to build a local test package with uncommitted tracked changes.
 Android APKs are reused from existing Android builds, not rebuilt here.
 Read docs/CUSTOM_RELEASE_BUILD.md before running.
 #>
 [CmdletBinding()]
-param([switch]$Rebuild, [switch]$PackageOnly)
+param([switch]$Rebuild, [switch]$PackageOnly, [switch]$AllowDirty)
 $ErrorActionPreference = 'Stop'
 # Use framework hashing and ZIP APIs to avoid shell module auto-loading dependencies.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -29,7 +30,15 @@ if (-not $releaseMajor -or -not $releaseMinor) { throw 'Version could not be rea
 $releaseVersion = "$releaseMajor.$releaseMinor"
 $releaseCommit = (& git -C $releaseRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE) { throw 'Cannot resolve build commit.' }
-if (& git -C $releaseRoot status --porcelain --untracked-files=no) { throw 'Commit tracked changes before building a package.' }
+$releaseTrackedChanges = @(& git -C $releaseRoot status --porcelain --untracked-files=no)
+if ($LASTEXITCODE) { throw 'Cannot read source working-tree status.' }
+$releaseDirty = $releaseTrackedChanges.Count -gt 0
+if ($releaseDirty -and -not $AllowDirty) {
+    throw 'Uncommitted tracked changes found. For local testing, rerun with -AllowDirty; commit changes before a public release.'
+}
+if ($releaseDirty) {
+    Write-Warning 'Building a local test package with uncommitted changes; package-manifest.json will record them.'
+}
 
 if (-not $PackageOnly) {
     $releaseTarget = if ($Rebuild) { 'Rebuild' } else { 'Build' }
@@ -127,6 +136,7 @@ $releaseFiles = @(Get-ChildItem -LiteralPath $release64 -Recurse -File | ForEach
     @{ path = $_.FullName.Substring($release64.Length + 1); bytes = $_.Length; sha256 = (Get-ReleaseHash $_.FullName) }
 })
 @{ version = $releaseVersion; commit = $releaseCommit; windows = @('x86', 'x64');
+    source = @{ dirty = $releaseDirty; trackedChanges = $releaseTrackedChanges };
     ltCG = $false; android = $releaseAndroid; files = $releaseFiles } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $release64 'package-manifest.json') -Encoding UTF8
 $releasePackage = Join-Path $releaseRoot "package\RenderSocoDoc_${releaseVersion}_64"

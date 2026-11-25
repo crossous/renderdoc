@@ -48,6 +48,27 @@ the tail on failure.
 - Keep `renderdoc/renderdoc_no_export.vcxproj` synchronized with
   `renderdoc/renderdoc.vcxproj`; `system_load.dll` comes from the no-export project.
 
+### Windows-only local packages
+
+`scripts/build_win.bat` delegates to `build_win.ps1` and forwards its parameters.
+Both build Windows x86/x64 and package the existing Android APKs. They require clean
+tracked files by default, so a commit identifies the packaged source.
+
+For local capture/replay testing while edits are still uncommitted, use:
+
+```powershell
+# From the scripts directory:
+.\build_win.bat -AllowDirty
+# PowerShell entry point is equivalent:
+.\build_win.ps1 -AllowDirty
+```
+
+Add `-Rebuild` when a full Windows rebuild is needed. `-AllowDirty` keeps the existing
+build and package validation, and records `source.dirty` and tracked changes in
+`package-manifest.json`. It is for local test packages; commit the intended source
+changes before a public release. `-PackageOnly` reuses existing binaries and does not
+compile new source edits.
+
 ## Windows: LTCG Compiler Crash
 
 ### Symptom
