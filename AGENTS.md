@@ -25,6 +25,12 @@ Other custom areas include Detours inline hooking, Android EGLImage wrappers, ca
 customizations, Win32 PE parsing, D3D12 AGS suppression, per-DLL hook modes, API Monitor,
 custom injection, and Vulkan emulator multi-instance capture bridging.
 
+## Development Branch
+
+Use the existing `v1.x` branch for routine development, fixes, commits, and pushes.
+Do not create a separate branch for ordinary work. Reserve separate branches for
+major incompatible changes or an explicit user request.
+
 ## Build and Release — Mandatory Preflight
 
 Before any local build, packaging operation, or GitHub Release, read
